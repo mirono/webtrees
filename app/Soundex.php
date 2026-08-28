@@ -19,9 +19,23 @@ declare(strict_types=1);
 
 namespace Fisharebest\Webtrees;
 
+use Fig\Http\Message\StatusCodeInterface;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
+use Throwable;
+
 use function array_slice;
 use function count;
+use function getenv;
+use function is_array;
+use function is_bool;
+use function is_string;
+use function json_decode;
+use function json_encode;
+use function rtrim;
 use function strlen;
+
+use const JSON_THROW_ON_ERROR;
 
 /**
  * Phonetic matching of strings.
@@ -33,6 +47,22 @@ class Soundex
 
     // Max. table key length (in ASCII bytes -- NOT in UTF-8 characters!)
     private const int MAXCHAR = 7;
+
+    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
+    // docs/php-to-js-migration/). When set, russell()/compare()/
+    // daitchMokotoff() try this Node service first and fall back to the
+    // native PHP implementation below on any failure — the service is
+    // never a single point of failure. Unset by default: with no env var,
+    // behavior is byte-for-byte identical to before this migration started.
+    private const string SERVICE_URL_ENV_VAR = 'WEBTREES_SOUNDEX_SERVICE_URL';
+
+    // Once a call to the service fails (timeout, connection refused, bad
+    // response), stop trying it for the rest of this PHP process/request.
+    // Soundex is called per-name in bulk contexts (GEDCOM import can call
+    // it thousands of times in one request/CLI invocation) — without this,
+    // a downed service would add its full timeout cost to every single
+    // call instead of just the first one.
+    private static bool $service_unavailable = false;
 
     /**
      * Name transformation arrays.
@@ -610,10 +640,70 @@ class Soundex
     }
 
     /**
+     * Call the Phase 3 bridge service, if configured and not already known
+     * to be unreachable this process. Returns the decoded JSON response
+     * body on success, or null on any failure (service not configured,
+     * unreachable, timed out, or returned something unusable) — callers
+     * must always fall back to the native PHP implementation when this
+     * returns null.
+     *
+     * @param array<string,string> $payload
+     *
+     * @return array<string,bool|string>|null
+     */
+    private static function callService(string $path, array $payload): array|null
+    {
+        if (self::$service_unavailable) {
+            return null;
+        }
+
+        $service_url = (string) getenv(self::SERVICE_URL_ENV_VAR);
+
+        if ($service_url === '') {
+            return null;
+        }
+
+        try {
+            $client  = new Client(['timeout' => 0.5, 'connect_timeout' => 0.5]);
+            $request = new Request(
+                'POST',
+                rtrim($service_url, '/') . $path,
+                ['content-type' => 'application/json'],
+                json_encode($payload, JSON_THROW_ON_ERROR),
+            );
+
+            $response = $client->send($request);
+
+            if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
+                self::$service_unavailable = true;
+
+                return null;
+            }
+
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            return is_array($body) ? $body : null;
+        } catch (Throwable) {
+            // Service down, network issue, timed out, or returned something
+            // that couldn't be encoded/decoded — stop trying it for the
+            // rest of this process and silently use native PHP.
+            self::$service_unavailable = true;
+
+            return null;
+        }
+    }
+
+    /**
      * Is there a match between two soundex codes?
      */
     public static function compare(string $soundex1, string $soundex2): bool
     {
+        $service_result = self::callService('/compare', ['a' => $soundex1, 'b' => $soundex2]);
+
+        if (is_array($service_result) && is_bool($service_result['match'] ?? null)) {
+            return $service_result['match'];
+        }
+
         if ($soundex1 !== '' && $soundex2 !== '') {
             return array_intersect(explode(':', $soundex1), explode(':', $soundex2)) !== [];
         }
@@ -626,6 +716,12 @@ class Soundex
      */
     public static function russell(string $text): string
     {
+        $service_result = self::callService('/russell', ['text' => $text]);
+
+        if (is_array($service_result) && is_string($service_result['code'] ?? null)) {
+            return $service_result['code'];
+        }
+
         $words         = explode(' ', $text);
         $soundex_array = [];
 
@@ -654,6 +750,12 @@ class Soundex
      */
     public static function daitchMokotoff(string $text): string
     {
+        $service_result = self::callService('/daitch-mokotoff', ['text' => $text]);
+
+        if (is_array($service_result) && is_string($service_result['code'] ?? null)) {
+            return $service_result['code'];
+        }
+
         $words         = explode(' ', $text);
         $soundex_array = [];
 
