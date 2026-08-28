@@ -1,0 +1,1289 @@
+{
+    "Patrilineal": {
+        "newChildNames": [
+            {
+                "input": {
+                    "father_name": "John \/Smith\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jan \/van der Berg\/",
+                    "sex": "M",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jan \/van der Berg\/",
+                    "sex": "F",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jan \/de Vries\/",
+                    "sex": "M",
+                    "case": "spfx_de"
+                },
+                "output": [
+                    "1 NAME \/de Vries\/\n2 TYPE BIRTH\n2 SPFX de\n2 SURN Vries"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jan \/de Vries\/",
+                    "sex": "F",
+                    "case": "spfx_de"
+                },
+                "output": [
+                    "1 NAME \/de Vries\/\n2 TYPE BIRTH\n2 SPFX de\n2 SURN Vries"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Sean \/O’Brien\/",
+                    "sex": "M",
+                    "case": "apostrophe"
+                },
+                "output": [
+                    "1 NAME \/O’Brien\/\n2 TYPE BIRTH\n2 SURN O’Brien"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Sean \/O’Brien\/",
+                    "sex": "F",
+                    "case": "apostrophe"
+                },
+                "output": [
+                    "1 NAME \/O’Brien\/\n2 TYPE BIRTH\n2 SURN O’Brien"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "John \/Smith\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jan \/van der Berg\/",
+                    "sex": "M",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jan \/van der Berg\/",
+                    "sex": "F",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "always_fixed"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": "\/\/"
+    },
+    "Paternal": {
+        "newChildNames": [
+            {
+                "input": {
+                    "father_name": "John \/Smith\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jan \/van der Berg\/",
+                    "sex": "M",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jan \/van der Berg\/",
+                    "sex": "F",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "John \/Smith\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH",
+                    "1 NAME \/Smith\/\n2 TYPE MARRIED\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jan \/van der Berg\/",
+                    "sex": "M",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jan \/van der Berg\/",
+                    "sex": "F",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH",
+                    "1 NAME \/van der Berg\/\n2 TYPE MARRIED\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "John \/Smith\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH",
+                    "1 NAME \/Smith\/\n2 TYPE MARRIED\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "Jan \/van der Berg\/",
+                    "sex": "M",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "Jan \/van der Berg\/",
+                    "sex": "F",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH",
+                    "1 NAME \/van der Berg\/\n2 TYPE MARRIED\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": "\/\/"
+    },
+    "Matrilineal": {
+        "newChildNames": [
+            {
+                "input": {
+                    "mother_name": "John \/Smith\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "mother_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "mother_name": "Jan \/van der Berg\/",
+                    "sex": "M",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "mother_name": "Jan \/van der Berg\/",
+                    "sex": "F",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "mother_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "mother_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "John \/Smith\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME \/Smith\/\n2 TYPE BIRTH\n2 SURN Smith"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jan \/van der Berg\/",
+                    "sex": "M",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jan \/van der Berg\/",
+                    "sex": "F",
+                    "case": "spfx_van"
+                },
+                "output": [
+                    "1 NAME \/van der Berg\/\n2 TYPE BIRTH\n2 SPFX van der\n2 SURN Berg"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "always_fixed"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": "\/\/"
+    },
+    "Icelandic": {
+        "newChildNames": [
+            {
+                "input": {
+                    "father_name": "Bjorn \/Petursson\/",
+                    "sex": "M",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME Bjornsson\n2 TYPE BIRTH\n2 GIVN Bjornsson"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Bjorn \/Petursson\/",
+                    "sex": "F",
+                    "case": "simple"
+                },
+                "output": [
+                    "1 NAME Bjornsdottir\n2 TYPE BIRTH\n2 GIVN Bjornsdottir"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "Jon Bjornsson",
+                    "sex": "M",
+                    "case": "sson_suffix"
+                },
+                "output": [
+                    "1 NAME Bjorn\n2 TYPE BIRTH\n2 GIVN Bjorn"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Anna Bjornsdottir",
+                    "sex": "F",
+                    "case": "sdottir_suffix"
+                },
+                "output": [
+                    "1 NAME Bjorn\n2 TYPE BIRTH\n2 GIVN Bjorn"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jon \/Bjornsson\/",
+                    "sex": "M",
+                    "case": "slashed_never_matches"
+                },
+                "output": [
+                    "1 NAME\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "always_fixed_ignores_spouse"
+                },
+                "output": [
+                    "1 NAME\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": ""
+    },
+    "Lithuanian": {
+        "newChildNames": [
+            {
+                "input": {
+                    "father_name": "Jonas \/Petraitis\/",
+                    "sex": "M",
+                    "case": "as_suffix"
+                },
+                "output": [
+                    "1 NAME \/Petraitis\/\n2 TYPE BIRTH\n2 SURN Petraitis"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jonas \/Petraitis\/",
+                    "sex": "F",
+                    "case": "as_suffix"
+                },
+                "output": [
+                    "1 NAME \/Petraitytė\/\n2 TYPE BIRTH\n2 SURN Petraitis"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Antanas \/Adamus\/",
+                    "sex": "M",
+                    "case": "us_suffix"
+                },
+                "output": [
+                    "1 NAME \/Adamus\/\n2 TYPE BIRTH\n2 SURN Adamus"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Antanas \/Adamus\/",
+                    "sex": "F",
+                    "case": "us_suffix"
+                },
+                "output": [
+                    "1 NAME \/Adamutė\/\n2 TYPE BIRTH\n2 SURN Adamus"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whita\/",
+                    "sex": "F",
+                    "case": "daughter_a"
+                },
+                "output": [
+                    "1 NAME \/Whitaitė\/\n2 TYPE BIRTH\n2 SURN Whita"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whitas\/",
+                    "sex": "F",
+                    "case": "daughter_as"
+                },
+                "output": [
+                    "1 NAME \/Whitaitė\/\n2 TYPE BIRTH\n2 SURN Whitas"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whitis\/",
+                    "sex": "F",
+                    "case": "daughter_is"
+                },
+                "output": [
+                    "1 NAME \/Whitytė\/\n2 TYPE BIRTH\n2 SURN Whitis"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whitys\/",
+                    "sex": "F",
+                    "case": "daughter_ys"
+                },
+                "output": [
+                    "1 NAME \/Whitytė\/\n2 TYPE BIRTH\n2 SURN Whitys"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whitius\/",
+                    "sex": "F",
+                    "case": "daughter_ius"
+                },
+                "output": [
+                    "1 NAME \/Whitiūtė\/\n2 TYPE BIRTH\n2 SURN Whitius"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whitus\/",
+                    "sex": "F",
+                    "case": "daughter_us"
+                },
+                "output": [
+                    "1 NAME \/Whitutė\/\n2 TYPE BIRTH\n2 SURN Whitus"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "Jonas \/Petraitis\/",
+                    "sex": "M",
+                    "case": "as_suffix"
+                },
+                "output": [
+                    "1 NAME \/Petraitis\/\n2 TYPE BIRTH\n2 SURN Petraitis"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jonas \/Petraitis\/",
+                    "sex": "F",
+                    "case": "as_suffix"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Mary \/Whitaitė\/",
+                    "sex": "M",
+                    "case": "male_aite"
+                },
+                "output": [
+                    "1 NAME \/Whitas\/\n2 TYPE BIRTH\n2 SURN Whitas"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Mary \/Whitytė\/",
+                    "sex": "M",
+                    "case": "male_yte"
+                },
+                "output": [
+                    "1 NAME \/Whitis\/\n2 TYPE BIRTH\n2 SURN Whitis"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Mary \/Whitiūtė\/",
+                    "sex": "M",
+                    "case": "male_iute"
+                },
+                "output": [
+                    "1 NAME \/Whitius\/\n2 TYPE BIRTH\n2 SURN Whitius"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Mary \/Whitutė\/",
+                    "sex": "M",
+                    "case": "male_ute"
+                },
+                "output": [
+                    "1 NAME \/Whitus\/\n2 TYPE BIRTH\n2 SURN Whitus"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "Jonas \/Petraitis\/",
+                    "sex": "M",
+                    "case": "as_suffix"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "Jonas \/Petraitis\/",
+                    "sex": "F",
+                    "case": "as_suffix"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH",
+                    "1 NAME \/Petraitienė\/\n2 TYPE MARRIED\n2 SURN Petraitis"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": "\/\/"
+    },
+    "Polish": {
+        "newChildNames": [
+            {
+                "input": {
+                    "father_name": "Jan \/Kowalski\/",
+                    "sex": "M",
+                    "case": "ski_suffix"
+                },
+                "output": [
+                    "1 NAME \/Kowalski\/\n2 TYPE BIRTH\n2 SURN Kowalski"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jan \/Kowalski\/",
+                    "sex": "F",
+                    "case": "ski_suffix"
+                },
+                "output": [
+                    "1 NAME \/Kowalska\/\n2 TYPE BIRTH\n2 SURN Kowalski"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whitecki\/",
+                    "sex": "F",
+                    "case": "female_cki"
+                },
+                "output": [
+                    "1 NAME \/Whitecka\/\n2 TYPE BIRTH\n2 SURN Whitecki"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whitedzki\/",
+                    "sex": "F",
+                    "case": "female_dzki"
+                },
+                "output": [
+                    "1 NAME \/Whitedzka\/\n2 TYPE BIRTH\n2 SURN Whitedzki"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whiteski\/",
+                    "sex": "F",
+                    "case": "female_ski"
+                },
+                "output": [
+                    "1 NAME \/Whiteska\/\n2 TYPE BIRTH\n2 SURN Whiteski"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "John \/Whiteżki\/",
+                    "sex": "F",
+                    "case": "female_zki"
+                },
+                "output": [
+                    "1 NAME \/Whiteżka\/\n2 TYPE BIRTH\n2 SURN Whiteżki"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "Jan \/Kowalski\/",
+                    "sex": "M",
+                    "case": "ski_suffix"
+                },
+                "output": [
+                    "1 NAME \/Kowalski\/\n2 TYPE BIRTH\n2 SURN Kowalski"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jan \/Kowalski\/",
+                    "sex": "F",
+                    "case": "ski_suffix"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Chris \/Whitecka\/",
+                    "sex": "M",
+                    "case": "male_cka"
+                },
+                "output": [
+                    "1 NAME \/Whitecki\/\n2 TYPE BIRTH\n2 SURN Whitecki"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Chris \/Whitedzka\/",
+                    "sex": "M",
+                    "case": "male_dzka"
+                },
+                "output": [
+                    "1 NAME \/Whitedzki\/\n2 TYPE BIRTH\n2 SURN Whitedzki"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Chris \/Whiteska\/",
+                    "sex": "M",
+                    "case": "male_ska"
+                },
+                "output": [
+                    "1 NAME \/Whiteski\/\n2 TYPE BIRTH\n2 SURN Whiteski"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Chris \/Whiteżka\/",
+                    "sex": "M",
+                    "case": "male_zka"
+                },
+                "output": [
+                    "1 NAME \/Whiteżki\/\n2 TYPE BIRTH\n2 SURN Whiteżki"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "Jan \/Kowalski\/",
+                    "sex": "M",
+                    "case": "ski_suffix"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "Jan \/Kowalski\/",
+                    "sex": "F",
+                    "case": "ski_suffix"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH",
+                    "1 NAME \/Kowalska\/\n2 TYPE MARRIED\n2 SURN Kowalski"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "spouse_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": "\/\/"
+    },
+    "Portuguese": {
+        "newChildNames": [
+            {
+                "input": {
+                    "father_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "mother_name": "Maria \/Aaaa\/ \/Bbbb\/",
+                    "sex": "M",
+                    "case": "both"
+                },
+                "output": [
+                    "1 NAME \/Dddd\/ \/Bbbb\/\n2 TYPE BIRTH\n2 SURN Dddd,Bbbb"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "mother_name": "",
+                    "sex": "M",
+                    "case": "father_only"
+                },
+                "output": [
+                    "1 NAME \/Dddd\/ \/\/\n2 TYPE BIRTH\n2 SURN Dddd"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "mother_name": "Maria \/Aaaa\/ \/Bbbb\/",
+                    "sex": "M",
+                    "case": "mother_only"
+                },
+                "output": [
+                    "1 NAME \/\/ \/Bbbb\/\n2 TYPE BIRTH\n2 SURN Bbbb"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "mother_name": "",
+                    "sex": "M",
+                    "case": "neither"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Gabriel \/Garcia\/ y \/Iglesias\/",
+                    "mother_name": "Maria \/Ruiz\/ y \/Lorca\/",
+                    "sex": "M",
+                    "case": "y_separator"
+                },
+                "output": [
+                    "1 NAME \/Iglesias\/ \/Lorca\/\n2 TYPE BIRTH\n2 SURN Iglesias,Lorca"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "sex": "M",
+                    "case": "two_surnames"
+                },
+                "output": [
+                    "1 NAME \/\/ \/Cccc\/\n2 TYPE BIRTH\n2 SURN Cccc"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "sex": "F",
+                    "case": "two_surnames"
+                },
+                "output": [
+                    "1 NAME \/\/ \/Dddd\/\n2 TYPE BIRTH\n2 SURN Dddd"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "always_fixed"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": "\/\/ \/\/"
+    },
+    "Spanish": {
+        "newChildNames": [
+            {
+                "input": {
+                    "father_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "mother_name": "Maria \/Aaaa\/ \/Bbbb\/",
+                    "sex": "M",
+                    "case": "both"
+                },
+                "output": [
+                    "1 NAME \/Cccc\/ \/Aaaa\/\n2 TYPE BIRTH\n2 SURN Cccc,Aaaa"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "mother_name": "",
+                    "sex": "M",
+                    "case": "father_only"
+                },
+                "output": [
+                    "1 NAME \/Cccc\/ \/\/\n2 TYPE BIRTH\n2 SURN Cccc"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "mother_name": "Maria \/Aaaa\/ \/Bbbb\/",
+                    "sex": "M",
+                    "case": "mother_only"
+                },
+                "output": [
+                    "1 NAME \/\/ \/Aaaa\/\n2 TYPE BIRTH\n2 SURN Aaaa"
+                ]
+            },
+            {
+                "input": {
+                    "father_name": "",
+                    "mother_name": "",
+                    "sex": "M",
+                    "case": "neither"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newParentNames": [
+            {
+                "input": {
+                    "child_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "sex": "M",
+                    "case": "two_surnames"
+                },
+                "output": [
+                    "1 NAME \/Cccc\/ \/\/\n2 TYPE BIRTH\n2 SURN Cccc"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "Jose \/Cccc\/ \/Dddd\/",
+                    "sex": "F",
+                    "case": "two_surnames"
+                },
+                "output": [
+                    "1 NAME \/Dddd\/ \/\/\n2 TYPE BIRTH\n2 SURN Dddd"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "M",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            },
+            {
+                "input": {
+                    "child_name": "",
+                    "sex": "F",
+                    "case": "no_match"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "newSpouseNames": [
+            {
+                "input": {
+                    "spouse_name": "John \/Smith\/",
+                    "sex": "F",
+                    "case": "always_fixed"
+                },
+                "output": [
+                    "1 NAME \/\/ \/\/\n2 TYPE BIRTH"
+                ]
+            }
+        ],
+        "defaultName": "\/\/ \/\/"
+    }
+}
