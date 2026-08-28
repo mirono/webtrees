@@ -1,0 +1,42 @@
+[
+    {
+        "input": {
+            "first": "BIRT",
+            "second": "DEAT"
+        },
+        "output": -1,
+        "error": null
+    },
+    {
+        "input": {
+            "first": "DEAT",
+            "second": "BIRT"
+        },
+        "output": 1,
+        "error": null
+    },
+    {
+        "input": {
+            "first": "BIRT",
+            "second": "BIRT"
+        },
+        "output": 0,
+        "error": null
+    },
+    {
+        "input": {
+            "first": "UNKNOWN1",
+            "second": "UNKNOWN2"
+        },
+        "output": 0,
+        "error": null
+    },
+    {
+        "input": {
+            "first": "SEX",
+            "second": "_UID"
+        },
+        "output": -1,
+        "error": null
+    }
+]

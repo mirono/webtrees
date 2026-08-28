@@ -2,7 +2,7 @@
 
 **Priority:** 3
 **Complexity:** Low
-**Status:** Not started
+**Status:** Done
 **Unblocks (not in this batch):** `FactComparator::byType/byDate/typeOrder`
 (`app/Comparators/FactComparator.php`) — deferred until the calendar-date
 engine (`app/Date/*`, `app/Date.php`) is ported, since `FactComparator::byDate()`
@@ -13,8 +13,11 @@ scope for this batch.
 
 ## Phase 0 — Why this one, third
 
-Trivially pure — a 68-entry constant array plus `array_search` and a
-spaceship comparison. No dependencies at all. On its own it's low-value,
+Trivially pure — a constant array (66 entries — corrected during
+implementation; earlier drafts of this doc said 68, verified wrong by
+`(new ReflectionClass(TagComparator::class))->getReflectionConstant('FACT_ORDER')->getValue()`)
+plus `array_search` and a spaceship comparison. No dependencies at all. On
+its own it's low-value,
 but it's the one piece of `app/Comparators/` that has zero coupling to the
 not-yet-ported Date engine, and landing it now means `FactComparator` only
 needs its own logic ported (not this too) once the Date engine exists.
@@ -71,10 +74,16 @@ exactly, don't reorder or "fix" it even though it looks arbitrary.)
 - The fallback-to-`'EVEN'` behavior when a tag isn't found is the one
   non-obvious branch — an unrecognized tag doesn't throw or return `-1`, it
   silently sorts as if it were `'EVEN'`. Characterize this explicitly.
-- `byOrder()` returning a PHP spaceship (`<=>`) result maps directly to JS's
-  `a - b` pattern for numeric comparators — no special handling needed, but
-  include it in the golden cases anyway so the parity test actually proves
-  it rather than assuming it.
+- **Correction, found by the parity test itself (this doc's original claim
+  was wrong):** `byOrder()`'s PHP spaceship (`<=>`) result does *not* map
+  directly to JS's `a - b`. PHP's `<=>` always normalizes to exactly
+  `-1`/`0`/`1`; a plain `a - b` on two array indices returns the raw
+  difference (e.g. `-34` for `'BIRT'` vs `'DEAT'`). The parity test caught
+  this immediately (`expected -34 to deeply equal -1`) the first time it
+  ran against the golden file — exactly the scenario this doc's own advice
+  ("include it in the golden cases anyway so the parity test actually
+  proves it rather than assuming it") was written to catch, and it worked.
+  Fix: `Math.sign(order(firstTag) - order(secondTag))`.
 
 ## Phase 1 — Characterization test
 
@@ -170,13 +179,43 @@ Then actually run `parity_tag_comparator.test.js` against the golden file
 
 ## Definition of done
 
-- [ ] `golden/tag_comparator_order.json` and
-      `golden/tag_comparator_byorder.json` generated from the real PHP class.
-- [ ] `lib/comparators/tag-comparator.js` exports `order()` and `byOrder()`.
-- [ ] `parity_tag_comparator.test.js` passes 100%, including the
-      unknown-tag-falls-back-to-EVEN case.
-- [ ] `FACT_ORDER` entry count and order verified to match the PHP source
-      exactly (68 entries).
-- [ ] Recorded in the Phase 4 cutover table under module
+- [x] `golden/tag_comparator_order.json` (9 cases) and
+      `golden/tag_comparator_byorder.json` (5 cases) generated from the
+      real PHP class.
+- [x] `lib/comparators/tag-comparator.js` exports `order()` and `byOrder()`.
+- [x] `js-tests/parity_tag_comparator.test.js` passes 100% (14/14),
+      including the unknown-tag-falls-back-to-EVEN case and (after the
+      `Math.sign()` fix above) the `byOrder()` sign-normalization cases.
+- [x] `FACT_ORDER` entry count and order verified to match the PHP source
+      exactly — 66 entries (not 68), confirmed both by reflection dump
+      (`bin/characterize_tag_comparator.php`'s companion check) and by a
+      direct JS-vs-PHP array-equality comparison at implementation time.
+- [x] Recorded in the Phase 4 cutover table under module
       `lib/comparators`, noted as unblocking `FactComparator` once the Date
-      engine is ported.
+      engine is ported. **Not bridged to a live PHP call site in this
+      task** — see the note below.
+
+### Phase 3 bridging: deliberately not done here
+
+Unlike Soundex (tasks [01](task-01-soundex-russell.md)/[02](task-02-soundex-daitch-mokotoff.md)),
+this task does not wire `TagComparator` into a live Node-service bridge.
+Reasoning, not an oversight:
+
+- Its only current caller is `Fact::sortFactTags()`
+  (`app/Fact.php:498-502`), which is itself marked `@deprecated` ("will be
+  removed in version 2.3. Use TagComparator::byOrder(...) instead") —
+  wiring a live HTTP bridge into code slated for removal is not a good use
+  of the added latency/complexity.
+- This task's stated purpose (see "Phase 0 — Why this one, third" above)
+  is to unblock `FactComparator`, which is where `TagComparator` will
+  actually matter in practice — and `FactComparator` isn't ported yet
+  (blocked on the Date engine). Bridging now would mean maintaining a live
+  cutover path with no real caller benefiting from it.
+
+If this reasoning is wrong — e.g. if `TagComparator::byOrder()` should be
+bridged now regardless — extending `server/soundex-service.mjs` (or
+splitting it into a more general migration service) with a
+`/comparators/tag/order` route and repeating the `app/Soundex.php`-style
+short-circuit-with-fallback pattern in `TagComparator::order()`/`byOrder()`
+would follow the exact same shape as
+[phase3-soundex-bridge.md](phase3-soundex-bridge.md).

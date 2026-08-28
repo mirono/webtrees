@@ -1,0 +1,65 @@
+[
+    {
+        "input": {
+            "tag": "SEX"
+        },
+        "output": 0,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "NAME"
+        },
+        "output": 1,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "BIRT"
+        },
+        "output": 2,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "DEAT"
+        },
+        "output": 36,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "CHAN"
+        },
+        "output": 63,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "_UID"
+        },
+        "output": 65,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "EVEN"
+        },
+        "output": 32,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "NOT_A_REAL_TAG"
+        },
+        "output": 32,
+        "error": null
+    },
+    {
+        "input": {
+            "tag": ""
+        },
+        "output": 32,
+        "error": null
+    }
+]
