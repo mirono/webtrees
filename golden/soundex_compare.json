@@ -1,0 +1,42 @@
+[
+    {
+        "input": {
+            "a": "S530",
+            "b": "S530"
+        },
+        "output": true,
+        "error": null
+    },
+    {
+        "input": {
+            "a": "S530:S000",
+            "b": "S000:X100"
+        },
+        "output": true,
+        "error": null
+    },
+    {
+        "input": {
+            "a": "S530",
+            "b": "S531"
+        },
+        "output": false,
+        "error": null
+    },
+    {
+        "input": {
+            "a": "",
+            "b": "S530"
+        },
+        "output": false,
+        "error": null
+    },
+    {
+        "input": {
+            "a": "",
+            "b": ""
+        },
+        "output": false,
+        "error": null
+    }
+]

@@ -1,0 +1,46 @@
+[
+    {
+        "input": "Smith",
+        "output": "Latn"
+    },
+    {
+        "input": "משה",
+        "output": "Hebr"
+    },
+    {
+        "input": "محمد",
+        "output": "Arab"
+    },
+    {
+        "input": "中文",
+        "output": "Hans"
+    },
+    {
+        "input": "",
+        "output": "Latn"
+    },
+    {
+        "input": "Кириллица",
+        "output": "Cyrl"
+    },
+    {
+        "input": "Ελληνικά",
+        "output": "Grek"
+    },
+    {
+        "input": "123",
+        "output": "Latn"
+    },
+    {
+        "input": "<b>Smith<\/b>",
+        "output": "Latn"
+    },
+    {
+        "input": "&amp;Smith",
+        "output": "Latn"
+    },
+    {
+        "input": "@N.N.",
+        "output": "Latn"
+    }
+]

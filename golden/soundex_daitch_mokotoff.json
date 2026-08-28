@@ -1,0 +1,135 @@
+[
+    {
+        "input": {
+            "text": "Moskowitz"
+        },
+        "output": "645740",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Moskovitz"
+        },
+        "output": "645740",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Auerbach"
+        },
+        "output": "097500:097400",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Uhrbach"
+        },
+        "output": "097500:059750:097400:059740",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Peters"
+        },
+        "output": "734000:739400",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Peterson"
+        },
+        "output": "734600:739460",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Levine"
+        },
+        "output": "876000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Lewin"
+        },
+        "output": "876000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "van der Berg"
+        },
+        "output": "760000:390000:795000:794000:763979",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "משה"
+        },
+        "output": "640000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "דוד"
+        },
+        "output": "373000:330000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": ""
+        },
+        "output": "",
+        "error": null
+    },
+    {
+        "input": {
+            "text": " "
+        },
+        "output": "",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "A"
+        },
+        "output": "000000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "123"
+        },
+        "output": "",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz Moskowitz "
+        },
+        "output": "645740:645746",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "SVGEE LWUSHE CSYJWVB PGZO XBBFV ZFZOMF BRYNUKI OSPT BBVCN FEZYRK HFGMAUO GQEJ BYRPV HQVORL HGXQDSL GCXQ TNBDL TJTRBJ OSXHTBP LHVO XWXHA FCNDKF"
+        },
+        "output": "475000:474000:874000:470000:447000:754000:740000:570000:474670:796500:047300:756000:746000:749500:575670:574670:500000:345000:797000:579800:545454:554548:554500:345545:545450:344545:367380:343974:339700:343970:339740:045453:045437:870000:857000:575450",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "ß"
+        },
+        "output": "400000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "straße"
+        },
+        "output": "294000",
+        "error": null
+    }
+]

@@ -1,0 +1,22 @@
+[
+    {
+        "input": "abc",
+        "output": "ABC"
+    },
+    {
+        "input": "straße",
+        "output": "STRASSE"
+    },
+    {
+        "input": "istanbul",
+        "output": "ISTANBUL"
+    },
+    {
+        "input": "msg",
+        "output": "MSG"
+    },
+    {
+        "input": "",
+        "output": ""
+    }
+]

@@ -1,0 +1,149 @@
+[
+    {
+        "input": {
+            "text": "Smith"
+        },
+        "output": "S530",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Smyth"
+        },
+        "output": "S530",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Robert"
+        },
+        "output": "R163",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Rupert"
+        },
+        "output": "R163",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Ashcraft"
+        },
+        "output": "A226",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Ashcroft"
+        },
+        "output": "A226",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "New York"
+        },
+        "output": "N000:Y620:N620",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "van der Berg"
+        },
+        "output": "V500:D600:B620:V536",
+        "error": null
+    },
+    {
+        "input": {
+            "text": ""
+        },
+        "output": "",
+        "error": null
+    },
+    {
+        "input": {
+            "text": " "
+        },
+        "output": "0000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "123"
+        },
+        "output": "",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "!!!"
+        },
+        "output": "",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "A"
+        },
+        "output": "A000",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "\u00e9"
+        },
+        "output": "",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "M\u00fcller"
+        },
+        "output": "M460",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "O'Brien"
+        },
+        "output": "O165",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Mary-Jane Smith-Jones"
+        },
+        "output": "M625:S532",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith Smith "
+        },
+        "output": "S530:S532",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Abb Abc Abd Abl Abm Abr Acb Acc Acd Acl Acm Acr Adb Adc Add Adl Adm Adr Alb Alc Ald All Alm Alr Amb Amc Amd Aml Amm Amr Arb Arc Ard Arl Arm Arr Bbb Bbc Bbd Bbl Bbm Bbr Bcb Bcd Bcl Bcm Bcr Bdb Bdc Bdl Bdm Bdr Blb Blc Bld Blm Blr Bmb Bmc Bmd Bml Bmr Brb Brc Brd Brl Brm Cbb Cbc Cbd Cbl Cbm Cbr Ccc Ccd Ccl Ccm Ccr"
+        },
+        "output": "A100:A120:A130:A140:A150:A160:A210:A200:A230:A240:A250:A260:A310:A320:A300:A340:A350:A360:A410:A420:A430:A400:A450:A460:A510:A520:A530:A540:A500:A560:A610:A620:A630:A640:A650:A600:B000:B200:B300:B400:B500:B600:B210:B230:B240:B250:B260:B310:B320:B340:B350",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "smith"
+        },
+        "output": "S530",
+        "error": null
+    },
+    {
+        "input": {
+            "text": "SMITH"
+        },
+        "output": "S530",
+        "error": null
+    }
+]
