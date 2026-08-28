@@ -1,0 +1,983 @@
+{
+    "fixedNowJd": 2460700,
+    "construction": [
+        {
+            "input": {
+                "class": "Gregorian",
+                "input": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "year": 2024,
+                "month": 2,
+                "day": 15,
+                "minimumJulianDay": 2460356,
+                "maximumJulianDay": 2460356
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "input": [
+                    "2024",
+                    "",
+                    ""
+                ]
+            },
+            "output": {
+                "year": 2024,
+                "month": 0,
+                "day": 0,
+                "minimumJulianDay": 2460311,
+                "maximumJulianDay": 2460676
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "input": [
+                    "2024",
+                    "FEB",
+                    ""
+                ]
+            },
+            "output": {
+                "year": 2024,
+                "month": 2,
+                "day": 0,
+                "minimumJulianDay": 2460342,
+                "maximumJulianDay": 2460370
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "input": [
+                    "",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "year": 0,
+                "month": 2,
+                "day": 15,
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "input": [
+                    "",
+                    "",
+                    ""
+                ]
+            },
+            "output": {
+                "year": 0,
+                "month": 0,
+                "day": 0,
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "input": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "year": 2024,
+                "month": 2,
+                "day": 15,
+                "minimumJulianDay": 2460369,
+                "maximumJulianDay": 2460369
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "input": [
+                    "100 B.C.",
+                    "JAN",
+                    "1"
+                ]
+            },
+            "output": {
+                "year": -100,
+                "month": 1,
+                "day": 1,
+                "minimumJulianDay": 1684899,
+                "maximumJulianDay": 1684899
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "input": [
+                    "1743\/44",
+                    "FEB",
+                    "2"
+                ]
+            },
+            "output": {
+                "year": 1744,
+                "month": 2,
+                "day": 2,
+                "minimumJulianDay": 2358086,
+                "maximumJulianDay": 2358086
+            }
+        },
+        {
+            "input": {
+                "class": "Roman",
+                "input": [
+                    "100",
+                    "JAN",
+                    "1"
+                ]
+            },
+            "output": {
+                "year": 100,
+                "month": 1,
+                "day": 1,
+                "minimumJulianDay": 1757583,
+                "maximumJulianDay": 1757583
+            }
+        }
+    ],
+    "constructionFromJd": [
+        {
+            "input": {
+                "class": "Gregorian",
+                "jd": 2460000
+            },
+            "output": {
+                "year": 2023,
+                "month": 2,
+                "day": 24
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "jd": 2460000
+            },
+            "output": {
+                "year": 2023,
+                "month": 2,
+                "day": 11
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "jd": 1721060
+            },
+            "output": {
+                "year": -1,
+                "month": 1,
+                "day": 1
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "jd": 1721060
+            },
+            "output": {
+                "year": -1,
+                "month": 1,
+                "day": 3
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "jd": 328
+            },
+            "output": {
+                "year": -4713,
+                "month": 10,
+                "day": 17
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "jd": 328
+            },
+            "output": {
+                "year": -4713,
+                "month": 11,
+                "day": 24
+            }
+        }
+    ],
+    "crossConstruction": [
+        {
+            "input": {
+                "from": "Gregorian",
+                "to": "Julian",
+                "input": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "year": 2024,
+                "month": 2,
+                "day": 2
+            }
+        },
+        {
+            "input": {
+                "from": "Julian",
+                "to": "Gregorian",
+                "input": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "year": 2024,
+                "month": 2,
+                "day": 28
+            }
+        },
+        {
+            "input": {
+                "from": "Gregorian",
+                "to": "Julian",
+                "input": [
+                    "",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "year": 0,
+                "month": 0,
+                "day": 0
+            }
+        }
+    ],
+    "compareAndAgeDifference": [
+        {
+            "input": {
+                "class": "Gregorian",
+                "a": [
+                    "2000",
+                    "JAN",
+                    "1"
+                ],
+                "b": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "compare": -1,
+                "ageDifference": [
+                    24,
+                    1,
+                    14
+                ]
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "a": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "b": [
+                    "2000",
+                    "JAN",
+                    "1"
+                ]
+            },
+            "output": {
+                "compare": 1,
+                "ageDifference": [
+                    -25,
+                    10,
+                    15
+                ]
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "a": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "b": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "compare": 0,
+                "ageDifference": [
+                    0,
+                    0,
+                    0
+                ]
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "a": [
+                    "2024",
+                    "",
+                    ""
+                ],
+                "b": [
+                    "2025",
+                    "JAN",
+                    "1"
+                ]
+            },
+            "output": {
+                "compare": -1,
+                "ageDifference": [
+                    1,
+                    0,
+                    0
+                ]
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "a": [
+                    "100 B.C.",
+                    "JAN",
+                    "1"
+                ],
+                "b": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "compare": -1,
+                "ageDifference": [
+                    2124,
+                    1,
+                    14
+                ]
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "a": [
+                    "1743\/44",
+                    "FEB",
+                    "2"
+                ],
+                "b": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ]
+            },
+            "output": {
+                "compare": -1,
+                "ageDifference": [
+                    280,
+                    0,
+                    13
+                ]
+            }
+        }
+    ],
+    "dateProperties": [
+        {
+            "input": {
+                "class": "Gregorian",
+                "year": 1900
+            },
+            "output": {
+                "isLeapYear": false,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "year": 2000
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "year": 2024
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "year": 2023
+            },
+            "output": {
+                "isLeapYear": false,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "year": 1900
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "year": 2000
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "year": 2024
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "year": 2023
+            },
+            "output": {
+                "isLeapYear": false,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        }
+    ],
+    "daysInMonthFallback": [
+        {
+            "input": {
+                "class": "Gregorian",
+                "value": [
+                    "2024",
+                    "",
+                    ""
+                ]
+            },
+            "output": 0
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "value": [
+                    "2024",
+                    "",
+                    ""
+                ]
+            },
+            "output": 0
+        }
+    ],
+    "format": [
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F %j, %Y",
+                "qualifier": ""
+            },
+            "output": "February 15, 2024"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%Y-%m-%d",
+                "qualifier": ""
+            },
+            "output": "2024-02-15"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%A %O %E",
+                "qualifier": ""
+            },
+            "output": "15 FEB 2024"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%@",
+                "qualifier": ""
+            },
+            "output": "@#DGREGORIAN@"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%d\/%m\/%Y",
+                "qualifier": ""
+            },
+            "output": "15\/02\/2024"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%l, %F %j",
+                "qualifier": ""
+            },
+            "output": "Thursday, February 15"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": ""
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "ABT"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "BEF"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "AFT"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "FROM"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "AND"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F %j, %Y",
+                "qualifier": ""
+            },
+            "output": "February 15, 2024&nbsp;CE"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%Y-%m-%d",
+                "qualifier": ""
+            },
+            "output": "2024&nbsp;CE-02-15"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%A %O %E",
+                "qualifier": ""
+            },
+            "output": "15 FEB 2024"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%@",
+                "qualifier": ""
+            },
+            "output": "@#DJULIAN@"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%d\/%m\/%Y",
+                "qualifier": ""
+            },
+            "output": "15\/02\/2024&nbsp;CE"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%l, %F %j",
+                "qualifier": ""
+            },
+            "output": "Wednesday, February 15"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": ""
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "ABT"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "BEF"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "AFT"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "FROM"
+            },
+            "output": "February"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "AND"
+            },
+            "output": "February"
+        }
+    ],
+    "formatIncomplete": [
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "2024"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "February  2024"
+        },
+        {
+            "input": {
+                "class": "Gregorian",
+                "date": [
+                    "",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": ""
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "2024&nbsp;CE"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "2024",
+                    "FEB",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "February  2024&nbsp;CE"
+        },
+        {
+            "input": {
+                "class": "Julian",
+                "date": [
+                    "",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": ""
+        }
+    ],
+    "julianYearFormats": [
+        {
+            "input": [
+                "100 B.C.",
+                "JAN",
+                "1"
+            ],
+            "output": {
+                "longYear": "100&nbsp;BCE",
+                "gedcomYear": "0100 B.C."
+            }
+        },
+        {
+            "input": [
+                "1743\/44",
+                "FEB",
+                "2"
+            ],
+            "output": {
+                "longYear": "1743\/44&nbsp;CE",
+                "gedcomYear": "1743\/44"
+            }
+        },
+        {
+            "input": [
+                "2024",
+                "FEB",
+                "15"
+            ],
+            "output": {
+                "longYear": "2024&nbsp;CE",
+                "gedcomYear": "2024"
+            }
+        }
+    ],
+    "romanYearFormats": {
+        "longYear": "100AUC",
+        "gedcomYear": "0100AUC"
+    },
+    "todayYmd": [
+        2025,
+        1,
+        24
+    ],
+    "today": {
+        "year": 2025,
+        "month": 1,
+        "day": 24
+    }
+}
