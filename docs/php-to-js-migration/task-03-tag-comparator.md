@@ -213,9 +213,10 @@ Reasoning, not an oversight:
   cutover path with no real caller benefiting from it.
 
 If this reasoning is wrong — e.g. if `TagComparator::byOrder()` should be
-bridged now regardless — extending `server/soundex-service.mjs` (or
-splitting it into a more general migration service) with a
-`/comparators/tag/order` route and repeating the `app/Soundex.php`-style
-short-circuit-with-fallback pattern in `TagComparator::order()`/`byOrder()`
-would follow the exact same shape as
-[phase3-soundex-bridge.md](phase3-soundex-bridge.md).
+bridged now regardless — `server/migration-service.mjs` is already the
+general migration service (it now hosts both Soundex and SurnameTradition,
+see [phase3-surname-tradition-bridge.md](phase3-surname-tradition-bridge.md)
+for why it was generalized); adding a `/comparators/tag/order` route there
+and repeating the `app/Soundex.php`-style short-circuit-with-fallback
+pattern in `TagComparator::order()`/`byOrder()` would follow the exact
+same shape as [phase3-soundex-bridge.md](phase3-soundex-bridge.md).

@@ -124,10 +124,10 @@ than staying one-off manual checks.
       `' y '`-separator cases, folded into the golden fixture.
 - [x] The Unicode `\b` divergence (finding #2 above) is fixed in
       `patrilineal.js`'s shared `inflect()`, not worked around per-table.
-- [ ] **Not yet decided: Phase 3 bridging.** Task 04 deferred bridging
-      because only 1 of 9 registered traditions was ported — that
-      condition no longer holds now that all 9 are. See
-      [phase4-cutover-tracking.md](phase4-cutover-tracking.md) for the
-      current status; this is a decision to raise with whoever's driving
-      the migration, not one to make unilaterally given it touches 5 live
-      HTTP request handlers.
+- [x] **Phase 3 bridging.** Built — see
+      [phase3-surname-tradition-bridge.md](phase3-surname-tradition-bridge.md).
+      `BridgedSurnameTradition` decorates all 9 traditions;
+      `SurnameTraditionFactory` wires it in centrally, so none of the 5
+      HTTP request handlers needed to change. Not enabled by default
+      (`WEBTREES_SURNAME_TRADITION_SERVICE_URL` unset) — flipping it on in
+      a real deployment remains a separate, later decision.

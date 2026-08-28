@@ -36,8 +36,8 @@ use function usleep;
 
 /**
  * Phase 3 bridge test (see docs/php-to-js-migration/). Spins up the real
- * Node soundex service (server/soundex-service.mjs) as a child process and
- * proves two things end to end:
+ * Node migration service (server/migration-service.mjs) as a child process
+ * and proves two things end to end:
  *
  * 1. When WEBTREES_SOUNDEX_SERVICE_URL points at a live service,
  *    Soundex::russell()/compare()/daitchMokotoff() route through it and
@@ -73,7 +73,7 @@ class SoundexServiceBridgeTest extends TestCase
     public function testRoutesThroughLiveService(): void
     {
         if (!$this->startService()) {
-            self::markTestSkipped('Could not start server/soundex-service.mjs (node/npm unavailable?)');
+            self::markTestSkipped('Could not start server/migration-service.mjs (node/npm unavailable?)');
         }
 
         // Native results, computed with the bridge disabled — the baseline
@@ -107,7 +107,7 @@ class SoundexServiceBridgeTest extends TestCase
     private function startService(): bool
     {
         $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $command     = 'PORT=' . self::PORT . ' node ' . escapeshellarg(__DIR__ . '/../../server/soundex-service.mjs');
+        $command     = 'PORT=' . self::PORT . ' node ' . escapeshellarg(__DIR__ . '/../../server/migration-service.mjs');
 
         $process = proc_open($command, $descriptors, $pipes, __DIR__ . '/../../');
 

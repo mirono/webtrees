@@ -5,7 +5,7 @@
     "watch": "webpack --mode=development --watch",
     "build": "webpack --mode=production",
     "test": "vitest run",
-    "serve:soundex": "node server/soundex-service.mjs"
+    "serve:migration": "node server/migration-service.mjs"
   },
   "devDependencies": {
     "@babel/core": "8.0.1",

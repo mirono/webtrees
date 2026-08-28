@@ -39,11 +39,10 @@ port takes that narrower shape directly:
 extractName(nameFacts) { ... }
 ```
 
-`Individual`/`Fact` are not ported. Whatever calls into these classes from
-PHP is responsible for converting a real `Individual` into this shape
-before crossing the bridge — not yet done, see
-[phase4-cutover-tracking.md](../../docs/php-to-js-migration/phase4-cutover-tracking.md)
-(now that all 9 traditions are ported, revisit whether this is worth doing).
+`Individual`/`Fact` are not ported. `app/SurnameTradition/BridgedSurnameTradition.php`
+is what converts a real `Individual` into this shape before crossing the
+bridge — see
+[phase3-surname-tradition-bridge.md](../../docs/php-to-js-migration/phase3-surname-tradition-bridge.md).
 
 ### 2. `name()`/`description()` take an injected i18n object
 

@@ -20,6 +20,7 @@ declare(strict_types=1);
 namespace Fisharebest\Webtrees\Factories;
 
 use Fisharebest\Webtrees\Contracts\SurnameTraditionFactoryInterface;
+use Fisharebest\Webtrees\SurnameTradition\BridgedSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\DefaultSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\IcelandicSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\LithuanianSurnameTradition;
@@ -44,15 +45,22 @@ class SurnameTraditionFactory implements SurnameTraditionFactoryInterface
      */
     public function __construct()
     {
-        $this->register(self::PATERNAL, new PaternalSurnameTradition());
-        $this->register(self::PATRILINEAL, new PatrilinealSurnameTradition());
-        $this->register(self::MATRILINEAL, new MatrilinealSurnameTradition());
-        $this->register(self::PORTUGUESE, new PortugueseSurnameTradition());
-        $this->register(self::SPANISH, new SpanishSurnameTradition());
-        $this->register(self::POLISH, new PolishSurnameTradition());
-        $this->register(self::LITHUANIAN, new LithuanianSurnameTradition());
-        $this->register(self::ICELANDIC, new IcelandicSurnameTradition());
-        $this->register(self::DEFAULT, new DefaultSurnameTradition());
+        // Every built-in tradition is wrapped in the Phase 3 bridge (see
+        // BridgedSurnameTradition) — this is the single place all 9 get
+        // it, rather than editing the 5 HTTP request handlers that
+        // actually call newChildNames()/newParentNames()/newSpouseNames().
+        // Traditions registered later via register() (e.g. by modules)
+        // are NOT wrapped — there's no server-side implementation to
+        // bridge an arbitrary custom key to.
+        $this->register(self::PATERNAL, new BridgedSurnameTradition(new PaternalSurnameTradition(), self::PATERNAL));
+        $this->register(self::PATRILINEAL, new BridgedSurnameTradition(new PatrilinealSurnameTradition(), self::PATRILINEAL));
+        $this->register(self::MATRILINEAL, new BridgedSurnameTradition(new MatrilinealSurnameTradition(), self::MATRILINEAL));
+        $this->register(self::PORTUGUESE, new BridgedSurnameTradition(new PortugueseSurnameTradition(), self::PORTUGUESE));
+        $this->register(self::SPANISH, new BridgedSurnameTradition(new SpanishSurnameTradition(), self::SPANISH));
+        $this->register(self::POLISH, new BridgedSurnameTradition(new PolishSurnameTradition(), self::POLISH));
+        $this->register(self::LITHUANIAN, new BridgedSurnameTradition(new LithuanianSurnameTradition(), self::LITHUANIAN));
+        $this->register(self::ICELANDIC, new BridgedSurnameTradition(new IcelandicSurnameTradition(), self::ICELANDIC));
+        $this->register(self::DEFAULT, new BridgedSurnameTradition(new DefaultSurnameTradition(), self::DEFAULT));
     }
 
     /**
@@ -72,7 +80,7 @@ class SurnameTraditionFactory implements SurnameTraditionFactoryInterface
      */
     public function make(string $name): SurnameTraditionInterface
     {
-        return $this->surname_traditions[$name] ?? new DefaultSurnameTradition();
+        return $this->surname_traditions[$name] ?? new BridgedSurnameTradition(new DefaultSurnameTradition(), self::DEFAULT);
     }
 
     public function register(string $name, SurnameTraditionInterface $surname_tradition): void

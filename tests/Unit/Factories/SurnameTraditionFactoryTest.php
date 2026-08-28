@@ -21,6 +21,7 @@ namespace Fisharebest\Webtrees\Tests\Unit;
 
 use Fisharebest\Webtrees\Contracts\SurnameTraditionFactoryInterface;
 use Fisharebest\Webtrees\Factories\SurnameTraditionFactory;
+use Fisharebest\Webtrees\SurnameTradition\BridgedSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\DefaultSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\IcelandicSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\LithuanianSurnameTradition;
@@ -30,6 +31,7 @@ use Fisharebest\Webtrees\SurnameTradition\PatrilinealSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\PolishSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\PortugueseSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\SpanishSurnameTradition;
+use Fisharebest\Webtrees\SurnameTradition\SurnameTraditionInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\Tests\TestCase;
@@ -41,22 +43,40 @@ class SurnameTraditionFactoryTest extends TestCase
     {
         $factory = new SurnameTraditionFactory();
 
-        self::assertInstanceOf(DefaultSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::DEFAULT));
-        self::assertInstanceOf(IcelandicSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::ICELANDIC));
-        self::assertInstanceOf(LithuanianSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::LITHUANIAN));
-        self::assertInstanceOf(MatrilinealSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::MATRILINEAL));
-        self::assertInstanceOf(PaternalSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::PATERNAL));
-        self::assertInstanceOf(PatrilinealSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::PATRILINEAL));
-        self::assertInstanceOf(PolishSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::POLISH));
-        self::assertInstanceOf(PortugueseSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::PORTUGUESE));
-        self::assertInstanceOf(SpanishSurnameTradition::class, $factory->make(SurnameTraditionFactoryInterface::SPANISH));
+        // Every built-in tradition is wrapped in the Phase 3 bridge (see
+        // BridgedSurnameTradition) — check both that make() returns a
+        // bridged instance, and that it wraps the expected concrete
+        // native implementation.
+        self::assertInstanceOf(DefaultSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::DEFAULT));
+        self::assertInstanceOf(IcelandicSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::ICELANDIC));
+        self::assertInstanceOf(LithuanianSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::LITHUANIAN));
+        self::assertInstanceOf(MatrilinealSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::MATRILINEAL));
+        self::assertInstanceOf(PaternalSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::PATERNAL));
+        self::assertInstanceOf(PatrilinealSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::PATRILINEAL));
+        self::assertInstanceOf(PolishSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::POLISH));
+        self::assertInstanceOf(PortugueseSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::PORTUGUESE));
+        self::assertInstanceOf(SpanishSurnameTradition::class, $this->native($factory, SurnameTraditionFactoryInterface::SPANISH));
     }
 
     public function testCreateInvalid(): void
     {
         $factory = new SurnameTraditionFactory();
 
-        self::assertInstanceOf(DefaultSurnameTradition::class, $factory->make('FOOBAR'));
+        self::assertInstanceOf(DefaultSurnameTradition::class, $this->native($factory, 'FOOBAR'));
+    }
+
+    /**
+     * Every built-in tradition make() returns is a BridgedSurnameTradition
+     * (SurnameTraditionInterface itself doesn't declare native()) —
+     * narrows that for the assertions above.
+     */
+    private function native(SurnameTraditionFactory $factory, string $name): SurnameTraditionInterface
+    {
+        $tradition = $factory->make($name);
+
+        self::assertInstanceOf(BridgedSurnameTradition::class, $tradition);
+
+        return $tradition->native();
     }
 
     public function testAllDescriptions(): void

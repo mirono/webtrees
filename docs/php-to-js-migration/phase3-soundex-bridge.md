@@ -22,16 +22,26 @@ app/Place.php                         — per-request place-name indexing
 single import of a large tree. Any bridging strategy has to survive that
 without degrading import time to something unusable.
 
+> **Note:** the service originally lived at `server/soundex-service.mjs`
+> (`npm run serve:soundex`). It was renamed to `server/migration-service.mjs`
+> (`npm run serve:migration`) when the
+> [SurnameTradition bridge](phase3-surname-tradition-bridge.md) was added —
+> bolting an unrelated module onto a Soundex-named file would only get more
+> misleading with each future module. Soundex's routes and env var
+> (`WEBTREES_SOUNDEX_SERVICE_URL`) were deliberately left unchanged, only
+> the file/npm script were renamed, so this doc's routes below are still
+> accurate.
+
 ## What was chosen: persistent Node HTTP microservice, with automatic fallback
 
-- **`server/soundex-service.mjs`** — a small `node:http` server (no
+- **`server/migration-service.mjs`** — a small `node:http` server (no
   framework dependency) exposing the ported functions:
   - `GET /health` → `{"status":"ok"}`
   - `POST /russell {"text": "..."}` → `{"code": "..."}`
   - `POST /compare {"a": "...", "b": "..."}` → `{"match": true|false}`
   - `POST /daitch-mokotoff {"text": "..."}` → `{"code": "..."}`
 
-  Run with `npm run serve:soundex` (listens on `PORT`, default 8090).
+  Run with `npm run serve:migration` (listens on `PORT`, default 8090).
 
 - **`app/Soundex.php`** — `russell()`, `compare()`, and `daitchMokotoff()`
   each now start with a call to a new private `callService()` helper. If
@@ -78,7 +88,7 @@ batch API without a real caller to prove it against would be speculative.
   available rather than failing CI on a Node-less machine.
 - Manual check:
   ```bash
-  npm run serve:soundex &
+  npm run serve:migration &
   WEBTREES_SOUNDEX_SERVICE_URL=http://127.0.0.1:8090 php -r '...'   # routes through the service
   unset WEBTREES_SOUNDEX_SERVICE_URL; php -r '...'                  # native, unchanged
   ```
