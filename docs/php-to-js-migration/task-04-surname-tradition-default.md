@@ -4,7 +4,7 @@
 **Complexity:** Medium (introduces two bridging patterns the rest of the
 `SurnameTradition` cluster will reuse: shimming a domain object as plain
 input, and stubbing `I18N::translate*`)
-**Status:** Not started
+**Status:** Done
 **Unblocks (follow-on batch, not in this task):** the 8 concrete
 subclasses — `PatrilinealSurnameTradition`, `MatrilinealSurnameTradition`,
 `PaternalSurnameTradition`, `IcelandicSurnameTradition`,
@@ -300,19 +300,54 @@ confirm the JS port reproduces exactly that, not just "some" filtering).
 
 ## Definition of done
 
-- [ ] `golden/default_surname_tradition.json` and
+- [x] `golden/default_surname_tradition.json` and
       `golden/default_surname_tradition_buildname.json` generated from the
-      real PHP class (via reflection for the protected methods).
-- [ ] `extractName()`'s golden cases validated against the actual
-      `NameType::VALUE_BIRTH`/`VALUE_CHANGE` constant values, not assumed
-      strings.
-- [ ] `lib/surname-tradition/default.js` exports a `DefaultSurnameTradition`
+      real PHP class (via reflection for the protected `buildName()`).
+      6 `buildName` cases, including an added one beyond the original
+      plan: `['TYPE' => '0']` — confirmed PHP's `array_filter()` drops the
+      string `'0'` too, not just `''` (PHP's classic falsy-string rule),
+      which the JS port replicates explicitly via `isPhpFalsy()` rather
+      than relying on JS truthiness (which would only drop `''`).
+- [x] `extractName()`'s golden cases validated against the actual
+      `NameType::VALUE_BIRTH`/`VALUE_CHANGE` constant values (confirmed:
+      `'BIRTH'`/`'CHANGE'`, exactly as assumed) — not PHP-generated golden
+      JSON, since there's no PHP call to generate it from once
+      `Individual` is out of scope; hand-derived cases live directly in
+      `js-tests/parity_default_surname_tradition.test.js`, cross-checked
+      against `Fact::attribute()`/`value()` (`app/Fact.php:91-165`), which
+      confirmed `attribute('TYPE')` returns `''` when a NAME fact has no
+      `TYPE` subtag at all — i.e. `type: ''` is the common case, not an
+      edge case.
+- [x] `lib/surname-tradition/default.js` exports a `DefaultSurnameTradition`
       class taking an injected i18n object.
-- [ ] `parity_default_surname_tradition.test.js` passes 100%.
-- [ ] The i18n dependency-injection pattern and the NAME-fact-array input
-      shape are written down somewhere the next 8 subclass tasks can reuse
-      without re-deriving them (e.g. a short "patterns" note at the top of
-      `lib/surname-tradition/`).
-- [ ] Recorded in the Phase 4 cutover table under module
+- [x] `js-tests/parity_default_surname_tradition.test.js` passes 100%
+      (18/18).
+- [x] The i18n dependency-injection pattern and the NAME-fact-array input
+      shape are written down in `lib/surname-tradition/README.md` for the
+      8 subclass tasks to reuse.
+- [x] Recorded in the Phase 4 cutover table under module
       `lib/surname-tradition`, noting the 8 remaining subclasses as
-      follow-on work.
+      follow-on work. **Not bridged to a live PHP call site** — see below.
+
+### Phase 3 bridging: deliberately not done here
+
+Same reasoning as task 3. Real callers exist and are live, not deprecated
+— `SurnameTraditionFactory::make()` (`app/Factories/SurnameTraditionFactory.php`)
+feeds `newChildNames()`/`newParentNames()`/`newSpouseNames()` to 5 HTTP
+request handlers (`AddChildToIndividualPage`, `AddSpouseToIndividualPage`,
+`AddParentToIndividualPage`, `AddChildToFamilyPage`, `AddSpouseToFamilyPage`
+— the "add family member" form pre-fill). But:
+
+- Only 1 of the 9 registered traditions (`DefaultSurnameTradition`) is
+  ported. Most real tree configurations use a different tradition
+  (Patrilineal, Paternal, etc.) — none of those are ported yet, so a
+  bridge today would only ever fire for a minority of trees.
+- Bridging would require the call sites to convert a real `Individual`
+  into this port's plain NAME-fact-array shape first — new PHP code at 5
+  call sites, not just a `Soundex`-style short-circuit inside one class.
+
+Revisit once enough of the 8 remaining subclasses land that routing
+`SurnameTraditionFactory`'s output through Node covers most real trees —
+at that point a shared `Individual` → NAME-fact-array conversion helper
+(used by all 5 call sites) is the natural place to start, following
+[phase3-soundex-bridge.md](phase3-soundex-bridge.md)'s shape.

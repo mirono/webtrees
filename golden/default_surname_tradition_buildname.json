@@ -1,0 +1,60 @@
+[
+    {
+        "input": {
+            "name": "",
+            "parts": []
+        },
+        "output": "1 NAME",
+        "error": null
+    },
+    {
+        "input": {
+            "name": "",
+            "parts": {
+                "TYPE": "BIRTH"
+            }
+        },
+        "output": "1 NAME\n2 TYPE BIRTH",
+        "error": null
+    },
+    {
+        "input": {
+            "name": "John \/Smith\/",
+            "parts": []
+        },
+        "output": "1 NAME John \/Smith\/",
+        "error": null
+    },
+    {
+        "input": {
+            "name": "John \/Smith\/",
+            "parts": {
+                "TYPE": "BIRTH",
+                "SPFX": "van",
+                "SURN": "Berg"
+            }
+        },
+        "output": "1 NAME John \/Smith\/\n2 TYPE BIRTH\n2 SPFX van\n2 SURN Berg",
+        "error": null
+    },
+    {
+        "input": {
+            "name": "John \/Smith\/",
+            "parts": {
+                "TYPE": ""
+            }
+        },
+        "output": "1 NAME John \/Smith\/",
+        "error": null
+    },
+    {
+        "input": {
+            "name": "John \/Smith\/",
+            "parts": {
+                "TYPE": "0"
+            }
+        },
+        "output": "1 NAME John \/Smith\/",
+        "error": null
+    }
+]
