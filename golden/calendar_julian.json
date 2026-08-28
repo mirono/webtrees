@@ -1,0 +1,457 @@
+{
+    "constants": {
+        "daysInWeek": 7,
+        "monthsInYear": 12,
+        "gedcomCalendarEscape": "@#DJULIAN@",
+        "jdStart": 1
+    },
+    "jdToYmd": [
+        {
+            "input": {
+                "jd": 0
+            },
+            "output": [
+                -4713,
+                1,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 1
+            },
+            "output": [
+                -4713,
+                1,
+                2
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 328
+            },
+            "output": [
+                -4713,
+                11,
+                24
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 366
+            },
+            "output": [
+                -4712,
+                1,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 1721060
+            },
+            "output": [
+                -1,
+                1,
+                3
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 1721424
+            },
+            "output": [
+                1,
+                1,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 1721426
+            },
+            "output": [
+                1,
+                1,
+                3
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2451545
+            },
+            "output": [
+                1999,
+                12,
+                19
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2460000
+            },
+            "output": [
+                2023,
+                2,
+                11
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2500000
+            },
+            "output": [
+                2132,
+                8,
+                17
+            ],
+            "error": null
+        }
+    ],
+    "ymdToJd": [
+        {
+            "input": {
+                "year": 1,
+                "month": 1,
+                "day": 1
+            },
+            "output": 1721424,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 0,
+                "month": 1,
+                "day": 1
+            },
+            "output": 1721058,
+            "error": null
+        },
+        {
+            "input": {
+                "year": -1,
+                "month": 1,
+                "day": 1
+            },
+            "output": 1721058,
+            "error": null
+        },
+        {
+            "input": {
+                "year": -4713,
+                "month": 11,
+                "day": 24
+            },
+            "output": 328,
+            "error": null
+        },
+        {
+            "input": {
+                "year": -4714,
+                "month": 11,
+                "day": 24
+            },
+            "output": -38,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2000,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2451558,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1900,
+                "month": 2,
+                "day": 28
+            },
+            "output": 2415091,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": 2,
+                "day": 29
+            },
+            "output": 2460383,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 100,
+                "month": 3,
+                "day": 1
+            },
+            "output": 1757643,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": 0,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": 13,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 13 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": -1,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month -1 is invalid for this calendar"
+        }
+    ],
+    "isLeapYear": [
+        {
+            "input": {
+                "year": 1900
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2000
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2024
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2023
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": -4
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": -100
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": -400
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 0
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1
+            },
+            "output": false,
+            "error": null
+        }
+    ],
+    "daysInMonth": [
+        {
+            "input": {
+                "year": 2024,
+                "month": 2
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2023,
+                "month": 2
+            },
+            "output": 28,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1900,
+                "month": 2
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2000,
+                "month": 2
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": 4
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": 1
+            },
+            "output": 31,
+            "error": null
+        },
+        {
+            "input": {
+                "year": -4,
+                "month": 2
+            },
+            "output": 28,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": 0
+            },
+            "output": null,
+            "error": "Month 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": 13
+            },
+            "output": null,
+            "error": "Month 13 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 2024,
+                "month": -1
+            },
+            "output": null,
+            "error": "Month -1 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 0,
+                "month": 1
+            },
+            "output": null,
+            "error": "Year 0 is invalid for this calendar"
+        }
+    ],
+    "easterDays": [
+        {
+            "input": {
+                "year": 2024
+            },
+            "output": 32,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2025
+            },
+            "output": 17,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1900
+            },
+            "output": 19,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2000
+            },
+            "output": 27,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1600
+            },
+            "output": 2,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1700
+            },
+            "output": 10,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 2100
+            },
+            "output": 28,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1016
+            },
+            "output": 11,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1019
+            },
+            "output": 8,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1020
+            },
+            "output": 27,
+            "error": null
+        }
+    ]
+}
