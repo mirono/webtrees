@@ -1,0 +1,14 @@
+# Phase 4 — Cutover Tracking
+
+Per [php-to-js-migration-checklist.md](../php-to-js-migration-checklist.md).
+Tracked by module rather than HTTP route where there's no route yet — see
+[00-phase0-inventory.md](00-phase0-inventory.md) for why (no Node backend
+exists yet; these are library-level ports).
+
+| Route/Feature | Functions migrated | Parity tests passing | Traffic cut over? | Notes |
+|---|---|---|---|---|
+| `lib/soundex` | `russell`, `compare`, `daitchMokotoff` (+ bridging helpers `strtoupper`, `textScript`) — 5/5 across tasks 1-2 | ✅ 61/61 (`npm test`); ✅ bridge itself covered by `tests/Feature/SoundexServiceBridgeTest.php` | ⚠️ Bridged but not enabled — `app/Soundex.php`'s 4 real callers (`GedcomImportService`, `SearchService`, `BranchesListModule`, `Place`) now route through `server/soundex-service.mjs` *when* `WEBTREES_SOUNDEX_SERVICE_URL` is set, with automatic fallback to native PHP. Unset (0%) in every environment today — see [phase3-soundex-bridge.md](phase3-soundex-bridge.md) | Tasks 1 and 2 (the ports) and the Phase 3 bridge are all complete. Flipping the env var on in a real deployment — i.e. actually cutting traffic — is a separate, later decision; known risk to weigh first: no request batching yet, so bulk GEDCOM import pays one HTTP round-trip per name. |
+
+Review this table weekly. If a row hasn't moved in two weeks, that's the
+signal something's blocked — usually a Phase 3 bridging decision — surface
+it rather than letting it sit.
