@@ -1,0 +1,786 @@
+{
+    "constants": {
+        "daysInWeek": 7,
+        "gedcomCalendarEscape": "@#DHEBREW@",
+        "jdStart": 347998
+    },
+    "jdToYmd": [
+        {
+            "input": {
+                "jd": 347998
+            },
+            "output": [
+                1,
+                1,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2460000
+            },
+            "output": [
+                5783,
+                7,
+                3
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2415021
+            },
+            "output": [
+                5660,
+                5,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2299161
+            },
+            "output": [
+                5343,
+                1,
+                19
+            ],
+            "error": null
+        }
+    ],
+    "ymdToJd": [
+        {
+            "input": {
+                "year": 1,
+                "month": 1,
+                "day": 1
+            },
+            "output": 347998,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 7,
+                "day": 3
+            },
+            "output": 2460000,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5660,
+                "month": 5,
+                "day": 1
+            },
+            "output": 2415021,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5343,
+                "month": 1,
+                "day": 19
+            },
+            "output": 2299161,
+            "error": null
+        }
+    ],
+    "isLeapYear": [
+        {
+            "input": {
+                "year": 5780
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5781
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5782
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5785
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5786
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5787
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5788
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5789
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5790
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5791
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5792
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5793
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5794
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5795
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5796
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5797
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5798
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5799
+            },
+            "output": false,
+            "error": null
+        }
+    ],
+    "monthsInYear": [
+        {
+            "input": {
+                "year": 5780
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5781
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5782
+            },
+            "output": 13,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784
+            },
+            "output": 13,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5785
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5786
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5787
+            },
+            "output": 13,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5788
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5789
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5790
+            },
+            "output": 13,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5791
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5792
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5793
+            },
+            "output": 13,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5794
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5795
+            },
+            "output": 13,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5796
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5797
+            },
+            "output": 12,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5798
+            },
+            "output": 13,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5799
+            },
+            "output": 12,
+            "error": null
+        }
+    ],
+    "daysInMonth": [
+        {
+            "input": {
+                "year": 5783,
+                "month": 1
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 2
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 3
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 4
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 5
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 6
+            },
+            "output": 0,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 7
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 8
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 9
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 10
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 11
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 12
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5783,
+                "month": 13
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 1
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 2
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 3
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 4
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 5
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 6
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 7
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 8
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 9
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 10
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 11
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 12
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 13
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 0,
+                "month": 1
+            },
+            "output": null,
+            "error": "Year 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 0
+            },
+            "output": null,
+            "error": "Month 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 5784,
+                "month": 14
+            },
+            "output": null,
+            "error": "Month 14 is invalid for this calendar"
+        }
+    ],
+    "emulateBug54254": [
+        {
+            "input": {
+                "year": 5783,
+                "jd": 2459998
+            },
+            "output": {
+                "normal": [
+                    5783,
+                    7,
+                    1
+                ],
+                "withBugEmulation": [
+                    5783,
+                    6,
+                    1
+                ]
+            }
+        },
+        {
+            "input": {
+                "year": 5784,
+                "jd": 2460381
+            },
+            "output": {
+                "normal": [
+                    5784,
+                    7,
+                    1
+                ],
+                "withBugEmulation": [
+                    5784,
+                    7,
+                    1
+                ]
+            }
+        }
+    ],
+    "monthsInYearNoArg": 13,
+    "numberToHebrewNumerals": [
+        {
+            "input": {
+                "n": 1,
+                "showThousands": true
+            },
+            "output": "א׳",
+            "byteLength": 4
+        },
+        {
+            "input": {
+                "n": 1,
+                "showThousands": false
+            },
+            "output": "א׳",
+            "byteLength": 4
+        },
+        {
+            "input": {
+                "n": 15,
+                "showThousands": false
+            },
+            "output": "ט״ו",
+            "byteLength": 6
+        },
+        {
+            "input": {
+                "n": 16,
+                "showThousands": false
+            },
+            "output": "ט״ז",
+            "byteLength": 6
+        },
+        {
+            "input": {
+                "n": 17,
+                "showThousands": false
+            },
+            "output": "י״ז",
+            "byteLength": 6
+        },
+        {
+            "input": {
+                "n": 18,
+                "showThousands": false
+            },
+            "output": "י״ח",
+            "byteLength": 6
+        },
+        {
+            "input": {
+                "n": 19,
+                "showThousands": false
+            },
+            "output": "י״ט",
+            "byteLength": 6
+        },
+        {
+            "input": {
+                "n": 20,
+                "showThousands": false
+            },
+            "output": "כ׳",
+            "byteLength": 4
+        },
+        {
+            "input": {
+                "n": 100,
+                "showThousands": false
+            },
+            "output": "ק׳",
+            "byteLength": 4
+        },
+        {
+            "input": {
+                "n": 400,
+                "showThousands": false
+            },
+            "output": "ת׳",
+            "byteLength": 4
+        },
+        {
+            "input": {
+                "n": 613,
+                "showThousands": false
+            },
+            "output": "תרי״ג",
+            "byteLength": 10
+        },
+        {
+            "input": {
+                "n": 5784,
+                "showThousands": true
+            },
+            "output": "ה׳תשפ״ד",
+            "byteLength": 14
+        },
+        {
+            "input": {
+                "n": 5784,
+                "showThousands": false
+            },
+            "output": "תשפ״ד",
+            "byteLength": 10
+        },
+        {
+            "input": {
+                "n": 5000,
+                "showThousands": true
+            },
+            "output": "ה׳ אלפים",
+            "byteLength": 15
+        },
+        {
+            "input": {
+                "n": 5000,
+                "showThousands": false
+            },
+            "output": "ה׳ אלפים",
+            "byteLength": 15
+        },
+        {
+            "input": {
+                "n": 5001,
+                "showThousands": true
+            },
+            "output": "ה׳א׳",
+            "byteLength": 8
+        },
+        {
+            "input": {
+                "n": 5001,
+                "showThousands": false
+            },
+            "output": "א׳",
+            "byteLength": 4
+        }
+    ]
+}
