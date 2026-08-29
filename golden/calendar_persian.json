@@ -1,0 +1,249 @@
+{
+    "constants": {
+        "daysInWeek": 7,
+        "monthsInYear": 12,
+        "gedcomCalendarEscape": "@#DJALALI@",
+        "jdStart": 1948321,
+        "jdEnd": 9223372036854775807
+    },
+    "jdToYmd": [
+        {
+            "input": {
+                "jd": 1948321
+            },
+            "output": [
+                1,
+                1,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2460000
+            },
+            "output": [
+                1401,
+                12,
+                5
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2450000
+            },
+            "output": [
+                1374,
+                7,
+                17
+            ],
+            "error": null
+        }
+    ],
+    "ymdToJd": [
+        {
+            "input": {
+                "year": 1,
+                "month": 1,
+                "day": 1
+            },
+            "output": 1948321,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 100,
+                "month": 1,
+                "day": 1
+            },
+            "output": 1984480,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1403,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2460390,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1404,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2460755,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1,
+                "month": 0,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 1,
+                "month": 13,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 13 is invalid for this calendar"
+        }
+    ],
+    "isLeapYear": [
+        {
+            "input": {
+                "year": 1
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 100
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1403
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1404
+            },
+            "output": true,
+            "error": null
+        }
+    ],
+    "daysInMonth": [
+        {
+            "input": {
+                "year": 1403,
+                "month": 1
+            },
+            "output": 31,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1403,
+                "month": 6
+            },
+            "output": 31,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1403,
+                "month": 7
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1403,
+                "month": 12
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1404,
+                "month": 12
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1403,
+                "month": 0
+            },
+            "output": 31,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1403,
+                "month": 13
+            },
+            "output": 29,
+            "error": null
+        }
+    ],
+    "mod": [
+        {
+            "input": {
+                "dividend": -5,
+                "divisor": 3
+            },
+            "output": 1
+        },
+        {
+            "input": {
+                "dividend": 5,
+                "divisor": 3
+            },
+            "output": 2
+        },
+        {
+            "input": {
+                "dividend": -1029982,
+                "divisor": 1029983
+            },
+            "output": 1
+        },
+        {
+            "input": {
+                "dividend": 0,
+                "divisor": 5
+            },
+            "output": 0
+        },
+        {
+            "input": {
+                "dividend": -2820,
+                "divisor": 2820
+            },
+            "output": 0
+        }
+    ],
+    "negativeYearLimitation": [
+        {
+            "input": {
+                "year": -1
+            },
+            "ymdToJdOutput": 1947955,
+            "ymdToJdError": null,
+            "roundTripOutput": [
+                0,
+                1,
+                1
+            ],
+            "roundTripError": null
+        },
+        {
+            "input": {
+                "year": -100
+            },
+            "ymdToJdOutput": 1911796,
+            "ymdToJdError": null,
+            "roundTripOutput": null,
+            "roundTripError": "Month -11 is invalid for this calendar"
+        }
+    ]
+}

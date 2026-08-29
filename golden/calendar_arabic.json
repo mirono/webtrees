@@ -1,0 +1,180 @@
+{
+    "constants": {
+        "daysInWeek": 7,
+        "monthsInYear": 12,
+        "gedcomCalendarEscape": "@#DHIJRI@",
+        "jdStart": 1948440,
+        "jdEnd": 9223372036854775807
+    },
+    "jdToYmd": [
+        {
+            "input": {
+                "jd": 1948440
+            },
+            "output": [
+                1,
+                1,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2460000
+            },
+            "output": [
+                1444,
+                8,
+                3
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2450000
+            },
+            "output": [
+                1416,
+                5,
+                14
+            ],
+            "error": null
+        }
+    ],
+    "ymdToJd": [
+        {
+            "input": {
+                "year": 1,
+                "month": 1,
+                "day": 1
+            },
+            "output": 1948440,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 100,
+                "month": 1,
+                "day": 1
+            },
+            "output": 1983522,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1445,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2460145,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1446,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2460500,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1,
+                "month": 0,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 1,
+                "month": 13,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 13 is invalid for this calendar"
+        }
+    ],
+    "isLeapYear": [
+        {
+            "input": {
+                "year": 1
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 100
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1445
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1446
+            },
+            "output": false,
+            "error": null
+        }
+    ],
+    "daysInMonth": [
+        {
+            "input": {
+                "year": 1445,
+                "month": 1
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1445,
+                "month": 2
+            },
+            "output": 28,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1445,
+                "month": 12
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1445,
+                "month": 0
+            },
+            "output": 29,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1445,
+                "month": 13
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1445,
+                "month": -5
+            },
+            "output": 29,
+            "error": null
+        }
+    ]
+}

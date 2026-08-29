@@ -1,0 +1,196 @@
+{
+    "constants": {
+        "daysInWeek": 10,
+        "monthsInYear": 13,
+        "gedcomCalendarEscape": "@#DFRENCH R@",
+        "jdStart": 2375840,
+        "jdEnd": 2380687
+    },
+    "jdToYmd": [
+        {
+            "input": {
+                "jd": 2375840
+            },
+            "output": [
+                1,
+                1,
+                1
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2380687
+            },
+            "output": [
+                14,
+                4,
+                10
+            ],
+            "error": null
+        },
+        {
+            "input": {
+                "jd": 2378000
+            },
+            "output": [
+                6,
+                12,
+                5
+            ],
+            "error": null
+        }
+    ],
+    "ymdToJd": [
+        {
+            "input": {
+                "year": 1,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2375840,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2377301,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 7,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2378031,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 11,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2379492,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 14,
+                "month": 1,
+                "day": 1
+            },
+            "output": 2380588,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1,
+                "month": 0,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": 1,
+                "month": 14,
+                "day": 1
+            },
+            "output": null,
+            "error": "Month 14 is invalid for this calendar"
+        }
+    ],
+    "isLeapYear": [
+        {
+            "input": {
+                "year": 1
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 5
+            },
+            "output": false,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 7
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 11
+            },
+            "output": true,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 14
+            },
+            "output": false,
+            "error": null
+        }
+    ],
+    "daysInMonth": [
+        {
+            "input": {
+                "year": 1,
+                "month": 1
+            },
+            "output": 30,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 1,
+                "month": 13
+            },
+            "output": 5,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 3,
+                "month": 13
+            },
+            "output": 6,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 4,
+                "month": 13
+            },
+            "output": 5,
+            "error": null
+        },
+        {
+            "input": {
+                "year": 0,
+                "month": 1
+            },
+            "output": null,
+            "error": "Year 0 is invalid for this calendar"
+        },
+        {
+            "input": {
+                "year": -1,
+                "month": 1
+            },
+            "output": null,
+            "error": "Year -1 is invalid for this calendar"
+        }
+    ]
+}
