@@ -1,0 +1,2546 @@
+{
+    "construction": [
+        {
+            "input": {
+                "class": "French",
+                "input": [
+                    "12",
+                    "VEND",
+                    "1"
+                ]
+            },
+            "output": {
+                "year": 12,
+                "month": 1,
+                "day": 1,
+                "minimumJulianDay": 2379858,
+                "maximumJulianDay": 2379858
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "input": [
+                    "3",
+                    "COMP",
+                    "6"
+                ]
+            },
+            "output": {
+                "year": 3,
+                "month": 13,
+                "day": 6,
+                "minimumJulianDay": 2376935,
+                "maximumJulianDay": 2376935
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "input": [
+                    "12",
+                    "COMP",
+                    "5"
+                ]
+            },
+            "output": {
+                "year": 12,
+                "month": 13,
+                "day": 5,
+                "minimumJulianDay": 2380222,
+                "maximumJulianDay": 2380222
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "input": [
+                    "12",
+                    "",
+                    ""
+                ]
+            },
+            "output": {
+                "year": 12,
+                "month": 0,
+                "day": 0,
+                "minimumJulianDay": 2379858,
+                "maximumJulianDay": 2380222
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "input": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ]
+            },
+            "output": {
+                "year": 1445,
+                "month": 9,
+                "day": 10,
+                "minimumJulianDay": 2460390,
+                "maximumJulianDay": 2460390
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "input": [
+                    "1445",
+                    "",
+                    ""
+                ]
+            },
+            "output": {
+                "year": 1445,
+                "month": 0,
+                "day": 0,
+                "minimumJulianDay": 2460145,
+                "maximumJulianDay": 2460499
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "input": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ]
+            },
+            "output": {
+                "year": 1403,
+                "month": 7,
+                "day": 1,
+                "minimumJulianDay": 2460576,
+                "maximumJulianDay": 2460576
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "input": [
+                    "1403",
+                    "",
+                    ""
+                ]
+            },
+            "output": {
+                "year": 1403,
+                "month": 0,
+                "day": 0,
+                "minimumJulianDay": 2460390,
+                "maximumJulianDay": 2460754
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "input": [
+                    "5784",
+                    "ADR",
+                    "1"
+                ]
+            },
+            "output": {
+                "year": 5784,
+                "month": 6,
+                "day": 1,
+                "minimumJulianDay": 2460351,
+                "maximumJulianDay": 2460351
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "input": [
+                    "5783",
+                    "ADR",
+                    "1"
+                ]
+            },
+            "output": {
+                "year": 5783,
+                "month": 7,
+                "day": 1,
+                "minimumJulianDay": 2459998,
+                "maximumJulianDay": 2459998
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "input": [
+                    "5784",
+                    "ADS",
+                    "1"
+                ]
+            },
+            "output": {
+                "year": 5784,
+                "month": 7,
+                "day": 1,
+                "minimumJulianDay": 2460381,
+                "maximumJulianDay": 2460381
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "input": [
+                    "5784",
+                    "",
+                    ""
+                ]
+            },
+            "output": {
+                "year": 5784,
+                "month": 0,
+                "day": 0,
+                "minimumJulianDay": 2460204,
+                "maximumJulianDay": 2460586
+            }
+        }
+    ],
+    "constructionFromJd": [
+        {
+            "input": {
+                "class": "French",
+                "jd": 2378000
+            },
+            "output": {
+                "year": 6,
+                "month": 12,
+                "day": 5
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "jd": 2378000
+            },
+            "output": {
+                "year": 1213,
+                "month": 3,
+                "day": 10
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "jd": 2378000
+            },
+            "output": {
+                "year": 1177,
+                "month": 5,
+                "day": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "jd": 2378000
+            },
+            "output": {
+                "year": 5558,
+                "month": 13,
+                "day": 10
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "jd": 2460600
+            },
+            "output": {
+                "year": 1446,
+                "month": 4,
+                "day": 12
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "jd": 2460600
+            },
+            "output": {
+                "year": 1403,
+                "month": 7,
+                "day": 25
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "jd": 2460600
+            },
+            "output": {
+                "year": 5785,
+                "month": 1,
+                "day": 14
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "jd": 2460700
+            },
+            "output": {
+                "year": 1446,
+                "month": 7,
+                "day": 24
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "jd": 2460700
+            },
+            "output": {
+                "year": 1403,
+                "month": 11,
+                "day": 5
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "jd": 2460700
+            },
+            "output": {
+                "year": 5785,
+                "month": 4,
+                "day": 24
+            }
+        }
+    ],
+    "dateProperties": [
+        {
+            "input": {
+                "class": "French",
+                "year": 3
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 30,
+                "daysInWeek": 10,
+                "monthsInYear": 13,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12
+            },
+            "output": {
+                "isLeapYear": false,
+                "daysInMonth": 30,
+                "daysInWeek": 10,
+                "monthsInYear": 13,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 30,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444
+            },
+            "output": {
+                "isLeapYear": false,
+                "daysInMonth": 30,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403
+            },
+            "output": {
+                "isLeapYear": false,
+                "daysInMonth": 31,
+                "daysInWeek": 7,
+                "monthsInYear": 12,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784
+            },
+            "output": {
+                "isLeapYear": true,
+                "daysInMonth": 30,
+                "daysInWeek": 7,
+                "monthsInYear": 13,
+                "inValidRange": true
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783
+            },
+            "output": {
+                "isLeapYear": false,
+                "daysInMonth": 30,
+                "daysInWeek": 7,
+                "monthsInYear": 13,
+                "inValidRange": true
+            }
+        }
+    ],
+    "daysInMonth": [
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 1,
+                "monthName": "VEND"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 2,
+                "monthName": "BRUM"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 3,
+                "monthName": "FRIM"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 4,
+                "monthName": "NIVO"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 5,
+                "monthName": "PLUV"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 6,
+                "monthName": "VENT"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 7,
+                "monthName": "GERM"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 8,
+                "monthName": "FLOR"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 9,
+                "monthName": "PRAI"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 10,
+                "monthName": "MESS"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 11,
+                "monthName": "THER"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 12,
+                "monthName": "FRUC"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 3,
+                "monthNumber": 13,
+                "monthName": "COMP"
+            },
+            "output": {
+                "resolvedMonth": 13,
+                "daysInMonth": 6
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 1,
+                "monthName": "VEND"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 2,
+                "monthName": "BRUM"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 3,
+                "monthName": "FRIM"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 4,
+                "monthName": "NIVO"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 5,
+                "monthName": "PLUV"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 6,
+                "monthName": "VENT"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 7,
+                "monthName": "GERM"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 8,
+                "monthName": "FLOR"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 9,
+                "monthName": "PRAI"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 10,
+                "monthName": "MESS"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 11,
+                "monthName": "THER"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 12,
+                "monthName": "FRUC"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "French",
+                "year": 12,
+                "monthNumber": 13,
+                "monthName": "COMP"
+            },
+            "output": {
+                "resolvedMonth": 13,
+                "daysInMonth": 5
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 1,
+                "monthName": "MUHAR"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 2,
+                "monthName": "SAFAR"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 28
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 3,
+                "monthName": "RABIA"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 4,
+                "monthName": "RABIT"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 5,
+                "monthName": "JUMAA"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 6,
+                "monthName": "JUMAT"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 7,
+                "monthName": "RAJAB"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 8,
+                "monthName": "SHAAB"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 9,
+                "monthName": "RAMAD"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 10,
+                "monthName": "SHAWW"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 11,
+                "monthName": "DHUAQ"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1445,
+                "monthNumber": 12,
+                "monthName": "DHUAH"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 1,
+                "monthName": "MUHAR"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 2,
+                "monthName": "SAFAR"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 28
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 3,
+                "monthName": "RABIA"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 4,
+                "monthName": "RABIT"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 5,
+                "monthName": "JUMAA"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 6,
+                "monthName": "JUMAT"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 7,
+                "monthName": "RAJAB"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 8,
+                "monthName": "SHAAB"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 9,
+                "monthName": "RAMAD"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 10,
+                "monthName": "SHAWW"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 11,
+                "monthName": "DHUAQ"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "year": 1444,
+                "monthNumber": 12,
+                "monthName": "DHUAH"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 1,
+                "monthName": "FARVA"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 2,
+                "monthName": "ORDIB"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 3,
+                "monthName": "KHORD"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 4,
+                "monthName": "TIR"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 5,
+                "monthName": "MORDA"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 6,
+                "monthName": "SHAHR"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 7,
+                "monthName": "MEHR"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 8,
+                "monthName": "ABAN"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 9,
+                "monthName": "AZAR"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 10,
+                "monthName": "DEY"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 11,
+                "monthName": "BAHMA"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1404,
+                "monthNumber": 12,
+                "monthName": "ESFAN"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 1,
+                "monthName": "FARVA"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 2,
+                "monthName": "ORDIB"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 3,
+                "monthName": "KHORD"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 4,
+                "monthName": "TIR"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 5,
+                "monthName": "MORDA"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 6,
+                "monthName": "SHAHR"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "daysInMonth": 31
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 7,
+                "monthName": "MEHR"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 8,
+                "monthName": "ABAN"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 9,
+                "monthName": "AZAR"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 10,
+                "monthName": "DEY"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 11,
+                "monthName": "BAHMA"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "year": 1403,
+                "monthNumber": 12,
+                "monthName": "ESFAN"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 1,
+                "monthName": "TSH"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 2,
+                "monthName": "CSH"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 3,
+                "monthName": "KSL"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 4,
+                "monthName": "TVT"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 5,
+                "monthName": "SHV"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 6,
+                "monthName": "ADR"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 7,
+                "monthName": "ADS"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 8,
+                "monthName": "NSN"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 9,
+                "monthName": "IYR"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 10,
+                "monthName": "SVN"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 11,
+                "monthName": "TMZ"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 12,
+                "monthName": "AAV"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5784,
+                "monthNumber": 13,
+                "monthName": "ELL"
+            },
+            "output": {
+                "resolvedMonth": 13,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 1,
+                "monthName": "TSH"
+            },
+            "output": {
+                "resolvedMonth": 1,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 2,
+                "monthName": "CSH"
+            },
+            "output": {
+                "resolvedMonth": 2,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 3,
+                "monthName": "KSL"
+            },
+            "output": {
+                "resolvedMonth": 3,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 4,
+                "monthName": "TVT"
+            },
+            "output": {
+                "resolvedMonth": 4,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 5,
+                "monthName": "SHV"
+            },
+            "output": {
+                "resolvedMonth": 5,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 6,
+                "monthName": "ADR"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 7,
+                "monthName": "ADS"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 8,
+                "monthName": "NSN"
+            },
+            "output": {
+                "resolvedMonth": 8,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 9,
+                "monthName": "IYR"
+            },
+            "output": {
+                "resolvedMonth": 9,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 10,
+                "monthName": "SVN"
+            },
+            "output": {
+                "resolvedMonth": 10,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 11,
+                "monthName": "TMZ"
+            },
+            "output": {
+                "resolvedMonth": 11,
+                "daysInMonth": 29
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 12,
+                "monthName": "AAV"
+            },
+            "output": {
+                "resolvedMonth": 12,
+                "daysInMonth": 30
+            }
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "year": 5783,
+                "monthNumber": 13,
+                "monthName": "ELL"
+            },
+            "output": {
+                "resolvedMonth": 13,
+                "daysInMonth": 29
+            }
+        }
+    ],
+    "format": [
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%F %j, %Y",
+                "qualifier": ""
+            },
+            "output": "Vendemiaire 1, An XII"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%Y-%m-%d",
+                "qualifier": ""
+            },
+            "output": "An XII-01-01"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%A %O %E",
+                "qualifier": ""
+            },
+            "output": "01 VEND 0012"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%@",
+                "qualifier": ""
+            },
+            "output": "@#DFRENCH R@"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%d\/%m\/%Y",
+                "qualifier": ""
+            },
+            "output": "01\/01\/An XII"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%l, %F %j",
+                "qualifier": ""
+            },
+            "output": "Nonidi, Vendemiaire 1"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%D",
+                "qualifier": ""
+            },
+            "output": "Nonidi"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": ""
+            },
+            "output": "Vendemiaire"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "ABT"
+            },
+            "output": "Vendemiaire"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "BEF"
+            },
+            "output": "Vendemiaire"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "AFT"
+            },
+            "output": "Vendemiaire"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "FROM"
+            },
+            "output": "Vendemiaire"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "AND"
+            },
+            "output": "Vendemiaire"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%F %j, %Y",
+                "qualifier": ""
+            },
+            "output": "Ramadan 10, 1445"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%Y-%m-%d",
+                "qualifier": ""
+            },
+            "output": "1445-09-10"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%A %O %E",
+                "qualifier": ""
+            },
+            "output": "10 RAMAD 1445"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%@",
+                "qualifier": ""
+            },
+            "output": "@#DHIJRI@"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%d\/%m\/%Y",
+                "qualifier": ""
+            },
+            "output": "10\/09\/1445"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%l, %F %j",
+                "qualifier": ""
+            },
+            "output": "Wednesday, Ramadan 10"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%D",
+                "qualifier": ""
+            },
+            "output": "Wed"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%F",
+                "qualifier": ""
+            },
+            "output": "Ramadan"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%F",
+                "qualifier": "ABT"
+            },
+            "output": "Ramadan"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%F",
+                "qualifier": "BEF"
+            },
+            "output": "Ramadan"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%F",
+                "qualifier": "AFT"
+            },
+            "output": "Ramadan"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%F",
+                "qualifier": "FROM"
+            },
+            "output": "Ramadan"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    "10"
+                ],
+                "format": "%F",
+                "qualifier": "AND"
+            },
+            "output": "Ramadan"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%F %j, %Y",
+                "qualifier": ""
+            },
+            "output": "Mehr 1, 1403"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%Y-%m-%d",
+                "qualifier": ""
+            },
+            "output": "1403-07-01"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%A %O %E",
+                "qualifier": ""
+            },
+            "output": "01 MEHR 1403"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%@",
+                "qualifier": ""
+            },
+            "output": "@#DJALALI@"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%d\/%m\/%Y",
+                "qualifier": ""
+            },
+            "output": "01\/07\/1403"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%l, %F %j",
+                "qualifier": ""
+            },
+            "output": "Sunday, Mehr 1"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%D",
+                "qualifier": ""
+            },
+            "output": "Sun"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": ""
+            },
+            "output": "Mehr"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "ABT"
+            },
+            "output": "Mehr"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "BEF"
+            },
+            "output": "Mehr"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "AFT"
+            },
+            "output": "Mehr"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "FROM"
+            },
+            "output": "Mehr"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    "1"
+                ],
+                "format": "%F",
+                "qualifier": "AND"
+            },
+            "output": "Mehr"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%F %j, %Y",
+                "qualifier": ""
+            },
+            "output": "Adar II 15, 5784"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%Y-%m-%d",
+                "qualifier": ""
+            },
+            "output": "5784-07-15"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%A %O %E",
+                "qualifier": ""
+            },
+            "output": "15 ADS 5784"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%@",
+                "qualifier": ""
+            },
+            "output": "@#DHEBREW@"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%d\/%m\/%Y",
+                "qualifier": ""
+            },
+            "output": "15\/07\/5784"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%l, %F %j",
+                "qualifier": ""
+            },
+            "output": "Monday, Adar II 15"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%D",
+                "qualifier": ""
+            },
+            "output": "Mon"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": ""
+            },
+            "output": "Adar II"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "ABT"
+            },
+            "output": "Adar II"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "BEF"
+            },
+            "output": "Adar II"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "AFT"
+            },
+            "output": "Adar II"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "FROM"
+            },
+            "output": "Adar II"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    "15"
+                ],
+                "format": "%F",
+                "qualifier": "AND"
+            },
+            "output": "Adar II"
+        }
+    ],
+    "formatIncomplete": [
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "An XII"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "12",
+                    "VEND",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "Vendemiaire  An XII"
+        },
+        {
+            "input": {
+                "class": "French",
+                "date": [
+                    "",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": ""
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "1445"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "1445",
+                    "RAMAD",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "Ramadan  1445"
+        },
+        {
+            "input": {
+                "class": "Hijri",
+                "date": [
+                    "",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": ""
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "1403"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "1403",
+                    "MEHR",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "Mehr  1403"
+        },
+        {
+            "input": {
+                "class": "Jalali",
+                "date": [
+                    "",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": ""
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "5784"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "5784",
+                    "ADS",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": "Adar II  5784"
+        },
+        {
+            "input": {
+                "class": "Jewish",
+                "date": [
+                    "",
+                    "",
+                    ""
+                ],
+                "format": "%F %j, %Y"
+            },
+            "output": ""
+        }
+    ],
+    "jewishAdarMonthNames": [
+        {
+            "input": {
+                "year": "5784",
+                "month": "ADR",
+                "label": "Adar I (leap year)"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "nominative": "Adar I",
+                "genitive": "Adar I",
+                "locative": "Adar I",
+                "instrumental": "Adar I"
+            }
+        },
+        {
+            "input": {
+                "year": "5784",
+                "month": "ADS",
+                "label": "Adar II (leap year)"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "nominative": "Adar II",
+                "genitive": "Adar II",
+                "locative": "Adar II",
+                "instrumental": "Adar II"
+            }
+        },
+        {
+            "input": {
+                "year": "5783",
+                "month": "ADR",
+                "label": "Adar (non-leap year, remapped)"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "nominative": "Adar",
+                "genitive": "Adar",
+                "locative": "Adar",
+                "instrumental": "Adar"
+            }
+        }
+    ],
+    "jewishNextMonth": [
+        {
+            "input": {
+                "year": "5784",
+                "month": "ADR"
+            },
+            "output": {
+                "resolvedMonth": 6,
+                "minimumJulianDay": 2460351,
+                "maximumJulianDay": 2460380
+            }
+        },
+        {
+            "input": {
+                "year": "5783",
+                "month": "ADR"
+            },
+            "output": {
+                "resolvedMonth": 7,
+                "minimumJulianDay": 2459998,
+                "maximumJulianDay": 2460026
+            }
+        }
+    ],
+    "jewishHebrewScriptFormatting": [
+        {
+            "input": {
+                "year": "5784",
+                "month": "TSH",
+                "day": "15"
+            },
+            "output": {
+                "formatDay": "ט״ו",
+                "formatShortYear": "תשפ״ד",
+                "formatLongYear": "ה׳תשפ״ד"
+            }
+        },
+        {
+            "input": {
+                "year": "5001",
+                "month": "TSH",
+                "day": "1"
+            },
+            "output": {
+                "formatDay": "א׳",
+                "formatShortYear": "א׳",
+                "formatLongYear": "ה׳א׳"
+            }
+        }
+    ]
+}
