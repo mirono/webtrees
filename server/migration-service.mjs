@@ -16,12 +16,14 @@
 // The Phase 3 bridge target for the PHP->JS strangler-fig migration (see
 // docs/php-to-js-migration/). Hosts every ported module that has a live
 // PHP-side bridge — currently Soundex (app/Soundex.php,
-// WEBTREES_SOUNDEX_SERVICE_URL, see phase3-soundex-bridge.md) and
+// WEBTREES_SOUNDEX_SERVICE_URL, see phase3-soundex-bridge.md),
 // SurnameTradition (app/SurnameTradition/BridgedSurnameTradition.php,
 // WEBTREES_SURNAME_TRADITION_SERVICE_URL, see
-// phase3-surname-tradition-bridge.md). Each PHP bridge falls back to its
-// own native implementation on any failure — this service is never a
-// single point of failure for the app, for either module.
+// phase3-surname-tradition-bridge.md), and GedcomService
+// (app/Services/GedcomService.php, WEBTREES_GEDCOM_SERVICE_URL, see
+// phase3-gedcom-service-bridge.md). Each PHP bridge falls back to its own
+// native implementation on any failure — this service is never a single
+// point of failure for the app, for any module.
 //
 // Originally soundex-service.mjs (Soundex-only) — renamed when the
 // SurnameTradition bridge was added, since bolting unrelated modules onto
@@ -39,6 +41,7 @@
 
 import { createServer } from 'node:http';
 import { russell, compare, daitchMokotoff } from '../lib/soundex.js';
+import { canonicalTag, readLatitude, readLongitude } from '../lib/services/gedcom-service.js';
 import { DefaultSurnameTradition } from '../lib/surname-tradition/default.js';
 import { PatrilinealSurnameTradition } from '../lib/surname-tradition/patrilineal.js';
 import { PaternalSurnameTradition } from '../lib/surname-tradition/paternal.js';
@@ -57,6 +60,14 @@ const SOUNDEX_ROUTES = {
   '/russell': (body) => ({ code: russell(String(body.text ?? '')) }),
   '/compare': (body) => ({ match: compare(String(body.a ?? ''), String(body.b ?? '')) }),
   '/daitch-mokotoff': (body) => ({ code: daitchMokotoff(String(body.text ?? '')) }),
+};
+
+// --- GedcomService routes (app/Services/GedcomService.php) ---
+
+const GEDCOM_SERVICE_ROUTES = {
+  '/gedcom/canonical-tag': (body) => ({ tag: canonicalTag(String(body.tag ?? '')) }),
+  '/gedcom/read-latitude': (body) => ({ value: readLatitude(String(body.text ?? '')) }),
+  '/gedcom/read-longitude': (body) => ({ value: readLongitude(String(body.text ?? '')) }),
 };
 
 // --- SurnameTradition routes (app/SurnameTradition/BridgedSurnameTradition.php) ---
@@ -126,6 +137,10 @@ function readBody(req) {
 function resolveHandler(pathname) {
   if (SOUNDEX_ROUTES[pathname]) {
     return SOUNDEX_ROUTES[pathname];
+  }
+
+  if (GEDCOM_SERVICE_ROUTES[pathname]) {
+    return GEDCOM_SERVICE_ROUTES[pathname];
   }
 
   const segments = pathname.split('/').filter(Boolean);

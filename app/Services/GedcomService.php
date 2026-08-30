@@ -19,13 +19,98 @@ declare(strict_types=1);
 
 namespace Fisharebest\Webtrees\Services;
 
+use Fig\Http\Message\StatusCodeInterface;
 use Fisharebest\Webtrees\Gedcom;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
+use Throwable;
+
+use function array_key_exists;
+use function getenv;
+use function is_array;
+use function is_string;
+use function json_decode;
+use function json_encode;
+use function rtrim;
+
+use const JSON_THROW_ON_ERROR;
 
 /**
  * Utilities for manipulating GEDCOM data.
  */
 class GedcomService
 {
+    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
+    // docs/php-to-js-migration/). When set, canonicalTag()/readLatitude()/
+    // readLongitude() try this Node service first and fall back to the
+    // native PHP implementation below on any failure — the service is
+    // never a single point of failure. Unset by default: with no env var,
+    // behavior is byte-for-byte identical to before this migration started.
+    private const string SERVICE_URL_ENV_VAR = 'WEBTREES_GEDCOM_SERVICE_URL';
+
+    // Once a call to the service fails (timeout, connection refused, bad
+    // response), stop trying it for the rest of this PHP process/request.
+    // Shared across all GedcomService instances (static, not instance
+    // state) — GedcomImportService constructs a fresh GedcomService per
+    // call site in places, and a downed service shouldn't pay its full
+    // timeout cost more than once per process. Same pattern as
+    // Soundex::$service_unavailable.
+    private static bool $service_unavailable = false;
+
+    /**
+     * Call the Phase 3 bridge service, if configured and not already known
+     * to be unreachable this process. Returns the decoded JSON response
+     * body on success, or null on any failure (service not configured,
+     * unreachable, timed out, or returned something unusable) — callers
+     * must always fall back to the native PHP implementation when this
+     * returns null.
+     *
+     * @param array<string,string> $payload
+     *
+     * @return array<string,bool|float|string|null>|null
+     */
+    private static function callService(string $path, array $payload): array|null
+    {
+        if (self::$service_unavailable) {
+            return null;
+        }
+
+        $service_url = (string) getenv(self::SERVICE_URL_ENV_VAR);
+
+        if ($service_url === '') {
+            return null;
+        }
+
+        try {
+            $client  = new Client(['timeout' => 0.5, 'connect_timeout' => 0.5]);
+            $request = new Request(
+                'POST',
+                rtrim($service_url, '/') . $path,
+                ['content-type' => 'application/json'],
+                json_encode($payload, JSON_THROW_ON_ERROR),
+            );
+
+            $response = $client->send($request);
+
+            if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
+                self::$service_unavailable = true;
+
+                return null;
+            }
+
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            return is_array($body) ? $body : null;
+        } catch (Throwable) {
+            // Service down, network issue, timed out, or returned something
+            // that couldn't be encoded/decoded — stop trying it for the
+            // rest of this process and silently use native PHP.
+            self::$service_unavailable = true;
+
+            return null;
+        }
+    }
+
     // Some applications, such as FTM, use GEDCOM tag names instead of the tags.
     private const array TAG_NAMES = [
         'ABBREVIATION'      => 'ABBR',
@@ -163,6 +248,12 @@ class GedcomService
      */
     public function canonicalTag(string $tag): string
     {
+        $service_result = self::callService('/gedcom/canonical-tag', ['tag' => $tag]);
+
+        if (is_array($service_result) && is_string($service_result['tag'] ?? null)) {
+            return $service_result['tag'];
+        }
+
         $tag = strtoupper($tag);
 
         $tag = self::TAG_NAMES[$tag] ?? self::TAG_SYNONYMS[$tag] ?? $tag;
@@ -172,11 +263,23 @@ class GedcomService
 
     public function readLatitude(string $text): float|null
     {
+        $service_result = self::callService('/gedcom/read-latitude', ['text' => $text]);
+
+        if (is_array($service_result) && array_key_exists('value', $service_result)) {
+            return $service_result['value'] === null ? null : (float) $service_result['value'];
+        }
+
         return $this->readDegrees($text, Gedcom::LATITUDE_NORTH, Gedcom::LATITUDE_SOUTH);
     }
 
     public function readLongitude(string $text): float|null
     {
+        $service_result = self::callService('/gedcom/read-longitude', ['text' => $text]);
+
+        if (is_array($service_result) && array_key_exists('value', $service_result)) {
+            return $service_result['value'] === null ? null : (float) $service_result['value'];
+        }
+
         return $this->readDegrees($text, Gedcom::LONGITUDE_EAST, Gedcom::LONGITUDE_WEST);
     }
 
