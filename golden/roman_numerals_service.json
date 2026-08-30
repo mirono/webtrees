@@ -1,0 +1,286 @@
+{
+    "numberToRomanNumerals": [
+        {
+            "input": {
+                "number": 0
+            },
+            "output": "0",
+            "error": null
+        },
+        {
+            "input": {
+                "number": -5
+            },
+            "output": "-5",
+            "error": null
+        },
+        {
+            "input": {
+                "number": -1
+            },
+            "output": "-1",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 1
+            },
+            "output": "I",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 4
+            },
+            "output": "IV",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 9
+            },
+            "output": "IX",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 40
+            },
+            "output": "XL",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 90
+            },
+            "output": "XC",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 400
+            },
+            "output": "CD",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 900
+            },
+            "output": "CM",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 3888
+            },
+            "output": "MMMDCCCLXXXVIII",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 3999
+            },
+            "output": "MMMCMXCIX",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 4000
+            },
+            "output": "MMMM",
+            "error": null
+        },
+        {
+            "input": {
+                "number": 4888
+            },
+            "output": "MMMMDCCCLXXXVIII",
+            "error": null
+        }
+    ],
+    "romanNumeralsToNumber": [
+        {
+            "input": {
+                "roman": ""
+            },
+            "output": 0,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "I"
+            },
+            "output": 1,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "III"
+            },
+            "output": 3,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "IV"
+            },
+            "output": 4,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "IX"
+            },
+            "output": 9,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "MCMXCIV"
+            },
+            "output": 1994,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "IIII"
+            },
+            "output": 4,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "VX"
+            },
+            "output": 5,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "mcmxciv"
+            },
+            "output": 0,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "XIV"
+            },
+            "output": 14,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "XIVfoo"
+            },
+            "output": 14,
+            "error": null
+        },
+        {
+            "input": {
+                "roman": "XYZ123"
+            },
+            "output": 10,
+            "error": null
+        }
+    ],
+    "roundtrip": [
+        {
+            "input": {
+                "number": 1
+            },
+            "toRoman": "I",
+            "backToNum": 1,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 4
+            },
+            "toRoman": "IV",
+            "backToNum": 4,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 9
+            },
+            "toRoman": "IX",
+            "backToNum": 9,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 14
+            },
+            "toRoman": "XIV",
+            "backToNum": 14,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 40
+            },
+            "toRoman": "XL",
+            "backToNum": 40,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 90
+            },
+            "toRoman": "XC",
+            "backToNum": 90,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 400
+            },
+            "toRoman": "CD",
+            "backToNum": 400,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 900
+            },
+            "toRoman": "CM",
+            "backToNum": 900,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 1994
+            },
+            "toRoman": "MCMXCIV",
+            "backToNum": 1994,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 3888
+            },
+            "toRoman": "MMMDCCCLXXXVIII",
+            "backToNum": 3888,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 3999
+            },
+            "toRoman": "MMMCMXCIX",
+            "backToNum": 3999,
+            "roundtrip": "success"
+        },
+        {
+            "input": {
+                "number": 4000
+            },
+            "toRoman": "MMMM",
+            "backToNum": 4000,
+            "roundtrip": "success"
+        }
+    ]
+}

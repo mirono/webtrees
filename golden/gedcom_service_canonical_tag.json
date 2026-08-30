@@ -1,0 +1,107 @@
+[
+    {
+        "input": {
+            "tag": "BIRTH"
+        },
+        "output": "BIRT",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "ADDRESS1"
+        },
+        "output": "ADR1",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "CONCAT"
+        },
+        "output": "CONCAT",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "birth"
+        },
+        "output": "BIRT",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "address1"
+        },
+        "output": "ADR1",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "concat"
+        },
+        "output": "CONCAT",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "Birth"
+        },
+        "output": "BIRT",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "ADDRESS_1"
+        },
+        "output": "ADDRESS_1",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "_PGVU"
+        },
+        "output": "_WT_USER",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "_pgvu"
+        },
+        "output": "_WT_USER",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "_PGV_OBJS"
+        },
+        "output": "_WT_OBJE_SORT",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "BIRT"
+        },
+        "output": "BIRT",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "ZZZZ"
+        },
+        "output": "ZZZZ",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": "XYZ"
+        },
+        "output": "XYZ",
+        "error": null
+    },
+    {
+        "input": {
+            "tag": ""
+        },
+        "output": "",
+        "error": null
+    }
+]

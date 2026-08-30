@@ -1,0 +1,202 @@
+[
+    {
+        "input": {
+            "x": "1 JAN 1950",
+            "y": "15 MAR 2020",
+            "description": "full-precision: 70 years, 2 months, 14 days"
+        },
+        "xMinimumDate": {
+            "year": 1950,
+            "month": 1,
+            "day": 1
+        },
+        "xIsOK": true,
+        "yMaximumDate": {
+            "year": 2020,
+            "month": 3,
+            "day": 15
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": 25641,
+            "ageYears": 70,
+            "ageYearsString": "70",
+            "toString": "70 years"
+        }
+    },
+    {
+        "input": {
+            "x": "15 JAN 2020",
+            "y": "20 MAR 2020",
+            "description": "same-year: 0 years, 2 months, 5 days"
+        },
+        "xMinimumDate": {
+            "year": 2020,
+            "month": 1,
+            "day": 15
+        },
+        "xIsOK": true,
+        "yMaximumDate": {
+            "year": 2020,
+            "month": 3,
+            "day": 20
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": 65,
+            "ageYears": 0,
+            "ageYearsString": "0",
+            "toString": "2 months"
+        }
+    },
+    {
+        "input": {
+            "x": "15 JAN 2020",
+            "y": "18 JAN 2020",
+            "description": "same-month: 0 years, 0 months, 3 days"
+        },
+        "xMinimumDate": {
+            "year": 2020,
+            "month": 1,
+            "day": 15
+        },
+        "xIsOK": true,
+        "yMaximumDate": {
+            "year": 2020,
+            "month": 1,
+            "day": 18
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": 3,
+            "ageYears": 0,
+            "ageYearsString": "0",
+            "toString": "3 days"
+        }
+    },
+    {
+        "input": {
+            "x": "15 JAN 2020",
+            "y": "15 JAN 2020",
+            "description": "identical dates: 0 years, 0 months, 0 days"
+        },
+        "xMinimumDate": {
+            "year": 2020,
+            "month": 1,
+            "day": 15
+        },
+        "xIsOK": true,
+        "yMaximumDate": {
+            "year": 2020,
+            "month": 1,
+            "day": 15
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": 0,
+            "ageYears": 0,
+            "ageYearsString": "0",
+            "toString": "0 days"
+        }
+    },
+    {
+        "input": {
+            "x": "2020",
+            "y": "2020",
+            "description": "year-only same year: 0 years, 0 months, 0 days"
+        },
+        "xMinimumDate": {
+            "year": 2020,
+            "month": 0,
+            "day": 0
+        },
+        "xIsOK": true,
+        "yMaximumDate": {
+            "year": 2020,
+            "month": 0,
+            "day": 0
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": 0,
+            "ageYears": 0,
+            "ageYearsString": "0",
+            "toString": "0"
+        }
+    },
+    {
+        "input": {
+            "x": "15 MAR 2020",
+            "y": "1 JAN 1950",
+            "description": "reversed dates: negative age"
+        },
+        "xMinimumDate": {
+            "year": 2020,
+            "month": 3,
+            "day": 15
+        },
+        "xIsOK": true,
+        "yMaximumDate": {
+            "year": 1950,
+            "month": 1,
+            "day": 1
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": -25641,
+            "ageYears": -71,
+            "ageYearsString": "<span class=\"wt-icon-warning\"><i class=\"fa-solid fa-exclamation-triangle text-warning\"><\/i><\/span>",
+            "toString": "<span class=\"wt-icon-warning\"><i class=\"fa-solid fa-exclamation-triangle text-warning\"><\/i><\/span>"
+        }
+    },
+    {
+        "input": {
+            "x": "",
+            "y": "15 JAN 2020",
+            "description": "invalid date: empty first date"
+        },
+        "xMinimumDate": {
+            "year": 0,
+            "month": 0,
+            "day": 0
+        },
+        "xIsOK": false,
+        "yMaximumDate": {
+            "year": 2020,
+            "month": 1,
+            "day": 15
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": -1,
+            "ageYears": -1,
+            "ageYearsString": "",
+            "toString": ""
+        }
+    },
+    {
+        "input": {
+            "x": "MAR 1950",
+            "y": "MAR 2020",
+            "description": "month+year precision: 70 years, 0 months, 0 days"
+        },
+        "xMinimumDate": {
+            "year": 1950,
+            "month": 3,
+            "day": 0
+        },
+        "xIsOK": true,
+        "yMaximumDate": {
+            "year": 2020,
+            "month": 3,
+            "day": 0
+        },
+        "yIsOK": true,
+        "output": {
+            "ageDays": 25568,
+            "ageYears": 70,
+            "ageYearsString": "70",
+            "toString": "70 years"
+        }
+    }
+]

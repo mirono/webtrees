@@ -1,0 +1,226 @@
+[
+    {
+        "input": {
+            "text": "N52.1234",
+            "method": "readLatitude"
+        },
+        "output": 52.1234,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "S52.1234",
+            "method": "readLatitude"
+        },
+        "output": -52.1234,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "E010.5",
+            "method": "readLongitude"
+        },
+        "output": 10.5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "W010.5",
+            "method": "readLongitude"
+        },
+        "output": -10.5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "52.1234",
+            "method": "readLatitude"
+        },
+        "output": 52.1234,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "10.5",
+            "method": "readLongitude"
+        },
+        "output": 10.5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "N",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "5",
+            "method": "readLatitude"
+        },
+        "output": 5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "  52.5  ",
+            "method": "readLatitude"
+        },
+        "output": 52.5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "N  52.5",
+            "method": "readLatitude"
+        },
+        "output": 52.5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "1e3",
+            "method": "readLatitude"
+        },
+        "output": 1000,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "N1e3",
+            "method": "readLatitude"
+        },
+        "output": 1000,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "+5",
+            "method": "readLatitude"
+        },
+        "output": 5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "-5",
+            "method": "readLatitude"
+        },
+        "output": -5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "N+5",
+            "method": "readLatitude"
+        },
+        "output": 5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "12.5.6",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "N12.5.6",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "not a number",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "E52.5",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "n52.5",
+            "method": "readLatitude"
+        },
+        "output": 52.5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "s52.5",
+            "method": "readLatitude"
+        },
+        "output": -52.5,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "N52.5",
+            "method": "readLongitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "N0x1A",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "0x1A",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "NInfinity",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "Infinity",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    },
+    {
+        "input": {
+            "text": "NaN",
+            "method": "readLatitude"
+        },
+        "output": null,
+        "error": null
+    }
+]

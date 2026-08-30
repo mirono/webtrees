@@ -48,7 +48,10 @@ to decide whether to render Hebrew numerals instead of digits. Added
   service isn't part of `app/Date/`, so it's ported as a small standalone
   helper, `lib/date/roman-numerals.js`, rather than folded into
   `french.js` (it's a generically-reusable numeral converter, not
-  French-calendar-specific logic).
+  French-calendar-specific logic). **Note:** This helper was later
+  promoted to a full service port at `lib/services/roman-numerals-service.js`
+  in task 14 (see
+  [task-14-roman-numerals-service.md](task-14-roman-numerals-service.md)).
 - **`HijriDate`** (`@#DHIJRI@`, `ArabicCalendar`) — 12 months, no day-name
   or year-format overrides (uses the base class's Monday-Sunday day names
   and plain-digit year formatting). Simplest of the 4.
