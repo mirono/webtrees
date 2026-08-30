@@ -1,0 +1,202 @@
+[
+    {
+        "input": {
+            "a": "12 JAN 1900",
+            "b": "15 JAN 1900",
+            "description": "a strictly before b"
+        },
+        "a_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "b_details": {
+            "gedcom": "15 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415035,
+            "maximumJulianDay": 2415035
+        },
+        "output": -1
+    },
+    {
+        "input": {
+            "a": "15 JAN 1900",
+            "b": "12 JAN 1900",
+            "description": "reverse, opposite sign"
+        },
+        "a_details": {
+            "gedcom": "15 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415035,
+            "maximumJulianDay": 2415035
+        },
+        "b_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "output": 1
+    },
+    {
+        "input": {
+            "a": "12 JAN 1900",
+            "b": "12 JAN 1900",
+            "description": "identical, equal"
+        },
+        "a_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "b_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "output": 0
+    },
+    {
+        "input": {
+            "a": "1900",
+            "b": "12 JAN 1900",
+            "description": "a year-only (wide range) vs b exact day inside it"
+        },
+        "a_details": {
+            "gedcom": "1900",
+            "qual1": "",
+            "minimumJulianDay": 2415021,
+            "maximumJulianDay": 2415385
+        },
+        "b_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "output": 0
+    },
+    {
+        "input": {
+            "a": "BEF 12 JAN 1900",
+            "b": "12 JAN 1900",
+            "description": "BEF nudges a to minJD-1"
+        },
+        "a_details": {
+            "gedcom": "BEF 12 JAN 1900",
+            "qual1": "BEF",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "b_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "output": -1
+    },
+    {
+        "input": {
+            "a": "AFT 12 JAN 1900",
+            "b": "12 JAN 1900",
+            "description": "AFT nudges a to maxJD+1"
+        },
+        "a_details": {
+            "gedcom": "AFT 12 JAN 1900",
+            "qual1": "AFT",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "b_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "output": 1
+    },
+    {
+        "input": {
+            "a": "BEF 12 JAN 1900",
+            "b": "AFT 12 JAN 1900",
+            "description": "both nudged: BEF vs AFT"
+        },
+        "a_details": {
+            "gedcom": "BEF 12 JAN 1900",
+            "qual1": "BEF",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "b_details": {
+            "gedcom": "AFT 12 JAN 1900",
+            "qual1": "AFT",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "output": -1
+    },
+    {
+        "input": {
+            "a": "",
+            "b": "12 JAN 1900",
+            "description": "a is empty GEDCOM date (JD=0) \u2014 exercises $bmax > 0 guard"
+        },
+        "a_details": {
+            "gedcom": "",
+            "qual1": "",
+            "minimumJulianDay": 0,
+            "maximumJulianDay": 0
+        },
+        "b_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "output": -1
+    },
+    {
+        "input": {
+            "a": "12 JAN 1900",
+            "b": "",
+            "description": "b is empty GEDCOM date (JD=0)"
+        },
+        "a_details": {
+            "gedcom": "12 JAN 1900",
+            "qual1": "",
+            "minimumJulianDay": 2415032,
+            "maximumJulianDay": 2415032
+        },
+        "b_details": {
+            "gedcom": "",
+            "qual1": "",
+            "minimumJulianDay": 0,
+            "maximumJulianDay": 0
+        },
+        "output": 0
+    },
+    {
+        "input": {
+            "a": "",
+            "b": "",
+            "description": "both empty"
+        },
+        "a_details": {
+            "gedcom": "",
+            "qual1": "",
+            "minimumJulianDay": 0,
+            "maximumJulianDay": 0
+        },
+        "b_details": {
+            "gedcom": "",
+            "qual1": "",
+            "minimumJulianDay": 0,
+            "maximumJulianDay": 0
+        },
+        "output": 0
+    }
+]

@@ -1,0 +1,261 @@
+[
+    {
+        "label": "Two dated facts, different dates and types",
+        "fact1": {
+            "gedcom": "1 BIRT\n2 DATE 12 JAN 1900",
+            "id": "birth",
+            "tag": "INDI:BIRT",
+            "value": "",
+            "id_method": "birth",
+            "attributeDate": "12 JAN 1900",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 2415032,
+                "maximumJulianDay": 2415032,
+                "isOK": true
+            },
+            "typeOrder": 2
+        },
+        "fact2": {
+            "gedcom": "1 DEAT\n2 DATE 15 JAN 1900",
+            "id": "death",
+            "tag": "INDI:DEAT",
+            "value": "",
+            "id_method": "death",
+            "attributeDate": "15 JAN 1900",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 2415035,
+                "maximumJulianDay": 2415035,
+                "isOK": true
+            },
+            "typeOrder": 36
+        },
+        "comparisons": {
+            "byDate": -1,
+            "byType": -1
+        }
+    },
+    {
+        "label": "Two facts, same date, different types",
+        "fact1": {
+            "gedcom": "1 BIRT\n2 DATE 12 JAN 1900",
+            "id": "birth",
+            "tag": "INDI:BIRT",
+            "value": "",
+            "id_method": "birth",
+            "attributeDate": "12 JAN 1900",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 2415032,
+                "maximumJulianDay": 2415032,
+                "isOK": true
+            },
+            "typeOrder": 2
+        },
+        "fact2": {
+            "gedcom": "1 DEAT\n2 DATE 12 JAN 1900",
+            "id": "death",
+            "tag": "INDI:DEAT",
+            "value": "",
+            "id_method": "death",
+            "attributeDate": "12 JAN 1900",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 2415032,
+                "maximumJulianDay": 2415032,
+                "isOK": true
+            },
+            "typeOrder": 36
+        },
+        "comparisons": {
+            "byDate": -1,
+            "byType": -1
+        }
+    },
+    {
+        "label": "One dated fact, one with no DATE",
+        "fact1": {
+            "gedcom": "1 BIRT\n2 DATE 12 JAN 1900",
+            "id": "birth",
+            "tag": "INDI:BIRT",
+            "value": "",
+            "id_method": "birth",
+            "attributeDate": "12 JAN 1900",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 2415032,
+                "maximumJulianDay": 2415032,
+                "isOK": true
+            },
+            "typeOrder": 2
+        },
+        "fact2": {
+            "gedcom": "1 DEAT",
+            "id": "death_no_date",
+            "tag": "INDI:DEAT",
+            "value": "",
+            "id_method": "death_no_date",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 36
+        },
+        "comparisons": {
+            "byDate": 0,
+            "byType": -1
+        }
+    },
+    {
+        "label": "Same tag, one dated and one undated",
+        "fact1": {
+            "gedcom": "1 BIRT\n2 DATE 12 JAN 1900",
+            "id": "birth_dated",
+            "tag": "INDI:BIRT",
+            "value": "",
+            "id_method": "birth_dated",
+            "attributeDate": "12 JAN 1900",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 2415032,
+                "maximumJulianDay": 2415032,
+                "isOK": true
+            },
+            "typeOrder": 2
+        },
+        "fact2": {
+            "gedcom": "1 BIRT",
+            "id": "birth_undated",
+            "tag": "INDI:BIRT",
+            "value": "",
+            "id_method": "birth_undated",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 2
+        },
+        "comparisons": {
+            "byDate": 0,
+            "byType": -1
+        }
+    },
+    {
+        "label": "Unrecognized tags fallback to EVEN",
+        "fact1": {
+            "gedcom": "1 FAKE1",
+            "id": "fake1",
+            "tag": "INDI:FAKE1",
+            "value": "",
+            "id_method": "fake1",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 32
+        },
+        "fact2": {
+            "gedcom": "1 FAKE2",
+            "id": "fake2",
+            "tag": "INDI:FAKE2",
+            "value": "",
+            "id_method": "fake2",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 32
+        },
+        "comparisons": {
+            "byDate": 0,
+            "byType": 0
+        }
+    },
+    {
+        "label": "NO negation fact",
+        "fact1": {
+            "gedcom": "1 NO BIRT",
+            "id": "no_birth",
+            "tag": "INDI:NO",
+            "value": "BIRT",
+            "id_method": "no_birth",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 2
+        },
+        "fact2": {
+            "gedcom": "1 BIRT",
+            "id": "regular_birth",
+            "tag": "INDI:BIRT",
+            "value": "",
+            "id_method": "regular_birth",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 2
+        },
+        "comparisons": {
+            "byDate": 0,
+            "byType": 0
+        }
+    },
+    {
+        "label": "ASSO associate fact",
+        "fact1": {
+            "gedcom": "1 ASSO @I2@\n2 RELA godparent",
+            "id": "asso",
+            "tag": "INDI:ASSO",
+            "value": "@I2@",
+            "id_method": "asso",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 32
+        },
+        "fact2": {
+            "gedcom": "1 BIRT",
+            "id": "birth",
+            "tag": "INDI:BIRT",
+            "value": "",
+            "id_method": "birth",
+            "attributeDate": "",
+            "date": {
+                "qual1": "",
+                "minimumJulianDay": 0,
+                "maximumJulianDay": 0,
+                "isOK": false
+            },
+            "typeOrder": 2
+        },
+        "comparisons": {
+            "byDate": 0,
+            "byType": 1
+        }
+    }
+]
