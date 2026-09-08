@@ -1,0 +1,114 @@
+[
+    {
+        "index": 0,
+        "input": {
+            "date": "1 JAN 2000",
+            "years": 18,
+            "qualifier": "AFT"
+        },
+        "result": {
+            "qual1": "AFT",
+            "qual2": "",
+            "date1": {
+                "class": "GregorianDate",
+                "escape": "@#DGREGORIAN@",
+                "year": 2018,
+                "month": 0,
+                "day": 0,
+                "minJulianDay": 2458120,
+                "maxJulianDay": 2458484
+            },
+            "date2": null,
+            "text": "",
+            "minJulianDay": 2458120,
+            "maxJulianDay": 2458484,
+            "julianDay": 2458302,
+            "isOK": true,
+            "gregorianYear": 2018
+        }
+    },
+    {
+        "index": 1,
+        "input": {
+            "date": "1980",
+            "years": -5,
+            "qualifier": "BEF"
+        },
+        "result": {
+            "qual1": "BEF",
+            "qual2": "",
+            "date1": {
+                "class": "GregorianDate",
+                "escape": "@#DGREGORIAN@",
+                "year": 1975,
+                "month": 0,
+                "day": 0,
+                "minJulianDay": 2442414,
+                "maxJulianDay": 2442778
+            },
+            "date2": null,
+            "text": "",
+            "minJulianDay": 2442414,
+            "maxJulianDay": 2442778,
+            "julianDay": 2442596,
+            "isOK": true,
+            "gregorianYear": 1975
+        }
+    },
+    {
+        "index": 2,
+        "input": {
+            "date": "BET 1980 AND 1990",
+            "years": 10,
+            "qualifier": ""
+        },
+        "result": {
+            "qual1": "",
+            "qual2": "",
+            "date1": {
+                "class": "GregorianDate",
+                "escape": "@#DGREGORIAN@",
+                "year": 1990,
+                "month": 0,
+                "day": 0,
+                "minJulianDay": 2447893,
+                "maxJulianDay": 2448257
+            },
+            "date2": null,
+            "text": "",
+            "minJulianDay": 2447893,
+            "maxJulianDay": 2448257,
+            "julianDay": 2448075,
+            "isOK": true,
+            "gregorianYear": 1990
+        }
+    },
+    {
+        "index": 3,
+        "input": {
+            "date": "15 MAR 2000",
+            "years": 0,
+            "qualifier": "EST"
+        },
+        "result": {
+            "qual1": "EST",
+            "qual2": "",
+            "date1": {
+                "class": "GregorianDate",
+                "escape": "@#DGREGORIAN@",
+                "year": 2000,
+                "month": 0,
+                "day": 0,
+                "minJulianDay": 2451545,
+                "maxJulianDay": 2451910
+            },
+            "date2": null,
+            "text": "",
+            "minJulianDay": 2451545,
+            "maxJulianDay": 2451910,
+            "julianDay": 2451727,
+            "isOK": true,
+            "gregorianYear": 2000
+        }
+    }
+]

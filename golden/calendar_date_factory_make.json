@@ -1,0 +1,626 @@
+[
+    {
+        "index": 0,
+        "input": "1 JAN 2000",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 2000,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451545,
+            "maxJulianDay": 2451545
+        }
+    },
+    {
+        "index": 1,
+        "input": "31 DEC 1999",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 1999,
+            "month": 12,
+            "day": 31,
+            "minJulianDay": 2451544,
+            "maxJulianDay": 2451544
+        }
+    },
+    {
+        "index": 2,
+        "input": "FEB 1980",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 1980,
+            "month": 2,
+            "day": 0,
+            "minJulianDay": 2444271,
+            "maxJulianDay": 2444299
+        }
+    },
+    {
+        "index": 3,
+        "input": "1980",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 1980,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 2444240,
+            "maxJulianDay": 2444605
+        }
+    },
+    {
+        "index": 4,
+        "input": "450",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 450,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 1885420,
+            "maxJulianDay": 1885784
+        }
+    },
+    {
+        "index": 5,
+        "input": "@#DGREGORIAN@ 1 JAN 2000",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 2000,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451545,
+            "maxJulianDay": 2451545
+        }
+    },
+    {
+        "index": 6,
+        "input": "@#DJULIAN@ 1 JAN 2000",
+        "result": {
+            "class": "JulianDate",
+            "escape": "@#DJULIAN@",
+            "year": 2000,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451558,
+            "maxJulianDay": 2451558
+        }
+    },
+    {
+        "index": 7,
+        "input": "@#DHEBREW@ 1 TSH 5760",
+        "result": {
+            "class": "JewishDate",
+            "escape": "@#DHEBREW@",
+            "year": 5760,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451433,
+            "maxJulianDay": 2451433
+        }
+    },
+    {
+        "index": 8,
+        "input": "@#DHIJRI@ 1 MUHAR 1400",
+        "result": {
+            "class": "HijriDate",
+            "escape": "@#DHIJRI@",
+            "year": 1400,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2444199,
+            "maxJulianDay": 2444199
+        }
+    },
+    {
+        "index": 9,
+        "input": "@#DFRENCH R@ 1 VEND 1",
+        "result": {
+            "class": "FrenchDate",
+            "escape": "@#DFRENCH R@",
+            "year": 1,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2375840,
+            "maxJulianDay": 2375840
+        }
+    },
+    {
+        "index": 10,
+        "input": "@#DROMAN@ 1 JAN 2000",
+        "result": {
+            "class": "RomanDate",
+            "escape": "@#DROMAN@",
+            "year": 2000,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451558,
+            "maxJulianDay": 2451558
+        }
+    },
+    {
+        "index": 11,
+        "input": "@#DJALALI@ 1 FARVA 1400",
+        "result": {
+            "class": "JalaliDate",
+            "escape": "@#DJALALI@",
+            "year": 1400,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2459295,
+            "maxJulianDay": 2459295
+        }
+    },
+    {
+        "index": 12,
+        "input": "@#DGREGORIAN@",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 13,
+        "input": "@#DGREGORIAN@ ",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 14,
+        "input": "1 TSH 5760",
+        "result": {
+            "class": "JewishDate",
+            "escape": "@#DHEBREW@",
+            "year": 5760,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451433,
+            "maxJulianDay": 2451433
+        }
+    },
+    {
+        "index": 15,
+        "input": "1 CSH 5760",
+        "result": {
+            "class": "JewishDate",
+            "escape": "@#DHEBREW@",
+            "year": 5760,
+            "month": 2,
+            "day": 1,
+            "minJulianDay": 2451463,
+            "maxJulianDay": 2451463
+        }
+    },
+    {
+        "index": 16,
+        "input": "1 VEND 1",
+        "result": {
+            "class": "FrenchDate",
+            "escape": "@#DFRENCH R@",
+            "year": 1,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2375840,
+            "maxJulianDay": 2375840
+        }
+    },
+    {
+        "index": 17,
+        "input": "1 BRUM 1",
+        "result": {
+            "class": "FrenchDate",
+            "escape": "@#DFRENCH R@",
+            "year": 1,
+            "month": 2,
+            "day": 1,
+            "minJulianDay": 2375870,
+            "maxJulianDay": 2375870
+        }
+    },
+    {
+        "index": 18,
+        "input": "1 MUHAR 1400",
+        "result": {
+            "class": "HijriDate",
+            "escape": "@#DHIJRI@",
+            "year": 1400,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2444199,
+            "maxJulianDay": 2444199
+        }
+    },
+    {
+        "index": 19,
+        "input": "1 RABIA 1400",
+        "result": {
+            "class": "HijriDate",
+            "escape": "@#DHIJRI@",
+            "year": 1400,
+            "month": 3,
+            "day": 1,
+            "minJulianDay": 2444258,
+            "maxJulianDay": 2444258
+        }
+    },
+    {
+        "index": 20,
+        "input": "1 RABIT 1400",
+        "result": {
+            "class": "HijriDate",
+            "escape": "@#DHIJRI@",
+            "year": 1400,
+            "month": 4,
+            "day": 1,
+            "minJulianDay": 2444288,
+            "maxJulianDay": 2444288
+        }
+    },
+    {
+        "index": 21,
+        "input": "1 JUMAA 1400",
+        "result": {
+            "class": "HijriDate",
+            "escape": "@#DHIJRI@",
+            "year": 1400,
+            "month": 5,
+            "day": 1,
+            "minJulianDay": 2444317,
+            "maxJulianDay": 2444317
+        }
+    },
+    {
+        "index": 22,
+        "input": "1 JUMAT 1400",
+        "result": {
+            "class": "HijriDate",
+            "escape": "@#DHIJRI@",
+            "year": 1400,
+            "month": 6,
+            "day": 1,
+            "minJulianDay": 2444347,
+            "maxJulianDay": 2444347
+        }
+    },
+    {
+        "index": 23,
+        "input": "1 FARVA 1400",
+        "result": {
+            "class": "JalaliDate",
+            "escape": "@#DJALALI@",
+            "year": 1400,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2459295,
+            "maxJulianDay": 2459295
+        }
+    },
+    {
+        "index": 24,
+        "input": "1 ESFAN 1400",
+        "result": {
+            "class": "JalaliDate",
+            "escape": "@#DJALALI@",
+            "year": 1400,
+            "month": 12,
+            "day": 1,
+            "minJulianDay": 2459631,
+            "maxJulianDay": 2459631
+        }
+    },
+    {
+        "index": 25,
+        "input": "@#DGREGORIAN@ 1 TSH 5760",
+        "result": {
+            "class": "JewishDate",
+            "escape": "@#DHEBREW@",
+            "year": 5760,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451433,
+            "maxJulianDay": 2451433
+        }
+    },
+    {
+        "index": 26,
+        "input": "1 JAN 2000",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 2000,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 2451545,
+            "maxJulianDay": 2451545
+        }
+    },
+    {
+        "index": 27,
+        "input": "1 DEC 2000",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 2000,
+            "month": 12,
+            "day": 1,
+            "minJulianDay": 2451880,
+            "maxJulianDay": 2451880
+        }
+    },
+    {
+        "index": 28,
+        "input": "3760",
+        "result": {
+            "class": "JewishDate",
+            "escape": "@#DHEBREW@",
+            "year": 3760,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 1720934,
+            "maxJulianDay": 1721318
+        }
+    },
+    {
+        "index": 29,
+        "input": "5000",
+        "result": {
+            "class": "JewishDate",
+            "escape": "@#DHEBREW@",
+            "year": 5000,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 2173846,
+            "maxJulianDay": 2174228
+        }
+    },
+    {
+        "index": 30,
+        "input": "5999",
+        "result": {
+            "class": "JewishDate",
+            "escape": "@#DHEBREW@",
+            "year": 5999,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 2538725,
+            "maxJulianDay": 2539109
+        }
+    },
+    {
+        "index": 31,
+        "input": "2999",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 2999,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 2816423,
+            "maxJulianDay": 2816787
+        }
+    },
+    {
+        "index": 32,
+        "input": "6000",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 6000,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 3912515,
+            "maxJulianDay": 3912880
+        }
+    },
+    {
+        "index": 33,
+        "input": "4 FEB 1750/51",
+        "result": {
+            "class": "JulianDate",
+            "escape": "@#DJULIAN@",
+            "year": 1751,
+            "month": 2,
+            "day": 4,
+            "minJulianDay": 2360645,
+            "maxJulianDay": 2360645
+        }
+    },
+    {
+        "index": 34,
+        "input": "1750/51",
+        "result": {
+            "class": "JulianDate",
+            "escape": "@#DJULIAN@",
+            "year": 1751,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 2360611,
+            "maxJulianDay": 2360975
+        }
+    },
+    {
+        "index": 35,
+        "input": "100 B.C.",
+        "result": {
+            "class": "JulianDate",
+            "escape": "@#DJULIAN@",
+            "year": -100,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 1684899,
+            "maxJulianDay": 1685263
+        }
+    },
+    {
+        "index": 36,
+        "input": "1 JAN 100 B.C.",
+        "result": {
+            "class": "JulianDate",
+            "escape": "@#DJULIAN@",
+            "year": -100,
+            "month": 1,
+            "day": 1,
+            "minJulianDay": 1684899,
+            "maxJulianDay": 1684899
+        }
+    },
+    {
+        "index": 37,
+        "input": "",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 38,
+        "input": "ABCD",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 39,
+        "input": "the year of our lord 1850",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 1850,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 2396759,
+            "maxJulianDay": 2397123
+        }
+    },
+    {
+        "index": 40,
+        "input": "sometime in JAN of 1850",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 1850,
+            "month": 1,
+            "day": 0,
+            "minJulianDay": 2396759,
+            "maxJulianDay": 2396789
+        }
+    },
+    {
+        "index": 41,
+        "input": "JAN",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 1,
+            "day": 0,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 42,
+        "input": "15",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 15,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 1726539,
+            "maxJulianDay": 1726903
+        }
+    },
+    {
+        "index": 43,
+        "input": "about 15 or so",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 44,
+        "input": "99 red balloons FEB",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 2,
+            "day": 99,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 45,
+        "input": "text with no year but a FEB month and 15 a day-ish number",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 0,
+            "month": 2,
+            "day": 15,
+            "minJulianDay": 0,
+            "maxJulianDay": 0
+        }
+    },
+    {
+        "index": 46,
+        "input": "some text 100 B.C. more text",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 100,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 1757585,
+            "maxJulianDay": 1757949
+        }
+    },
+    {
+        "index": 47,
+        "input": "prefix 1234/56 suffix",
+        "result": {
+            "class": "GregorianDate",
+            "escape": "@#DGREGORIAN@",
+            "year": 1234,
+            "month": 0,
+            "day": 0,
+            "minJulianDay": 2171770,
+            "maxJulianDay": 2172134
+        }
+    }
+]

@@ -1,0 +1,50 @@
+[
+    {
+        "index": 0,
+        "input": {
+            "a": "1 JAN 2000",
+            "b": "1 JAN 2001"
+        },
+        "result": -1
+    },
+    {
+        "index": 1,
+        "input": {
+            "a": "1 JAN 2000",
+            "b": "1 JAN 2000"
+        },
+        "result": 0
+    },
+    {
+        "index": 2,
+        "input": {
+            "a": "BEF 1 JAN 2000",
+            "b": "1 JAN 2000"
+        },
+        "result": -1
+    },
+    {
+        "index": 3,
+        "input": {
+            "a": "AFT 1 JAN 2000",
+            "b": "1 JAN 2000"
+        },
+        "result": 1
+    },
+    {
+        "index": 4,
+        "input": {
+            "a": "BET 1980 AND 1990",
+            "b": "1985"
+        },
+        "result": 0
+    },
+    {
+        "index": 5,
+        "input": {
+            "a": "1980",
+            "b": "BET 1980 AND 1990"
+        },
+        "result": 0
+    }
+]
