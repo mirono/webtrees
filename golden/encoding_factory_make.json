@@ -1,0 +1,57 @@
+{
+    "valid_cases": [
+        {
+            "name": "UTF-8",
+            "result_name": "UTF-8"
+        },
+        {
+            "name": "UTF-16BE",
+            "result_name": "UTF-16BE"
+        },
+        {
+            "name": "UTF-16LE",
+            "result_name": "UTF-16LE"
+        },
+        {
+            "name": "ANSEL",
+            "result_name": "ANSEL"
+        },
+        {
+            "name": "ASCII",
+            "result_name": "ASCII"
+        },
+        {
+            "name": "ISO-8859-1",
+            "result_name": "ISO-8859-1"
+        },
+        {
+            "name": "ISO-8859-2",
+            "result_name": "ISO-8859-2"
+        },
+        {
+            "name": "CP1250",
+            "result_name": "CP1250"
+        },
+        {
+            "name": "CP1251",
+            "result_name": "CP1251"
+        },
+        {
+            "name": "CP1252",
+            "result_name": "CP1252"
+        },
+        {
+            "name": "CP437",
+            "result_name": "CP437"
+        },
+        {
+            "name": "CP850",
+            "result_name": "CP850"
+        },
+        {
+            "name": "MACROMAN",
+            "result_name": "MACROMAN"
+        }
+    ],
+    "invalid_message": "Invalid encoding: NOT-A-REAL-ENCODING"
+}

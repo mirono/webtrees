@@ -1,0 +1,146 @@
+[
+    {
+        "label": "valid_ascii",
+        "input_hex": "48656c6c6f",
+        "from_utf8": "48656c6c6f",
+        "to_utf8": "48656c6c6f"
+    },
+    {
+        "label": "valid_2byte",
+        "input_hex": "c3a9",
+        "from_utf8": "c3a9",
+        "to_utf8": "c3a9"
+    },
+    {
+        "label": "valid_3byte",
+        "input_hex": "e282ac",
+        "from_utf8": "e282ac",
+        "to_utf8": "e282ac"
+    },
+    {
+        "label": "valid_4byte_emoji",
+        "input_hex": "f09f9880",
+        "from_utf8": "f09f9880",
+        "to_utf8": "f09f9880"
+    },
+    {
+        "label": "lone_continuation",
+        "input_hex": "80",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "lone_continuation_x2",
+        "input_hex": "8081",
+        "from_utf8": "efbfbdefbfbd",
+        "to_utf8": "efbfbdefbfbd"
+    },
+    {
+        "label": "truncated_2byte",
+        "input_hex": "c3",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "truncated_3byte_1of3",
+        "input_hex": "e2",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "truncated_3byte_2of3",
+        "input_hex": "e282",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "truncated_4byte_1of4",
+        "input_hex": "f0",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "truncated_4byte_3of4",
+        "input_hex": "f09f98",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "invalid_start_0xFF",
+        "input_hex": "ff",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "invalid_start_0xFE",
+        "input_hex": "fe",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "invalid_start_0xC0",
+        "input_hex": "c0",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "invalid_start_0xC1",
+        "input_hex": "c1",
+        "from_utf8": "efbfbd",
+        "to_utf8": "efbfbd"
+    },
+    {
+        "label": "overlong_c0_80",
+        "input_hex": "c080",
+        "from_utf8": "efbfbdefbfbd",
+        "to_utf8": "efbfbdefbfbd"
+    },
+    {
+        "label": "overlong_e0_80_80",
+        "input_hex": "e08080",
+        "from_utf8": "efbfbdefbfbdefbfbd",
+        "to_utf8": "efbfbdefbfbdefbfbd"
+    },
+    {
+        "label": "valid_then_invalid",
+        "input_hex": "418042",
+        "from_utf8": "41efbfbd42",
+        "to_utf8": "41efbfbd42"
+    },
+    {
+        "label": "surrogate_encoded_eda080",
+        "input_hex": "eda080",
+        "from_utf8": "efbfbdefbfbdefbfbd",
+        "to_utf8": "efbfbdefbfbdefbfbd"
+    },
+    {
+        "label": "mixed_valid_truncated",
+        "input_hex": "c3a9c3",
+        "from_utf8": "c3a9efbfbd",
+        "to_utf8": "c3a9efbfbd"
+    },
+    {
+        "label": "empty",
+        "input_hex": "",
+        "from_utf8": "",
+        "to_utf8": ""
+    },
+    {
+        "label": "out_of_range_lead_f5",
+        "input_hex": "f5808080",
+        "from_utf8": "efbfbdefbfbdefbfbdefbfbd",
+        "to_utf8": "efbfbdefbfbdefbfbdefbfbd"
+    },
+    {
+        "label": "valid_string_with_bom",
+        "input_hex": "efbbbf48656c6c6f",
+        "from_utf8": "efbbbf48656c6c6f",
+        "to_utf8": "efbbbf48656c6c6f"
+    },
+    {
+        "label": "multiple_errors_in_a_row",
+        "input_hex": "80808080",
+        "from_utf8": "efbfbdefbfbdefbfbdefbfbd",
+        "to_utf8": "efbfbdefbfbdefbfbdefbfbd"
+    }
+]

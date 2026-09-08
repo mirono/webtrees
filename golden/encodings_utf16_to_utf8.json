@@ -1,0 +1,274 @@
+[
+    {
+        "encoding": "UTF16BE",
+        "case": "ascii",
+        "input_hex": "0041",
+        "result": "41"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "boundary_0x7f",
+        "input_hex": "007f",
+        "result": "7f"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "boundary_0x80",
+        "input_hex": "0080",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "latin1_e_acute_0xE9",
+        "input_hex": "00e9",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "boundary_0xff",
+        "input_hex": "00ff",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "boundary_0x100",
+        "input_hex": "0100",
+        "result": "c480"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "two_byte_0x7ff",
+        "input_hex": "07ff",
+        "result": "dfbf"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "three_byte_0x800",
+        "input_hex": "0800",
+        "result": "e0a080"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "cjk_0x4e2d",
+        "input_hex": "4e2d",
+        "result": "e4b8ad"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "boundary_0xd7ff",
+        "input_hex": "d7ff",
+        "result": "ed9fbf"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "lone_high_surrogate",
+        "input_hex": "d800",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "lone_low_surrogate",
+        "input_hex": "dfff",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "surrogate_pair_emoji",
+        "input_hex": "d83dde00",
+        "result": "efbfbdefbfbd"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "boundary_0xe000",
+        "input_hex": "e000",
+        "result": "ee8080"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "boundary_0xffff",
+        "input_hex": "ffff",
+        "result": "efbfbf"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "multi_char",
+        "input_hex": "004100e90042",
+        "result": "41efbfbd42"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_0",
+        "convertibleBytes": 0
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_1",
+        "convertibleBytes": 0
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_2",
+        "convertibleBytes": 2
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_3",
+        "convertibleBytes": 2
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_4",
+        "convertibleBytes": 4
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_5",
+        "convertibleBytes": 4
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_10",
+        "convertibleBytes": 10
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "convertible_bytes_len_11",
+        "convertibleBytes": 10
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "ascii",
+        "input_hex": "4100",
+        "result": "41"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "boundary_0x7f",
+        "input_hex": "7f00",
+        "result": "7f"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "boundary_0x80",
+        "input_hex": "8000",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "latin1_e_acute_0xE9",
+        "input_hex": "e900",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "boundary_0xff",
+        "input_hex": "ff00",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "boundary_0x100",
+        "input_hex": "0001",
+        "result": "c480"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "two_byte_0x7ff",
+        "input_hex": "ff07",
+        "result": "dfbf"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "three_byte_0x800",
+        "input_hex": "0008",
+        "result": "e0a080"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "cjk_0x4e2d",
+        "input_hex": "2d4e",
+        "result": "e4b8ad"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "boundary_0xd7ff",
+        "input_hex": "ffd7",
+        "result": "ed9fbf"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "lone_high_surrogate",
+        "input_hex": "00d8",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "lone_low_surrogate",
+        "input_hex": "ffdf",
+        "result": "efbfbd"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "surrogate_pair_emoji",
+        "input_hex": "3dd800de",
+        "result": "efbfbdefbfbd"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "boundary_0xe000",
+        "input_hex": "00e0",
+        "result": "ee8080"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "boundary_0xffff",
+        "input_hex": "ffff",
+        "result": "efbfbf"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "multi_char",
+        "input_hex": "4100e9004200",
+        "result": "41efbfbd42"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_0",
+        "convertibleBytes": 0
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_1",
+        "convertibleBytes": 0
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_2",
+        "convertibleBytes": 2
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_3",
+        "convertibleBytes": 2
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_4",
+        "convertibleBytes": 4
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_5",
+        "convertibleBytes": 4
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_10",
+        "convertibleBytes": 10
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "convertible_bytes_len_11",
+        "convertibleBytes": 10
+    }
+]

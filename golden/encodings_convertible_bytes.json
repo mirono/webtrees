@@ -1,0 +1,482 @@
+[
+    {
+        "encoding": "ASCII",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "ASCII",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "ASCII",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "ASCII",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "ASCII",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "ASCII",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "ASCII",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "ASCII",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "CP437",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "CP437",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "CP437",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "CP437",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "CP437",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "CP437",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "CP437",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "CP437",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "CP850",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "CP850",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "CP850",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "CP850",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "CP850",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "CP850",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "CP850",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "CP850",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "ISO88591",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "ISO88592",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "MacRoman",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1250",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1251",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "Windows1252",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 0,
+        "input": "",
+        "result": 0
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 1,
+        "input": "4142434445",
+        "result": 0
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 2,
+        "input": "48656c6c6f20576f726c64",
+        "result": 6
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 3,
+        "input": "48656c6c6f20576f726c645859",
+        "result": 6
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 4,
+        "input": "410a42",
+        "result": 2
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 5,
+        "input": "410d42",
+        "result": 2
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 6,
+        "input": "412042",
+        "result": 2
+    },
+    {
+        "encoding": "ANSEL",
+        "index": 7,
+        "input": "5a5a5a5a5a5a5a5a5a5a",
+        "result": 0
+    }
+]

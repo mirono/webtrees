@@ -1,0 +1,122 @@
+[
+    {
+        "encoding": "UTF16BE",
+        "case": "ascii_a",
+        "utf8_hex": "41",
+        "result": "0041"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "ascii_string",
+        "utf8_hex": "48656c6c6f",
+        "result": "00480065006c006c006f"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "latin1_e_acute",
+        "utf8_hex": "c3a9",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "cyrillic",
+        "utf8_hex": "d0b4",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "euro_sign",
+        "utf8_hex": "e282ac",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "cjk",
+        "utf8_hex": "e4b8ad",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "emoji_astral",
+        "utf8_hex": "f09f9880",
+        "result": "fffdfffdfffdfffd"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "mixed_a_e_b",
+        "utf8_hex": "41c3a942",
+        "result": "004100000042"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "two_letters",
+        "utf8_hex": "c3a9c3a8",
+        "result": "00000000"
+    },
+    {
+        "encoding": "UTF16BE",
+        "case": "empty",
+        "utf8_hex": "",
+        "result": ""
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "ascii_a",
+        "utf8_hex": "41",
+        "result": "4100"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "ascii_string",
+        "utf8_hex": "48656c6c6f",
+        "result": "480065006c006c006f00"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "latin1_e_acute",
+        "utf8_hex": "c3a9",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "cyrillic",
+        "utf8_hex": "d0b4",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "euro_sign",
+        "utf8_hex": "e282ac",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "cjk",
+        "utf8_hex": "e4b8ad",
+        "result": "0000"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "emoji_astral",
+        "utf8_hex": "f09f9880",
+        "result": "fdfffdfffdfffdff"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "mixed_a_e_b",
+        "utf8_hex": "41c3a942",
+        "result": "410000004200"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "two_letters",
+        "utf8_hex": "c3a9c3a8",
+        "result": "00000000"
+    },
+    {
+        "encoding": "UTF16LE",
+        "case": "empty",
+        "utf8_hex": "",
+        "result": ""
+    }
+]

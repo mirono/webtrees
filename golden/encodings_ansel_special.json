@@ -1,0 +1,116 @@
+[
+    {
+        "label": "e_acute",
+        "utf8_hex": "c3a9",
+        "from_utf8": "e265",
+        "round_trip": "c3a9"
+    },
+    {
+        "label": "e_acute_word",
+        "utf8_hex": "416e6472c3a9",
+        "from_utf8": "416e6472e265",
+        "round_trip": "416e6472c3a9"
+    },
+    {
+        "label": "a_ring",
+        "utf8_hex": "c3a5",
+        "from_utf8": "ea61",
+        "round_trip": "c3a5"
+    },
+    {
+        "label": "n_tilde",
+        "utf8_hex": "c3b1",
+        "from_utf8": "e46e",
+        "round_trip": "c3b1"
+    },
+    {
+        "label": "o_double_acute",
+        "utf8_hex": "c591",
+        "from_utf8": "ee6f",
+        "round_trip": "c591"
+    },
+    {
+        "label": "c_cedilla",
+        "utf8_hex": "c3a7",
+        "from_utf8": "f063",
+        "round_trip": "c3a7"
+    },
+    {
+        "label": "es_zett_capital",
+        "utf8_hex": "e1ba9e",
+        "from_utf8": "c7",
+        "round_trip": "e1ba9e"
+    },
+    {
+        "label": "es_zett_lower",
+        "utf8_hex": "c39f",
+        "from_utf8": "cf",
+        "round_trip": "c39f"
+    },
+    {
+        "label": "o_horn",
+        "utf8_hex": "6fcc9b",
+        "from_utf8": "bc",
+        "round_trip": "c6a1"
+    },
+    {
+        "label": "u_horn_capital",
+        "utf8_hex": "55cc9b",
+        "from_utf8": "ad",
+        "round_trip": "c6af"
+    },
+    {
+        "label": "o_horn_with_acute",
+        "utf8_hex": "6fcc9bcc81",
+        "from_utf8": "e2bc",
+        "round_trip": "c6a1cc81"
+    },
+    {
+        "label": "euro_sign",
+        "utf8_hex": "e282ac",
+        "from_utf8": "c8",
+        "round_trip": "e282ac"
+    },
+    {
+        "label": "degree_sign",
+        "utf8_hex": "c2b0",
+        "from_utf8": "c0",
+        "round_trip": "c2b0"
+    },
+    {
+        "label": "empty_string",
+        "utf8_hex": "",
+        "from_utf8": "",
+        "round_trip": ""
+    },
+    {
+        "label": "ascii_only",
+        "utf8_hex": "536d697468",
+        "from_utf8": "536d697468",
+        "round_trip": "536d697468"
+    },
+    {
+        "label": "mixed_multi",
+        "utf8_hex": "4a6f73c3a920416e6472c3a9204dc3bc6c6c6572",
+        "from_utf8": "4a6f73e26520416e6472e265204de8756c6c6572",
+        "round_trip": "4a6f73c3a920416e6472c3a9204dc3bc6c6c6572"
+    },
+    {
+        "label": "double_tilde_fa_fb",
+        "ansel_hex": "78fa79fb",
+        "to_utf8": "7879cda0",
+        "round_trip": "78fa79"
+    },
+    {
+        "label": "double_breve_eb_ec",
+        "ansel_hex": "78eb79ec",
+        "to_utf8": "7879cda1",
+        "round_trip": "78eb79"
+    },
+    {
+        "label": "combining_slash",
+        "ansel_hex": "4eff",
+        "to_utf8": "4eccb8",
+        "round_trip": "ff4e"
+    }
+]
