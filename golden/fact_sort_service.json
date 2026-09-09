@@ -1,0 +1,680 @@
+[
+    {
+        "label": "dated facts, chronological with same-date tiebreak",
+        "input": [
+            {
+                "id": "death",
+                "tag": "INDI:DEAT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2433283,
+                    "maximumJulianDay": 2433283
+                },
+                "attributeDate": "1 JAN 1950"
+            },
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            },
+            {
+                "id": "marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2422477,
+                    "maximumJulianDay": 2422477
+                },
+                "attributeDate": "1 JUN 1920"
+            },
+            {
+                "id": "christening",
+                "tag": "INDI:CHR",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            }
+        ],
+        "result": [
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            },
+            {
+                "id": "christening",
+                "tag": "INDI:CHR",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            },
+            {
+                "id": "marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2422477,
+                    "maximumJulianDay": 2422477
+                },
+                "attributeDate": "1 JUN 1920"
+            },
+            {
+                "id": "death",
+                "tag": "INDI:DEAT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2433283,
+                    "maximumJulianDay": 2433283
+                },
+                "attributeDate": "1 JAN 1950"
+            }
+        ]
+    },
+    {
+        "label": "undated individual facts placed by type order, close-relative event skipped",
+        "input": [
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            },
+            {
+                "id": "death",
+                "tag": "INDI:DEAT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2444240,
+                    "maximumJulianDay": 2444240
+                },
+                "attributeDate": "1 JAN 1980"
+            },
+            {
+                "id": "close_relative",
+                "tag": "INDI:EVEN",
+                "value": "CLOSE_RELATIVE",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2429782,
+                    "maximumJulianDay": 2429782
+                },
+                "attributeDate": "1 JUN 1940"
+            },
+            {
+                "id": "occupation",
+                "tag": "INDI:OCCU",
+                "value": "Farmer",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "residence",
+                "tag": "INDI:RESI",
+                "value": "Anytown",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ],
+        "result": [
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            },
+            {
+                "id": "close_relative",
+                "tag": "INDI:EVEN",
+                "value": "CLOSE_RELATIVE",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2429782,
+                    "maximumJulianDay": 2429782
+                },
+                "attributeDate": "1 JUN 1940"
+            },
+            {
+                "id": "occupation",
+                "tag": "INDI:OCCU",
+                "value": "Farmer",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "residence",
+                "tag": "INDI:RESI",
+                "value": "Anytown",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "death",
+                "tag": "INDI:DEAT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2444240,
+                    "maximumJulianDay": 2444240
+                },
+                "attributeDate": "1 JAN 1980"
+            }
+        ]
+    },
+    {
+        "label": "family with dated facts: undated facts inserted by type order",
+        "input": [
+            {
+                "id": "marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2422477,
+                    "maximumJulianDay": 2422477
+                },
+                "attributeDate": "1 JUN 1920"
+            },
+            {
+                "id": "divorce_undated",
+                "tag": "FAM:DIV",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "engagement_undated",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ],
+        "result": [
+            {
+                "id": "engagement_undated",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2422477,
+                    "maximumJulianDay": 2422477
+                },
+                "attributeDate": "1 JUN 1920"
+            },
+            {
+                "id": "divorce_undated",
+                "tag": "FAM:DIV",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ]
+    },
+    {
+        "label": "family with no dated facts: ordered by family_input_order",
+        "input": [
+            {
+                "id": "f2_engagement_undated",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F2",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "f1_marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2422477,
+                    "maximumJulianDay": 2422477
+                },
+                "attributeDate": "1 JUN 1920"
+            },
+            {
+                "id": "f3_divorce_undated",
+                "tag": "FAM:DIV",
+                "value": "",
+                "record_xref": "F3",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ],
+        "result": [
+            {
+                "id": "f2_engagement_undated",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F2",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "f1_marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2422477,
+                    "maximumJulianDay": 2422477
+                },
+                "attributeDate": "1 JUN 1920"
+            },
+            {
+                "id": "f3_divorce_undated",
+                "tag": "FAM:DIV",
+                "value": "",
+                "record_xref": "F3",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ]
+    },
+    {
+        "label": "combined: two families, individual facts, close-relative event",
+        "input": [
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            },
+            {
+                "id": "f1_marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2424303,
+                    "maximumJulianDay": 2424303
+                },
+                "attributeDate": "1 JUN 1925"
+            },
+            {
+                "id": "close_relative",
+                "tag": "INDI:EVEN",
+                "value": "CLOSE_RELATIVE",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2426129,
+                    "maximumJulianDay": 2426129
+                },
+                "attributeDate": "1 JUN 1930"
+            },
+            {
+                "id": "death",
+                "tag": "INDI:DEAT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2444240,
+                    "maximumJulianDay": 2444240
+                },
+                "attributeDate": "1 JAN 1980"
+            },
+            {
+                "id": "f2_engagement_undated",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F2",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "f1_divorce_undated",
+                "tag": "FAM:DIV",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "occupation",
+                "tag": "INDI:OCCU",
+                "value": "Farmer",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ],
+        "result": [
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            },
+            {
+                "id": "f1_marriage",
+                "tag": "FAM:MARR",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2424303,
+                    "maximumJulianDay": 2424303
+                },
+                "attributeDate": "1 JUN 1925"
+            },
+            {
+                "id": "f1_divorce_undated",
+                "tag": "FAM:DIV",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "close_relative",
+                "tag": "INDI:EVEN",
+                "value": "CLOSE_RELATIVE",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2426129,
+                    "maximumJulianDay": 2426129
+                },
+                "attributeDate": "1 JUN 1930"
+            },
+            {
+                "id": "occupation",
+                "tag": "INDI:OCCU",
+                "value": "Farmer",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "death",
+                "tag": "INDI:DEAT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2444240,
+                    "maximumJulianDay": 2444240
+                },
+                "attributeDate": "1 JAN 1980"
+            },
+            {
+                "id": "f2_engagement_undated",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F2",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ]
+    },
+    {
+        "label": "all facts undated",
+        "input": [
+            {
+                "id": "occupation",
+                "tag": "INDI:OCCU",
+                "value": "Farmer",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "f1_engagement",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "residence",
+                "tag": "INDI:RESI",
+                "value": "Anytown",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ],
+        "result": [
+            {
+                "id": "f1_engagement",
+                "tag": "FAM:ENGA",
+                "value": "",
+                "record_xref": "F1",
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "occupation",
+                "tag": "INDI:OCCU",
+                "value": "Farmer",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            },
+            {
+                "id": "residence",
+                "tag": "INDI:RESI",
+                "value": "Anytown",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 0,
+                    "maximumJulianDay": 0
+                },
+                "attributeDate": ""
+            }
+        ]
+    },
+    {
+        "label": "empty collection",
+        "input": [],
+        "result": []
+    },
+    {
+        "label": "single dated fact",
+        "input": [
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            }
+        ],
+        "result": [
+            {
+                "id": "birth",
+                "tag": "INDI:BIRT",
+                "value": "",
+                "record_xref": null,
+                "date": {
+                    "qual1": "",
+                    "minimumJulianDay": 2415021,
+                    "maximumJulianDay": 2415021
+                },
+                "attributeDate": "1 JAN 1900"
+            }
+        ]
+    }
+]
