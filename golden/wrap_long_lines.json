@@ -1,0 +1,98 @@
+[
+    {
+        "label": "short line, no wrapping",
+        "gedcom": "0 HEAD\n1 SOUR webtrees",
+        "max_line_length": 253,
+        "result": "0 HEAD\n1 SOUR webtrees"
+    },
+    {
+        "label": "line exactly at max_line_length, unchanged",
+        "gedcom": "1 NOTE AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "max_line_length": 253,
+        "result": "1 NOTE AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+        "label": "one char over a small max_line_length, single split",
+        "gedcom": "1 NOTE AAAAAAAAAAAAAAA",
+        "max_line_length": 20,
+        "result": "1 NOTE AAAAAAAAAAAAA\n2 CONC AA"
+    },
+    {
+        "label": "multiple splits needed",
+        "gedcom": "1 NOTE BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "max_line_length": 20,
+        "result": "1 NOTE BBBBBBBBBBBBB\n2 CONC BBBBBBBBBBBBB\n2 CONC BBBBBBBBBBBBB\n2 CONC BBBBBBBBBBBBB\n2 CONC BBBBBBBBBBBBB\n2 CONC BBBBB"
+    },
+    {
+        "label": "CONT tag: level not incremented",
+        "gedcom": "2 CONT CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+        "max_line_length": 20,
+        "result": "2 CONT CCCCCCCCCCCCC\n2 CONC CCCCCCCCCCCCC\n2 CONC CCCC"
+    },
+    {
+        "label": "non-CONT tag: level incremented for CONC lines",
+        "gedcom": "3 NOTE DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+        "max_line_length": 20,
+        "result": "3 NOTE DDDDDDDDDDDDD\n4 CONC DDDDDDDDDDDDD\n4 CONC DDDD"
+    },
+    {
+        "label": "split point backs up over trailing spaces",
+        "gedcom": "1 NOTE 1234567890123     4567890",
+        "max_line_length": 20,
+        "result": "1 NOTE 1234567890123\n2 CONC      4567890"
+    },
+    {
+        "label": "one long word, no spaces at all - splits mid-word, does NOT give up",
+        "gedcom": "1 NOTE EEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
+        "max_line_length": 12,
+        "result": "1 NOTE EEEEE\n2 CONC EEEEE\n2 CONC EEEEE\n2 CONC EEEEE\n2 CONC EEEEE\n2 CONC EEEEE"
+    },
+    {
+        "label": "value is entirely spaces - genuinely cannot split, gives up",
+        "gedcom": "1 NOTE                               ",
+        "max_line_length": 20,
+        "result": "1 NOTE                               "
+    },
+    {
+        "label": "single space in the value - splits normally at that space",
+        "gedcom": "1 NOTE FFFFFFFFFFFF FFFFFFFFFFFF",
+        "max_line_length": 20,
+        "result": "1 NOTE FFFFFFFFFFFF\n2 CONC  FFFFFFFFFFFF"
+    },
+    {
+        "label": "multiple lines, mixed lengths",
+        "gedcom": "0 HEAD\n1 NOTE GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG\n1 SOUR webtrees\n2 CONT HHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+        "max_line_length": 20,
+        "result": "0 HEAD\n1 NOTE GGGGGGGGGGGGG\n2 CONC GGGGGGGGGGGGG\n2 CONC GGGG\n1 SOUR webtrees\n2 CONT HHHHHHHHHHHHH\n2 CONC HHHHHHHHHHHHH\n2 CONC HHHH"
+    },
+    {
+        "label": "multi-byte UTF-8 content, single split",
+        "gedcom": "1 NOTE ééééééééééééééé",
+        "max_line_length": 20,
+        "result": "1 NOTE ééééééééééééé\n2 CONC éé"
+    },
+    {
+        "label": "multi-byte UTF-8 content, one long word, splits mid-word",
+        "gedcom": "1 NOTE éééééééééééééééééééééééééééééé",
+        "max_line_length": 20,
+        "result": "1 NOTE ééééééééééééé\n2 CONC ééééééééééééé\n2 CONC éééé"
+    },
+    {
+        "label": "multi-byte UTF-8 content with a later splittable space",
+        "gedcom": "1 NOTE éééééééééééé éééééééééééé",
+        "max_line_length": 20,
+        "result": "1 NOTE éééééééééééé\n2 CONC  éééééééééééé"
+    },
+    {
+        "label": "empty string",
+        "gedcom": "",
+        "max_line_length": 253,
+        "result": ""
+    },
+    {
+        "label": "realistic long note, default max_line_length 253",
+        "gedcom": "1 NOTE The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. ",
+        "max_line_length": 253,
+        "result": "1 NOTE The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox j\n2 CONC umps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy do\n2 CONC g. The quick brown fox jumps over the lazy dog. "
+    }
+]
