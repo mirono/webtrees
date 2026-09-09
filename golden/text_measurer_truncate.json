@@ -1,0 +1,51 @@
+[
+    {
+        "index": 0,
+        "text": "short",
+        "width": 100,
+        "size": 1,
+        "result": "short"
+    },
+    {
+        "index": 1,
+        "text": "this is a longer piece of text that needs truncating",
+        "width": 5,
+        "size": 1,
+        "result": "this is a lo…"
+    },
+    {
+        "index": 2,
+        "text": "aaaaaaaaaa",
+        "width": 3,
+        "size": 1,
+        "result": "aaaa…"
+    },
+    {
+        "index": 3,
+        "text": "a",
+        "width": 0.1,
+        "size": 1,
+        "result": "…"
+    },
+    {
+        "index": 4,
+        "text": "line one is long enough to truncate\nline two also long enough to truncate",
+        "width": 5,
+        "size": 1,
+        "result": "line one is…\nline two al…"
+    },
+    {
+        "index": 5,
+        "text": "⁨some bidi text here that is long⁩",
+        "width": 3,
+        "size": 1,
+        "result": "⁨some⁩…"
+    },
+    {
+        "index": 6,
+        "text": "exactfitcase",
+        "width": 5.02,
+        "size": 1,
+        "result": "exactfitcase"
+    }
+]

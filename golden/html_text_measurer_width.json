@@ -1,0 +1,74 @@
+[
+    {
+        "index": 0,
+        "text": "",
+        "style": {
+            "style": "",
+            "size": 1
+        },
+        "result": 0
+    },
+    {
+        "index": 1,
+        "text": "a",
+        "style": {
+            "style": "",
+            "size": 1
+        },
+        "result": 0.5
+    },
+    {
+        "index": 2,
+        "text": "Hello",
+        "style": {
+            "style": "",
+            "size": 1
+        },
+        "result": 2.08
+    },
+    {
+        "index": 3,
+        "text": "Hello",
+        "style": {
+            "style": "b",
+            "size": 1
+        },
+        "result": 2.184
+    },
+    {
+        "index": 4,
+        "text": "Hello World",
+        "style": {
+            "style": "",
+            "size": 12
+        },
+        "result": 58.55999999999999
+    },
+    {
+        "index": 5,
+        "text": "???",
+        "style": {
+            "style": "",
+            "size": 1
+        },
+        "result": 1.6500000000000001
+    },
+    {
+        "index": 6,
+        "text": "MMMiiiWWWlll",
+        "style": {
+            "style": "",
+            "size": 1
+        },
+        "result": 6.48
+    },
+    {
+        "index": 7,
+        "text": "⁨a⁩",
+        "style": {
+            "style": "",
+            "size": 1
+        },
+        "result": 0.5
+    }
+]

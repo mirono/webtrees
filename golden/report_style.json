@@ -1,0 +1,118 @@
+[
+    {
+        "index": 0,
+        "method": "constructor",
+        "input": {
+            "name": "body",
+            "style": "",
+            "size": 12
+        },
+        "result": {
+            "name": "body",
+            "style": "",
+            "size": 12
+        }
+    },
+    {
+        "index": 1,
+        "method": "constructor",
+        "input": {
+            "name": "body",
+            "style": "b",
+            "size": 12
+        },
+        "result": {
+            "name": "body",
+            "style": "b",
+            "size": 12
+        }
+    },
+    {
+        "index": 2,
+        "method": "constructor",
+        "input": {
+            "name": "body",
+            "style": "biud",
+            "size": 10
+        },
+        "result": {
+            "name": "body",
+            "style": "biud",
+            "size": 10
+        }
+    },
+    {
+        "index": 3,
+        "method": "constructor",
+        "input": {
+            "name": "body",
+            "style": "du",
+            "size": 8
+        },
+        "result": {
+            "name": "body",
+            "style": "du",
+            "size": 8
+        }
+    },
+    {
+        "index": 4,
+        "method": "constructor",
+        "input": {
+            "name": "body",
+            "style": "x",
+            "size": 12
+        },
+        "throws": "LogicException"
+    },
+    {
+        "index": 5,
+        "method": "constructor",
+        "input": {
+            "name": "body",
+            "style": "B",
+            "size": 12
+        },
+        "throws": "LogicException"
+    },
+    {
+        "index": 0,
+        "method": "fromXmlAttributes",
+        "input": {
+            "name": "body",
+            "style": "b",
+            "size": "14"
+        },
+        "result": {
+            "name": "body",
+            "style": "b",
+            "size": 14
+        }
+    },
+    {
+        "index": 1,
+        "method": "fromXmlAttributes",
+        "input": {
+            "name": "body"
+        },
+        "result": {
+            "name": "body",
+            "style": "",
+            "size": 12
+        }
+    },
+    {
+        "index": 2,
+        "method": "fromXmlAttributes",
+        "input": [],
+        "throws": "LogicException"
+    },
+    {
+        "index": 3,
+        "method": "fromXmlAttributes",
+        "input": {
+            "name": ""
+        },
+        "throws": "LogicException"
+    }
+]

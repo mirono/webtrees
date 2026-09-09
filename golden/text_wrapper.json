@@ -1,0 +1,186 @@
+[
+    {
+        "index": 0,
+        "label": "short text, no wrap needed",
+        "text": "Hello World",
+        "size": 1,
+        "first_width": 100,
+        "subsequent_width": null,
+        "lines": [
+            "Hello World"
+        ],
+        "countLines": 1,
+        "textHeight": 1.25,
+        "lastLineWidth": 4.879999999999999
+    },
+    {
+        "index": 1,
+        "label": "wraps at word boundary",
+        "text": "aaaaa bbbbb ccccc ddddd",
+        "size": 1,
+        "first_width": 8,
+        "subsequent_width": null,
+        "lines": [
+            "aaaaa bbbbb ",
+            "ccccc ddddd"
+        ],
+        "countLines": 2,
+        "textHeight": 2.5,
+        "lastLineWidth": 5.299999999999999
+    },
+    {
+        "index": 2,
+        "label": "leading space preserved (footnote continuation)",
+        "text": " word after a footnote reference",
+        "size": 1,
+        "first_width": 10,
+        "subsequent_width": null,
+        "lines": [
+            " word after a footnote ",
+            "reference"
+        ],
+        "countLines": 2,
+        "textHeight": 2.5,
+        "lastLineWidth": 3.9800000000000004
+    },
+    {
+        "index": 3,
+        "label": "first_width differs from subsequent_width",
+        "text": "aaaa bbbb cccc dddd eeee",
+        "size": 1,
+        "first_width": 5,
+        "subsequent_width": 15,
+        "lines": [
+            "aaaa bbbb ",
+            "cccc dddd eeee"
+        ],
+        "countLines": 3,
+        "textHeight": 3.75,
+        "lastLineWidth": 2
+    },
+    {
+        "index": 4,
+        "label": "explicit newline creates a new logical line",
+        "text": "line one\nline two",
+        "size": 1,
+        "first_width": 100,
+        "subsequent_width": null,
+        "lines": [
+            "line one",
+            "line two"
+        ],
+        "countLines": 2,
+        "textHeight": 2.5,
+        "lastLineWidth": 3.2800000000000002
+    },
+    {
+        "index": 5,
+        "label": "long word broken at URL punctuation",
+        "text": "https://example.com/some/long/path/that/is/very/long",
+        "size": 1,
+        "first_width": 10,
+        "subsequent_width": null,
+        "lines": [
+            "https://example.com/",
+            "some/long/path/that/",
+            "is/very/long"
+        ],
+        "countLines": 3,
+        "textHeight": 3.75,
+        "lastLineWidth": 5.02
+    },
+    {
+        "index": 6,
+        "label": "long word with no URL punctuation, breaks at width limit",
+        "text": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+        "size": 1,
+        "first_width": 10,
+        "subsequent_width": null,
+        "lines": [
+            "mmmmmmmmmmmm",
+            "mmmmmmmmmmmm",
+            "mmmmmmmmmmmm",
+            "mmmm"
+        ],
+        "countLines": 4,
+        "textHeight": 5,
+        "lastLineWidth": 3.12
+    },
+    {
+        "index": 7,
+        "label": "word too long for first line but fits a full subsequent line",
+        "text": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiii short",
+        "size": 1,
+        "first_width": 3,
+        "subsequent_width": 20,
+        "lines": [
+            "",
+            "iiiiiiiiiiiiiiiiiiiiiiiiiiiiii short"
+        ],
+        "countLines": 4,
+        "textHeight": 5,
+        "lastLineWidth": 2.12
+    },
+    {
+        "index": 8,
+        "label": "empty text",
+        "text": "",
+        "size": 1,
+        "first_width": 10,
+        "subsequent_width": null,
+        "lines": [
+            ""
+        ],
+        "countLines": 1,
+        "textHeight": 1.25,
+        "lastLineWidth": 0
+    },
+    {
+        "index": 9,
+        "label": "single very long word spanning multiple full-width chunks",
+        "text": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "size": 1,
+        "first_width": 10,
+        "subsequent_width": null,
+        "lines": [
+            "wwwwwwwwwwwww",
+            "wwwwwwwwwwwww",
+            "wwwwwwwwwwwww",
+            "wwwwwwwwwwwww",
+            "wwwwwwwwwwwww",
+            "wwwwwwwwwwwww",
+            "wwwwwwwwwwwww",
+            "wwwwwwwww"
+        ],
+        "countLines": 8,
+        "textHeight": 10,
+        "lastLineWidth": 6.479999999999999
+    },
+    {
+        "index": 10,
+        "label": "realistic size and width",
+        "text": "The quick brown fox jumps over the lazy dog",
+        "size": 12,
+        "first_width": 80,
+        "subsequent_width": null,
+        "lines": [
+            "The quick ",
+            "brown fox ",
+            "jumps over the ",
+            "lazy dog"
+        ],
+        "countLines": 4,
+        "textHeight": 60,
+        "lastLineWidth": 41.76
+    },
+    {
+        "index": 11,
+        "label": "zero width throws",
+        "throws": "LogicException"
+    },
+    {
+        "index": 12,
+        "label": "negative width throws",
+        "throws": "LogicException"
+    }
+]
