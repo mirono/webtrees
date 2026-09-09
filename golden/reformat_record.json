@@ -1,0 +1,290 @@
+[
+    {
+        "group": "date",
+        "label": "plain date, unchanged",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 2000",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 2000"
+    },
+    {
+        "group": "date",
+        "label": "INT date preserves parenthetical text",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE INT 2000 (from family bible)",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE INT 2000 (from family bible)"
+    },
+    {
+        "group": "date",
+        "label": "lowercase uppercased",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 jan 2000",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 2000"
+    },
+    {
+        "group": "date",
+        "label": "letter-digit spacing inserted",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE JAN1900",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE JAN 1900"
+    },
+    {
+        "group": "date",
+        "label": "digit-letter spacing inserted",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE 1JAN",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN"
+    },
+    {
+        "group": "date",
+        "label": "calendar escape spacing",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE @#DJULIAN@1JAN1700",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE @#DJULIAN@ 1 JAN 1700"
+    },
+    {
+        "group": "date",
+        "label": "BET-dot stripped",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 2000 BET.",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 2000 BET"
+    },
+    {
+        "group": "date",
+        "label": "CIR becomes ABT",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE CIR 1900",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE ABT 1900"
+    },
+    {
+        "group": "date",
+        "label": "APX becomes ABT",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE APX 1900",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE ABT 1900"
+    },
+    {
+        "group": "date",
+        "label": "B.C. round-trips",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE 100 B.C.",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 100 B.C."
+    },
+    {
+        "group": "date",
+        "label": "TMG EITHER-OR becomes BET-AND",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE EITHER 1900 OR 1901",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE BET 1900 AND 1901"
+    },
+    {
+        "group": "date",
+        "label": "BET-dash becomes BET-AND",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE BET 1900 - 1901",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE BET 1900 AND 1901"
+    },
+    {
+        "group": "date",
+        "label": "FROM-dash becomes FROM-TO",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE FROM 1900 - 1901",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE FROM 1900 TO 1901"
+    },
+    {
+        "group": "date",
+        "label": "calendar escape repositioned for FROM-TO",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE @#DJULIAN@ FROM 1700 TO 1710",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE FROM @#DJULIAN@ 1700 TO @#DJULIAN@ 1710"
+    },
+    {
+        "group": "date",
+        "label": "calendar escape repositioned for BET-AND",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE @#DJULIAN@ BET 1700 AND 1710",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE BET @#DJULIAN@ 1700 AND @#DJULIAN@ 1710"
+    },
+    {
+        "group": "date",
+        "label": "calendar escape repositioned for AFT",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE @#DJULIAN@ AFT 1700",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE AFT @#DJULIAN@ 1700"
+    },
+    {
+        "group": "date",
+        "label": "punctuation cleaned to spaces",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE 14-MAY, 1900",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 14 MAY 1900"
+    },
+    {
+        "group": "date",
+        "label": "slash preserved for NS-OS dates",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE 4 FEB 1750\/51",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 4 FEB 1750\/51"
+    },
+    {
+        "group": "date",
+        "label": "calendar escape with EITHER-OR and dash",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 DATE @#DJULIAN@ EITHER 1700-1701 OR 1702",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE @#DJULIAN@ EITHER 1700 1701 OR 1702"
+    },
+    {
+        "group": "head_trlr",
+        "label": "HEAD at level 0 strips xref\/data",
+        "input": "0 @H@ HEAD garbage-data",
+        "result": "0 HEAD"
+    },
+    {
+        "group": "head_trlr",
+        "label": "TRLR at level 0 strips xref\/data",
+        "input": "0 @T@ TRLR garbage-data",
+        "result": "0 TRLR"
+    },
+    {
+        "group": "name",
+        "label": "NAME extra whitespace collapsed",
+        "input": "0 @I1@ INDI\n1 NAME   John   \/Smith\/  ",
+        "result": "0 @I1@ INDI\n1 NAME John \/Smith\/"
+    },
+    {
+        "group": "plac",
+        "label": "ASCII comma normalized",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 PLAC Paris,France",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 PLAC Paris, France"
+    },
+    {
+        "group": "plac",
+        "label": "fullwidth comma normalized",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 PLAC Paris，France",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 PLAC Paris, France"
+    },
+    {
+        "group": "plac",
+        "label": "arabic comma normalized",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 PLAC Paris،France",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 PLAC Paris, France"
+    },
+    {
+        "group": "plac",
+        "label": "TMG lat\/long extracted into MAP\/LATI\/LONG",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 PLAC Pennsylvania, USA, 395945N0751013W",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 PLAC Pennsylvania, USA\n3 MAP\n4 LATI N39.9958\n4 LONG W75.1703"
+    },
+    {
+        "group": "plac",
+        "label": "TMG lat\/long at a deeper level",
+        "input": "0 @I1@ INDI\n1 BIRT\n2 SOUR @S1@\n3 DATA\n4 PLAC Pennsylvania, USA, 395945N0751013W",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 SOUR @S1@\n3 DATA\n4 PLAC Pennsylvania, USA\n5 MAP\n6 LATI N39.9958\n6 LONG W75.1703"
+    },
+    {
+        "group": "sex",
+        "label": "lowercase sex uppercased",
+        "input": "0 @I1@ INDI\n1 SEX m",
+        "result": "0 @I1@ INDI\n1 SEX M"
+    },
+    {
+        "group": "y_suppress",
+        "label": "Y suppressed when followed by DATE",
+        "input": "0 @I1@ INDI\n1 BIRT Y\n2 DATE 1 JAN 1900\n1 DEAT",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 1900\n1 DEAT"
+    },
+    {
+        "group": "y_suppress",
+        "label": "Y suppressed when followed by PLAC",
+        "input": "0 @I1@ INDI\n1 BIRT Y\n2 PLAC Anytown\n1 DEAT",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 PLAC Anytown\n1 DEAT"
+    },
+    {
+        "group": "y_suppress",
+        "label": "Y kept when no DATE\/PLAC follows",
+        "input": "0 @I1@ INDI\n1 BIRT Y\n2 NOTE nothing relevant\n1 DEAT",
+        "result": "0 @I1@ INDI\n1 BIRT Y\n2 NOTE nothing relevant\n1 DEAT"
+    },
+    {
+        "group": "y_suppress",
+        "label": "lowercase y uppercased then suppressed",
+        "input": "0 @I1@ INDI\n1 BIRT y\n2 DATE 1 JAN 1900\n1 DEAT",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 1900\n1 DEAT"
+    },
+    {
+        "group": "y_suppress",
+        "label": "Y with DATE as the absolute last line in the record",
+        "input": "0 @I1@ INDI\n1 BIRT Y\n2 DATE 1 JAN 1900",
+        "result": "0 @I1@ INDI\n1 BIRT Y\n2 DATE 1 JAN 1900"
+    },
+    {
+        "group": "y_suppress",
+        "label": "Y with DATE followed by one more sub-line",
+        "input": "0 @I1@ INDI\n1 BIRT Y\n2 DATE 1 JAN 1900\n2 NOTE trailing",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 1900\n2 NOTE trailing"
+    },
+    {
+        "group": "y_suppress",
+        "label": "Y followed by canonical PLAC spelling",
+        "input": "0 @I1@ INDI\n1 BIRT Y\n2 PLAC Anytown\n1 DEAT",
+        "result": "0 @I1@ INDI\n1 BIRT\n2 PLAC Anytown\n1 DEAT"
+    },
+    {
+        "group": "y_suppress",
+        "label": "Y followed by non-canonical PLACE spelling",
+        "input": "0 @I1@ INDI\n1 BIRT Y\n2 PLACE Anytown\n1 DEAT",
+        "result": "0 @I1@ INDI\n1 BIRT Y\n2 PLAC Anytown\n1 DEAT"
+    },
+    {
+        "group": "whitespace",
+        "label": "NOTE preserves internal double spaces",
+        "input": "0 @I1@ INDI\n1 NOTE some   text  with  gaps",
+        "result": "0 @I1@ INDI\n1 NOTE some   text  with  gaps"
+    },
+    {
+        "group": "whitespace",
+        "label": "OCCU (default bucket) collapses internal double spaces",
+        "input": "0 @I1@ INDI\n1 OCCU some   text  with  gaps",
+        "result": "0 @I1@ INDI\n1 OCCU some text with gaps"
+    },
+    {
+        "group": "whitespace",
+        "label": "default bucket strips tabs and trims",
+        "input": "0 @I1@ INDI\n1 OCCU \t padded \t ",
+        "result": "0 @I1@ INDI\n1 OCCU padded"
+    },
+    {
+        "group": "conc",
+        "label": "CONC merges without a space (WORD_WRAPPED_NOTES off)",
+        "input": "0 @I1@ INDI\n1 NOTE Hello\n2 CONC World",
+        "result": "0 @I1@ INDI\n1 NOTE HelloWorld"
+    },
+    {
+        "group": "conc",
+        "label": "CONC merges with a space (WORD_WRAPPED_NOTES on)",
+        "input": "0 @I1@ INDI\n1 NOTE Hello\n2 CONC World",
+        "result": "0 @I1@ INDI\n1 NOTE Hello World"
+    },
+    {
+        "group": "file",
+        "label": "FILE backslashes converted, no media path set",
+        "input": "0 @M1@ OBJE\n1 FILE C:\\photos\\me.jpg",
+        "result": "0 @M1@ OBJE\n1 FILE C:\/photos\/me.jpg"
+    },
+    {
+        "group": "file",
+        "label": "FILE strips matching media path prefix",
+        "input": "0 @M1@ OBJE\n1 FILE C:\\photos\\me.jpg",
+        "result": "0 @M1@ OBJE\n1 FILE me.jpg"
+    },
+    {
+        "group": "file",
+        "label": "FILE with non-matching prefix left alone (backslashes still converted)",
+        "input": "0 @M1@ OBJE\n1 FILE D:\\other\\me.jpg",
+        "result": "0 @M1@ OBJE\n1 FILE D:\/other\/me.jpg"
+    },
+    {
+        "group": "lines",
+        "label": "CRLF line endings normalized",
+        "input": "0 @I1@ INDI\r\n1 SEX M\r\n",
+        "result": "0 @I1@ INDI\n1 SEX M"
+    },
+    {
+        "group": "lines",
+        "label": "blank line collapsed away",
+        "input": "0 @I1@ INDI\n\n1 SEX M",
+        "result": "0 @I1@ INDI\n1 SEX M"
+    },
+    {
+        "group": "lines",
+        "label": "malformed line silently dropped",
+        "input": "0 @I1@ INDI\n***not a valid line***\n1 SEX M",
+        "result": "0 @I1@ INDI\n1 SEX M"
+    },
+    {
+        "group": "combined",
+        "label": "realistic combined record",
+        "input": "0 @I1@ INDI\n1 NAME   John   \/Smith\/\n1 SEX m\n1 BIRT y\n2 DATE cir 1900\n2 PLAC Anytown,USA\n1 DEAT Y\n2 NOTE nothing relevant\n1 NOTE Hello\n2 CONC  World",
+        "result": "0 @I1@ INDI\n1 NAME John \/Smith\/\n1 SEX M\n1 BIRT\n2 DATE ABT 1900\n2 PLAC Anytown, USA\n1 DEAT Y\n2 NOTE nothing relevant\n1 NOTE Hello  World"
+    }
+]
