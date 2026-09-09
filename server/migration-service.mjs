@@ -19,11 +19,18 @@
 // WEBTREES_SOUNDEX_SERVICE_URL, see phase3-soundex-bridge.md),
 // SurnameTradition (app/SurnameTradition/BridgedSurnameTradition.php,
 // WEBTREES_SURNAME_TRADITION_SERVICE_URL, see
-// phase3-surname-tradition-bridge.md), and GedcomService
+// phase3-surname-tradition-bridge.md), GedcomService
 // (app/Services/GedcomService.php, WEBTREES_GEDCOM_SERVICE_URL, see
-// phase3-gedcom-service-bridge.md). Each PHP bridge falls back to its own
-// native implementation on any failure — this service is never a single
-// point of failure for the app, for any module.
+// phase3-gedcom-service-bridge.md), FactSortService
+// (app/Services/FactSortService.php, WEBTREES_FACT_SORT_SERVICE_URL),
+// GedcomExportService::wrapLongLines() (app/Services/GedcomExportService.php,
+// WEBTREES_GEDCOM_EXPORT_SERVICE_URL), and
+// GedcomImportService::reformatRecord() (app/Services/GedcomImportService.php,
+// WEBTREES_GEDCOM_IMPORT_SERVICE_URL) — the latter three added together in
+// a single decision pass, see phase3-bridge-decision-pass-2.md. Each PHP
+// bridge falls back to its own native implementation on any failure —
+// this service is never a single point of failure for the app, for any
+// module.
 //
 // Originally soundex-service.mjs (Soundex-only) — renamed when the
 // SurnameTradition bridge was added, since bolting unrelated modules onto
@@ -42,6 +49,9 @@
 import { createServer } from 'node:http';
 import { russell, compare, daitchMokotoff } from '../lib/soundex.js';
 import { canonicalTag, readLatitude, readLongitude } from '../lib/services/gedcom-service.js';
+import { FactSortService } from '../lib/services/fact-sort-service.js';
+import { wrapLongLines } from '../lib/services/gedcom-export-service.js';
+import { reformatRecord } from '../lib/services/gedcom-import-service.js';
 import { DefaultSurnameTradition } from '../lib/surname-tradition/default.js';
 import { PatrilinealSurnameTradition } from '../lib/surname-tradition/patrilineal.js';
 import { PaternalSurnameTradition } from '../lib/surname-tradition/paternal.js';
@@ -68,6 +78,39 @@ const GEDCOM_SERVICE_ROUTES = {
   '/gedcom/canonical-tag': (body) => ({ tag: canonicalTag(String(body.tag ?? '')) }),
   '/gedcom/read-latitude': (body) => ({ value: readLatitude(String(body.text ?? '')) }),
   '/gedcom/read-longitude': (body) => ({ value: readLongitude(String(body.text ?? '')) }),
+};
+
+// --- FactSortService routes (app/Services/FactSortService.php) ---
+//
+// `body.facts` is an array of fact shims, each carrying its original PHP
+// array index (see FactSortService::factShim()) so the PHP side can map
+// the returned order back to its real Fact objects without needing to
+// reconstruct them from JSON. sort() only reads tag/value/id/attributeDate/
+// date/record — the index field rides along untouched and comes back in
+// the same shim object, in the new order.
+const factSortService = new FactSortService();
+
+const FACT_SORT_SERVICE_ROUTES = {
+  '/fact-sort/sort': (body) => ({ facts: factSortService.sort(Array.isArray(body.facts) ? body.facts : []) }),
+};
+
+// --- GedcomExportService routes (app/Services/GedcomExportService.php) ---
+
+const GEDCOM_EXPORT_SERVICE_ROUTES = {
+  '/gedcom-export/wrap-long-lines': (body) => ({
+    result: wrapLongLines(String(body.gedcom ?? ''), Number(body.maxLineLength ?? 0)),
+  }),
+};
+
+// --- GedcomImportService routes (app/Services/GedcomImportService.php) ---
+
+const GEDCOM_IMPORT_SERVICE_ROUTES = {
+  '/gedcom-import/reformat-record': (body) => ({
+    result: reformatRecord(String(body.rec ?? ''), {
+      gedcomMediaPath: String(body.gedcomMediaPath ?? ''),
+      wordWrappedNotes: String(body.wordWrappedNotes ?? ''),
+    }),
+  }),
 };
 
 // --- SurnameTradition routes (app/SurnameTradition/BridgedSurnameTradition.php) ---
@@ -141,6 +184,18 @@ function resolveHandler(pathname) {
 
   if (GEDCOM_SERVICE_ROUTES[pathname]) {
     return GEDCOM_SERVICE_ROUTES[pathname];
+  }
+
+  if (FACT_SORT_SERVICE_ROUTES[pathname]) {
+    return FACT_SORT_SERVICE_ROUTES[pathname];
+  }
+
+  if (GEDCOM_EXPORT_SERVICE_ROUTES[pathname]) {
+    return GEDCOM_EXPORT_SERVICE_ROUTES[pathname];
+  }
+
+  if (GEDCOM_IMPORT_SERVICE_ROUTES[pathname]) {
+    return GEDCOM_IMPORT_SERVICE_ROUTES[pathname];
   }
 
   const segments = pathname.split('/').filter(Boolean);

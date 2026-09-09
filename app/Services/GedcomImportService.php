@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Fisharebest\Webtrees\Services;
 
+use Fig\Http\Message\StatusCodeInterface;
 use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\DB;
 use Fisharebest\Webtrees\Exceptions\GedcomErrorException;
@@ -38,7 +39,10 @@ use Fisharebest\Webtrees\Source;
 use Fisharebest\Webtrees\Submission;
 use Fisharebest\Webtrees\Submitter;
 use Fisharebest\Webtrees\Tree;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
 use Illuminate\Database\Query\JoinClause;
+use Throwable;
 
 use function array_chunk;
 use function array_intersect_key;
@@ -47,6 +51,11 @@ use function array_unique;
 use function array_values;
 use function date;
 use function explode;
+use function getenv;
+use function is_array;
+use function is_string;
+use function json_decode;
+use function json_encode;
 use function max;
 use function mb_strtoupper;
 use function mb_substr;
@@ -54,6 +63,7 @@ use function preg_match;
 use function preg_match_all;
 use function preg_replace;
 use function round;
+use function rtrim;
 use function str_contains;
 use function str_replace;
 use function str_starts_with;
@@ -63,6 +73,7 @@ use function strtr;
 use function substr;
 use function trim;
 
+use const JSON_THROW_ON_ERROR;
 use const PREG_SET_ORDER;
 
 /**
@@ -70,11 +81,79 @@ use const PREG_SET_ORDER;
  */
 class GedcomImportService
 {
+    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
+    // docs/php-to-js-migration/). When set, reformatRecord() tries this
+    // Node service first and falls back to the native PHP implementation
+    // below on any failure — the service is never a single point of
+    // failure. Unset by default: with no env var, behavior is
+    // byte-for-byte identical to before this migration started. Known
+    // tradeoff (same as the Soundex bridge): reformatRecord() is called
+    // once per imported record with no request batching yet, so a bulk
+    // import pays one HTTP round-trip per record.
+    private const string SERVICE_URL_ENV_VAR = 'WEBTREES_GEDCOM_IMPORT_SERVICE_URL';
+
+    // Same static circuit-breaker pattern as GedcomService/Soundex/FactSortService/GedcomExportService.
+    private static bool $service_unavailable = false;
+
+    /**
+     * @param array<string,mixed> $payload
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function callService(string $path, array $payload): array|null
+    {
+        if (self::$service_unavailable) {
+            return null;
+        }
+
+        $service_url = (string) getenv(self::SERVICE_URL_ENV_VAR);
+
+        if ($service_url === '') {
+            return null;
+        }
+
+        try {
+            $client  = new Client(['timeout' => 0.5, 'connect_timeout' => 0.5]);
+            $request = new Request(
+                'POST',
+                rtrim($service_url, '/') . $path,
+                ['content-type' => 'application/json'],
+                json_encode($payload, JSON_THROW_ON_ERROR),
+            );
+
+            $response = $client->send($request);
+
+            if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
+                self::$service_unavailable = true;
+
+                return null;
+            }
+
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            return is_array($body) ? $body : null;
+        } catch (Throwable) {
+            self::$service_unavailable = true;
+
+            return null;
+        }
+    }
+
     /**
      * Tidy up a gedcom record on import, so that we can access it consistently/efficiently.
      */
     private function reformatRecord(string $rec, Tree $tree): string
     {
+        $service_result = self::callService('/gedcom-import/reformat-record', [
+            'rec'              => $rec,
+            'gedcomMediaPath'  => $tree->getPreference('GEDCOM_MEDIA_PATH'),
+            'wordWrappedNotes' => $tree->getPreference('WORD_WRAPPED_NOTES'),
+        ]);
+
+        if (is_array($service_result) && is_string($service_result['result'] ?? null)) {
+            return $service_result['result'];
+        }
+
         $gedcom_service = Registry::container()->get(GedcomService::class);
 
         // Strip out mac/msdos line endings

@@ -68,7 +68,14 @@ All 48 pass; full suite (`npm test`) is 3,961/3,961.
 
 ## Why no bridge was built (yet)
 
+<details>
+<summary>Original reasoning (superseded — a bridge was built; see below)</summary>
+
 Same posture as `FactSortService`/`wrapLongLines`/`TextWrapper` (tasks 18-20): a clean string-in/string-out shape (plus the small preference-object shim) with the highest real invocation volume found in this migration, but left as a deliberate future decision rather than bundled into this port-only task.
+
+</details>
+
+**Update:** a live bridge was built immediately after this task, in the same decision pass as `FactSortService` and `wrapLongLines` — see [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md). Same "one round-trip per record, no batching yet" tradeoff already accepted for `Soundex`/`wrapLongLines`. Not enabled by default; `WEBTREES_GEDCOM_IMPORT_SERVICE_URL` is unset until a deployer opts in.
 
 ---
 

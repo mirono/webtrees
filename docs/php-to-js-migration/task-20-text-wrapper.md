@@ -50,9 +50,16 @@ All 38 pass; full suite (`npm test`) is 3,913/3,913.
 
 ---
 
-## Why no bridge was built (yet)
+## Why no bridge was built
+
+<details>
+<summary>Original reasoning (superseded by a follow-up investigation — see below)</summary>
 
 Same posture as `FactSortService` and `wrapLongLines` (tasks 18-19): a clean, bounded interface (`wrapText()` takes/returns flat string arrays and floats, no polymorphic escaping objects) with a confirmed real call site (`HtmlRenderer.php` genuinely does use `HtmlTextMeasurer` for the HTML report backend) — a real future bridge candidate, left as a deliberate later decision rather than bundled into this port-only task.
+
+</details>
+
+**Update:** the follow-up bridge-decision pass ([phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md)) actually read `LayoutEngine.php`'s call sites and concluded **do not bridge** — this module's shape turned out to be architecturally different from `FactSortService`/`wrapLongLines`/`reformatRecord` (which all got bridged in that same pass). Call volume scales with report content (hundreds of calls per multi-page report, not a handful per page or one per record), and those calls are tightly interleaved with substantial PHP-side layout logic that makes decisions based on each measurement's result before the next call — the same shape as the already-rejected `lib/date` bridge, with no clean per-operation boundary to bridge across.
 
 ---
 

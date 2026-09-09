@@ -34,6 +34,9 @@ use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\Site;
 use Fisharebest\Webtrees\Tree;
 use Fisharebest\Webtrees\Webtrees;
+use Fig\Http\Message\StatusCodeInterface;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Collection;
@@ -43,6 +46,7 @@ use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use RuntimeException;
+use Throwable;
 use ZipArchive;
 
 use function addcslashes;
@@ -51,10 +55,15 @@ use function explode;
 use function fclose;
 use function fopen;
 use function fwrite;
+use function getenv;
+use function is_array;
 use function is_string;
+use function json_decode;
+use function json_encode;
 use function pathinfo;
 use function preg_match_all;
 use function rewind;
+use function rtrim;
 use function stream_filter_append;
 use function stream_get_meta_data;
 use function strlen;
@@ -63,6 +72,7 @@ use function strtolower;
 use function strtoupper;
 use function tmpfile;
 
+use const JSON_THROW_ON_ERROR;
 use const PATHINFO_EXTENSION;
 use const PREG_SET_ORDER;
 use const STREAM_FILTER_WRITE;
@@ -78,6 +88,64 @@ class GedcomExportService
         'visitor'  => Auth::PRIV_PRIVATE,
         'none'     => Auth::PRIV_HIDE,
     ];
+
+    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
+    // docs/php-to-js-migration/). When set, wrapLongLines() tries this
+    // Node service first and falls back to the native PHP implementation
+    // below on any failure — the service is never a single point of
+    // failure. Unset by default: with no env var, behavior is
+    // byte-for-byte identical to before this migration started. Known
+    // tradeoff (same as the Soundex bridge): wrapLongLines() is called
+    // once per exported record with no request batching yet, so a bulk
+    // export pays one HTTP round-trip per record.
+    private const string SERVICE_URL_ENV_VAR = 'WEBTREES_GEDCOM_EXPORT_SERVICE_URL';
+
+    // Same static circuit-breaker pattern as GedcomService/Soundex/FactSortService.
+    private static bool $service_unavailable = false;
+
+    /**
+     * @param array<string,mixed> $payload
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function callService(string $path, array $payload): array|null
+    {
+        if (self::$service_unavailable) {
+            return null;
+        }
+
+        $service_url = (string) getenv(self::SERVICE_URL_ENV_VAR);
+
+        if ($service_url === '') {
+            return null;
+        }
+
+        try {
+            $client  = new Client(['timeout' => 0.5, 'connect_timeout' => 0.5]);
+            $request = new Request(
+                'POST',
+                rtrim($service_url, '/') . $path,
+                ['content-type' => 'application/json'],
+                json_encode($payload, JSON_THROW_ON_ERROR),
+            );
+
+            $response = $client->send($request);
+
+            if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
+                self::$service_unavailable = true;
+
+                return null;
+            }
+
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            return is_array($body) ? $body : null;
+        } catch (Throwable) {
+            self::$service_unavailable = true;
+
+            return null;
+        }
+    }
 
     public function __construct(
         private readonly ResponseFactoryInterface $response_factory,
@@ -335,6 +403,15 @@ class GedcomExportService
 
     public function wrapLongLines(string $gedcom, int $max_line_length): string
     {
+        $service_result = self::callService('/gedcom-export/wrap-long-lines', [
+            'gedcom'        => $gedcom,
+            'maxLineLength' => $max_line_length,
+        ]);
+
+        if (is_array($service_result) && is_string($service_result['result'] ?? null)) {
+            return $service_result['result'];
+        }
+
         $lines = [];
 
         foreach (explode("\n", $gedcom) as $line) {

@@ -72,7 +72,14 @@ All 8 pass; full suite (`npm test`) is 3,858/3,858.
 
 ## Why no bridge was built (yet)
 
+<details>
+<summary>Original reasoning (superseded — a bridge was built; see below)</summary>
+
 Same posture as `FactComparator` (task 12): a real, high-traffic algorithm with a clean bounded shape, but out of scope for *this* task (port + parity test only). Unlike `FactComparator`'s payoff assessment, `FactSortService` has more call-site traffic than most already-bridged modules — worth a real look at bridging in a future task, since (unlike `lib/date`) its inputs and outputs are flat arrays of plain data, not polymorphic escaping objects. Left for a deliberate future decision rather than bundled into this one.
+
+</details>
+
+**Update:** a live bridge was built after task 21, as part of a dedicated bridge-decision pass covering `FactSortService`, `wrapLongLines`, `TextWrapper`, and `reformatRecord` together — see [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md). `FactSortService` was the strongest of the four candidates (low call volume — a handful per page, not per-item — and a genuinely clean, non-polymorphic shape). Not enabled by default anywhere; `WEBTREES_FACT_SORT_SERVICE_URL` is unset until a deployer opts in, same posture as every other bridge in this migration.
 
 ---
 

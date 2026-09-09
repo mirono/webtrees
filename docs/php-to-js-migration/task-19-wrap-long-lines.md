@@ -55,7 +55,14 @@ All 17 pass; full suite (`npm test`) is 3,875/3,875.
 
 ## Why no bridge was built (yet)
 
+<details>
+<summary>Original reasoning (superseded — a bridge was built; see below)</summary>
+
 Same posture as `FactSortService` (task 18): a clean, bounded, high-traffic, string-in/string-out shape with real bridge potential, but left as a deliberate future decision rather than bundled into this port-only task.
+
+</details>
+
+**Update:** a live bridge was built after task 21 — see [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md). Accepted the same "one round-trip per record, no batching yet" tradeoff already documented for the `Soundex` bridge, since declining to bridge this while keeping Soundex bridged would be an inconsistent double standard with no principled difference. Not enabled by default; `WEBTREES_GEDCOM_EXPORT_SERVICE_URL` is unset until a deployer opts in.
 
 ---
 

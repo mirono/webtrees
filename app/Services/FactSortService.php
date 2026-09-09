@@ -19,17 +19,113 @@ declare(strict_types=1);
 
 namespace Fisharebest\Webtrees\Services;
 
+use Fig\Http\Message\StatusCodeInterface;
 use Fisharebest\Webtrees\Comparators\FactComparator;
 use Fisharebest\Webtrees\Fact;
 use Fisharebest\Webtrees\Family;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
 use Illuminate\Support\Collection;
+use Throwable;
 
+use function array_key_exists;
 use function array_splice;
 use function count;
+use function getenv;
+use function is_array;
+use function is_int;
+use function json_decode;
+use function json_encode;
+use function rtrim;
 use function usort;
+
+use const JSON_THROW_ON_ERROR;
 
 final class FactSortService
 {
+    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
+    // docs/php-to-js-migration/). When set, sort() tries this Node service
+    // first and falls back to the native PHP implementation below on any
+    // failure — the service is never a single point of failure. Unset by
+    // default: with no env var, behavior is byte-for-byte identical to
+    // before this migration started.
+    private const string SERVICE_URL_ENV_VAR = 'WEBTREES_FACT_SORT_SERVICE_URL';
+
+    // Same static circuit-breaker pattern as GedcomService/Soundex.
+    private static bool $service_unavailable = false;
+
+    /**
+     * @param array<string,mixed> $payload
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function callService(string $path, array $payload): array|null
+    {
+        if (self::$service_unavailable) {
+            return null;
+        }
+
+        $service_url = (string) getenv(self::SERVICE_URL_ENV_VAR);
+
+        if ($service_url === '') {
+            return null;
+        }
+
+        try {
+            $client  = new Client(['timeout' => 0.5, 'connect_timeout' => 0.5]);
+            $request = new Request(
+                'POST',
+                rtrim($service_url, '/') . $path,
+                ['content-type' => 'application/json'],
+                json_encode($payload, JSON_THROW_ON_ERROR),
+            );
+
+            $response = $client->send($request);
+
+            if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
+                self::$service_unavailable = true;
+
+                return null;
+            }
+
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            return is_array($body) ? $body : null;
+        } catch (Throwable) {
+            self::$service_unavailable = true;
+
+            return null;
+        }
+    }
+
+    /**
+     * Build the plain-data shim payload for one fact, matching the shape
+     * lib/comparators/fact-comparator.js and lib/services/fact-sort-service.js
+     * already expect (tasks 12 & 18). `index` round-trips through the
+     * service so the response can be mapped back to the original Fact
+     * objects without needing to reconstruct them from JSON.
+     *
+     * @return array<string,mixed>
+     */
+    private static function factShim(int $index, Fact $fact): array
+    {
+        $record = $fact->record();
+
+        return [
+            'index'         => $index,
+            'tag'           => $fact->tag(),
+            'value'         => $fact->value(),
+            'id'            => $fact->id(),
+            'attributeDate' => $fact->attribute('DATE'),
+            'date'          => [
+                'qual1'            => $fact->date()->qual1,
+                'minimumJulianDay' => $fact->date()->minimumJulianDay(),
+                'maximumJulianDay' => $fact->date()->maximumJulianDay(),
+            ],
+            'record' => $record instanceof Family ? ['xref' => $record->xref()] : null,
+        ];
+    }
+
     /**
      * Sort a collection of facts.
      *
@@ -47,6 +143,41 @@ final class FactSortService
      */
     public function sort(Collection $unsorted): Collection
     {
+        $original = $unsorted->values()->all();
+
+        $shims = [];
+        foreach ($original as $index => $fact) {
+            $shims[] = self::factShim($index, $fact);
+        }
+
+        $service_result = self::callService('/fact-sort/sort', ['facts' => $shims]);
+
+        $service_facts = is_array($service_result) ? ($service_result['facts'] ?? null) : null;
+
+        if (is_array($service_facts) && count($service_facts) === count($original)) {
+            $reordered    = [];
+            $seen_indices = [];
+            foreach ($service_facts as $shim) {
+                $index      = is_array($shim) ? ($shim['index'] ?? null) : null;
+                $index_seen = is_int($index) && array_key_exists($index, $seen_indices);
+
+                if (!is_int($index) || !array_key_exists($index, $original) || $index_seen) {
+                    $reordered = null;
+                    break;
+                }
+
+                $seen_indices[$index] = true;
+                $reordered[]          = $original[$index];
+            }
+
+            // Every returned index must map back to a distinct original
+            // fact — reject anything else (duplicate/missing indices)
+            // rather than risk silently dropping or duplicating a fact.
+            if ($reordered !== null && count($reordered) === count($original)) {
+                return new Collection($reordered);
+            }
+        }
+
         $dated    = [];
         $nondated = [];
 
