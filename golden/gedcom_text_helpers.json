@@ -1,0 +1,320 @@
+[
+    {
+        "group": "getSubRecord",
+        "label": "empty gedrec",
+        "input": {
+            "level": 1,
+            "tag": "1 BIRT",
+            "gedrec": "",
+            "num": 1
+        },
+        "result": ""
+    },
+    {
+        "group": "getSubRecord",
+        "label": "simple sub-record among siblings",
+        "input": {
+            "level": 1,
+            "tag": "1 BIRT",
+            "gedrec": "1 BIRT\n2 DATE 1 JAN 1900\n2 PLAC Anytown\n1 DEAT\n2 DATE 1 JAN 1980",
+            "num": 1
+        },
+        "result": "1 BIRT\n2 DATE 1 JAN 1900\n2 PLAC Anytown"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "second sibling by tag",
+        "input": {
+            "level": 1,
+            "tag": "1 DEAT",
+            "gedrec": "1 BIRT\n2 DATE 1 JAN 1900\n2 PLAC Anytown\n1 DEAT\n2 DATE 1 JAN 1980",
+            "num": 1
+        },
+        "result": "1 DEAT\n2 DATE 1 JAN 1980\n"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "num=1 (first occurrence)",
+        "input": {
+            "level": 1,
+            "tag": "1 OCCU",
+            "gedrec": "1 OCCU Farmer\n1 OCCU Blacksmith\n1 OCCU Sailor",
+            "num": 1
+        },
+        "result": "1 OCCU Farmer"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "num=2 (second occurrence)",
+        "input": {
+            "level": 1,
+            "tag": "1 OCCU",
+            "gedrec": "1 OCCU Farmer\n1 OCCU Blacksmith\n1 OCCU Sailor",
+            "num": 2
+        },
+        "result": "1 OCCU Blacksmith"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "num=3 (third occurrence)",
+        "input": {
+            "level": 1,
+            "tag": "1 OCCU",
+            "gedrec": "1 OCCU Farmer\n1 OCCU Blacksmith\n1 OCCU Sailor",
+            "num": 3
+        },
+        "result": "1 OCCU Sailor\n"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "num beyond available occurrences",
+        "input": {
+            "level": 1,
+            "tag": "1 OCCU",
+            "gedrec": "1 OCCU Farmer\n1 OCCU Blacksmith\n1 OCCU Sailor",
+            "num": 4
+        },
+        "result": ""
+    },
+    {
+        "group": "getSubRecord",
+        "label": "sub-record is the last one, no end boundary found",
+        "input": {
+            "level": 1,
+            "tag": "1 BIRT",
+            "gedrec": "1 BIRT\n2 DATE 1 JAN 1900",
+            "num": 1
+        },
+        "result": "1 BIRT\n2 DATE 1 JAN 1900\n"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "nested children included, cut at next level-1 line",
+        "input": {
+            "level": 1,
+            "tag": "1 SOUR",
+            "gedrec": "1 SOUR @S1@\n2 DATA\n3 DATE 1 JAN 1900\n1 DEAT",
+            "num": 1
+        },
+        "result": "1 SOUR @S1@\n2 DATA\n3 DATE 1 JAN 1900"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "level-2 request, no level-2 sibling, falls back to level-1 boundary",
+        "input": {
+            "level": 2,
+            "tag": "2 DATA",
+            "gedrec": "1 SOUR @S1@\n2 DATA\n3 DATE 1 JAN 1900\n1 DEAT",
+            "num": 1
+        },
+        "result": "2 DATA\n3 DATE 1 JAN 1900"
+    },
+    {
+        "group": "getSubRecord",
+        "label": "verified finding: level-10+ line falsely terminates a level-1 boundary search",
+        "input": {
+            "level": 1,
+            "tag": "1 BIRT",
+            "gedrec": "1 BIRT\n2 DATE 1 JAN 1900\n10 FAKE deep nesting\n11 EVEN more nested content\n2 PLAC Anytown\n1 DEAT",
+            "num": 1
+        },
+        "result": "1 BIRT\n2 DATE 1 JAN 1900"
+    },
+    {
+        "group": "getCont",
+        "label": "no CONT lines",
+        "input": {
+            "level": 2,
+            "record": "1 NOTE Hello\n2 SOUR @S1@"
+        },
+        "result": ""
+    },
+    {
+        "group": "getCont",
+        "label": "multiple CONT lines merged",
+        "input": {
+            "level": 2,
+            "record": "1 NOTE Hello\n2 CONT World\n2 CONT Again"
+        },
+        "result": "\nWorld\nAgain"
+    },
+    {
+        "group": "getCont",
+        "label": "CONC lines ignored, only CONT extracted",
+        "input": {
+            "level": 2,
+            "record": "1 NOTE Hello\n2 CONC World\n2 CONT NewLine"
+        },
+        "result": "\nNewLine"
+    },
+    {
+        "group": "getCont",
+        "label": "verified finding: level 10+ CONT lines are never found",
+        "input": {
+            "level": 10,
+            "record": "10 CONT should be found but is not\n1 NOTE something"
+        },
+        "result": ""
+    },
+    {
+        "group": "getCont",
+        "label": "verified finding: same input, level 1 also finds nothing",
+        "input": {
+            "level": 1,
+            "record": "10 CONT should be found but is not\n1 NOTE something"
+        },
+        "result": ""
+    },
+    {
+        "group": "getNote",
+        "label": "simple single-line note",
+        "input": {
+            "gedcom": "0 @N1@ NOTE This is a simple note."
+        },
+        "result": "This is a simple note."
+    },
+    {
+        "group": "getNote",
+        "label": "multi-line note with CONT merging",
+        "input": {
+            "gedcom": "0 @N1@ NOTE Line one\n1 CONT Line two\n1 CONT Line three"
+        },
+        "result": "Line one\nLine two\nLine three"
+    },
+    {
+        "group": "getNote",
+        "label": "empty note text",
+        "input": {
+            "gedcom": "0 @N1@ NOTE"
+        },
+        "result": ""
+    },
+    {
+        "group": "getNote",
+        "label": "xref with allowed special characters",
+        "input": {
+            "gedcom": "0 @N:1_2.3-4@ NOTE Special xref chars"
+        },
+        "result": "Special xref chars"
+    },
+    {
+        "group": "getNote",
+        "label": "malformed record, no match",
+        "input": {
+            "gedcom": "not a valid gedcom record at all"
+        },
+        "result": ""
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "plain text, no tags",
+        "input": {
+            "html": "no break tags at all here"
+        },
+        "result": "no break tags at all here"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "paragraph closing tags become breaks",
+        "input": {
+            "html": "<p>para one<\/p><p>para two<\/p>"
+        },
+        "result": "para one"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "heading tags become breaks",
+        "input": {
+            "html": "<h1>Heading<\/h1>Body text"
+        },
+        "result": "Heading"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "list item tags become breaks",
+        "input": {
+            "html": "<ul><li>item one<\/li><li>item two<\/li><\/ul>"
+        },
+        "result": "item one"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "blockquote becomes a break",
+        "input": {
+            "html": "<blockquote>quoted<\/blockquote>after"
+        },
+        "result": "quoted"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "pre becomes a break",
+        "input": {
+            "html": "<pre>code<\/pre>after"
+        },
+        "result": "code"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "hr (no closing tag) becomes a break",
+        "input": {
+            "html": "<hr><p>after hr<\/p>"
+        },
+        "result": ""
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "table cells become spaces, not breaks",
+        "input": {
+            "html": "<table><tr><td>cell1<\/td><td>cell2<\/td><\/tr><\/table>"
+        },
+        "result": "cell1 cell2 "
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "canonical <br \/> is a break point",
+        "input": {
+            "html": "line one<br \/>line two"
+        },
+        "result": "line one"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "verified finding: naked <br> (no slash) is NOT a break point",
+        "input": {
+            "html": "line one<br>line two"
+        },
+        "result": "line one<br>line two"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "verified finding: <br\/> (no space) is NOT a break point",
+        "input": {
+            "html": "line one<br\/>line two"
+        },
+        "result": "line one<br\/>line two"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "html entities are decoded, including quotes (ENT_QUOTES)",
+        "input": {
+            "html": "special &amp; &lt;chars&gt; &quot;quoted&quot; &#039;apos&#039;"
+        },
+        "result": "special & <chars> \"quoted\" 'apos'"
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "empty html",
+        "input": {
+            "html": ""
+        },
+        "result": ""
+    },
+    {
+        "group": "firstLineOfTextFromHtml",
+        "label": "other inline tags stripped without becoming breaks",
+        "input": {
+            "html": "<strong>bold<\/strong> and <em>italic<\/em> text"
+        },
+        "result": "bold and italic text"
+    }
+]
