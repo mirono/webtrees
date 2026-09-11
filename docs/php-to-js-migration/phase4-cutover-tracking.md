@@ -23,6 +23,23 @@ exists yet; these are library-level ports).
 
 | `lib/report` + `lib/note` (GEDCOM/HTML text helpers) | `GedcomTextReader.getSubRecord()`/`getCont()`, `Note.getNoteText()`/`firstLineOfTextFromHtml()` — task 22 | ✅ 35/35 (`npm test`; `parity_gedcom_text_helpers.test.js` across 4 groups) | N/A by design — not bridged | Task 22 complete: a bundled task (the candidate pool is thinning — see the task-22 survey note) combining two small, unrelated-but-similarly-shaped helpers. **Two real bugs found and faithfully reproduced**, both stemming from a shared "GEDCOM nesting never reaches level 10" assumption: (1) `getSubRecord()`'s end-boundary search is a literal substring match on `"\n" + level`, so a level-10+ line falsely terminates the search, silently discarding legitimately-nested content after it; (2) `getCont()`'s level-prefix check is a fixed 2-character slice, so it can never find CONT lines at level 10+ under any circumstances. **One verified quirk, not a bug:** `firstLineOfTextFromHtml()` only treats the canonical `<br />` string as a break point — a naked `<br>`/`<br/>` in source HTML survives tag-stripping unchanged but doesn't break the line (likely never triggered by real webtrees-generated HTML). `htmlspecialchars_decode(...,ENT_QUOTES)` was characterized precisely rather than approximated — see [task-22-gedcom-text-helpers.md](task-22-gedcom-text-helpers.md) for the exact named/numeric entity set it covers (and the single-simultaneous-pass semantics needed to avoid double-decoding `&amp;lt;`). Not bridged — `getSubRecord()`/`getCont()`'s only real callers are inside the legacy `ParserGenerate.php` report engine (same "do not bridge" posture as `lib/report`); the `Note` helpers are cheap string operations with no round-trip-worthy latency to save. |
 
+| `lib/color-generator` | `ColorGenerator` (full class: constructor + `getNextColor()`) — task 23 | ✅ 17/17 (`npm test`; `parity_color_generator.test.js`, 17 multi-call scenarios) | N/A by design — not bridged | Task 23 complete: HSL color-cycling math for the lifespans chart. **The final module of the pure-algorithm-porting phase** — two consecutive thorough survey passes (before and after task 22) concluded the remaining `app/` territory is exhausted of clean pure-algorithm candidates; this was the one survivor. Verified (not assumed) that the hue wraparound check's `>=` comparison means a hue step landing *exactly* on the far boundary (`basehue + range`) is reset away immediately and never appears in the output — confirmed with a golden case where `range` is an exact multiple of `hueStep`. Single real call site (`LifespansChartModule.php`), not bridged (no round-trip-worthy latency to save). See [task-23-color-generator.md](task-23-color-generator.md). |
+
+## Pure-algorithm-porting phase: concluded
+
+As of task 23, this phase of the migration is done — 23 tasks, ~4,013 JS
+parity tests, 6 live PHP↔Node bridges built (none enabled by default).
+Two thorough survey passes found nothing further with real, self-contained
+computational value; what remains in `app/` is DB-Query-Builder-driven,
+filesystem/network-fused, I18N-coupled, or config/data classes — not
+candidates for this kind of port. The natural next phase, when picked up,
+is **bridge-activation decisions**: whether/where to actually set any of
+the six `WEBTREES_*_SERVICE_URL` env vars in a real deployment (Soundex,
+SurnameTradition, GedcomService, FactSortService, `wrapLongLines`,
+`reformatRecord`) — a separate kind of decision from anything tracked
+above, deliberately deferred throughout this migration and not yet made
+for any module.
+
 Review this table weekly. If a row hasn't moved in two weeks, that's the
 signal something's blocked — usually a Phase 3 bridging decision — surface
 it rather than letting it sit.
