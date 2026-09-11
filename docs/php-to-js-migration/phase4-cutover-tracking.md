@@ -28,17 +28,42 @@ exists yet; these are library-level ports).
 ## Pure-algorithm-porting phase: concluded
 
 As of task 23, this phase of the migration is done — 23 tasks, ~4,013 JS
-parity tests, 6 live PHP↔Node bridges built (none enabled by default).
-Two thorough survey passes found nothing further with real, self-contained
-computational value; what remains in `app/` is DB-Query-Builder-driven,
-filesystem/network-fused, I18N-coupled, or config/data classes — not
-candidates for this kind of port. The natural next phase, when picked up,
-is **bridge-activation decisions**: whether/where to actually set any of
-the six `WEBTREES_*_SERVICE_URL` env vars in a real deployment (Soundex,
-SurnameTradition, GedcomService, FactSortService, `wrapLongLines`,
-`reformatRecord`) — a separate kind of decision from anything tracked
-above, deliberately deferred throughout this migration and not yet made
-for any module.
+parity tests, 6 live PHP↔Node bridges built. Two thorough survey passes
+found nothing further with real, self-contained computational value; what
+remains in `app/` is DB-Query-Builder-driven, filesystem/network-fused,
+I18N-coupled, or config/data classes — not candidates for this kind of
+port.
+
+## Bridge-activation status (2026-09-11)
+
+**Enabled and verified in this repo's local dev sandbox** (`php -S
+localhost:8000` + `node server/migration-service.mjs` on port 8090, all
+six `WEBTREES_*_SERVICE_URL` env vars set on the PHP process pointing at
+it). This is **not** a production deployment decision — there is no real
+webtrees production instance for this repo, only the local dev/test
+environment used throughout this migration. Verified live (not just via
+`tests/Feature/*BridgeTest.php`'s self-managed ephemeral instances,
+though those all still pass too):
+
+- `Soundex::russell()`/`daitchMokotoff()` — called directly, correct
+  output, confirmed in the Node service's request log.
+- `BridgedSurnameTradition::newChildNames()` — same.
+- `GedcomService::canonicalTag()`/`readLatitude()` — same.
+- `GedcomExportService::wrapLongLines()` — same.
+- `FactSortService::sort()` and `GedcomImportService::reformatRecord()` —
+  the live Node service's routes (`/fact-sort/sort`,
+  `/gedcom-import/reformat-record`) were confirmed responding correctly
+  to realistic payloads on this same persistent instance; the full
+  PHP-side bridge mechanism (identical `callService()` pattern to the
+  four above) is proven by their dedicated Feature tests rather than
+  re-driven through a full app/DB bootstrap here, since doing so would
+  only re-verify a mechanism already shown correct, not add new evidence.
+
+**Real (non-sandbox) production cutover — whether any webtrees deployment
+anyone actually runs should set these env vars — remains a separate,
+unmade decision**, same posture as before: no batching yet (one HTTP
+round-trip per Soundex/GEDCOM-line/GEDCOM-record call), so a deployer
+should weigh that against wanting PHP code eventually retired.
 
 Review this table weekly. If a row hasn't moved in two weeks, that's the
 signal something's blocked — usually a Phase 3 bridging decision — surface
