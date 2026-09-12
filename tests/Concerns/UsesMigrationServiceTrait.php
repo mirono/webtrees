@@ -19,42 +19,34 @@ declare(strict_types=1);
 
 namespace Fisharebest\Webtrees\Tests\Concerns;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
 use ReflectionClass;
 
-use function escapeshellarg;
-use function is_resource;
-use function proc_close;
-use function proc_open;
-use function proc_terminate;
+use function getenv;
 use function putenv;
-use function usleep;
 
 /**
- * Shared boilerplate for spinning up a real server/migration-service.mjs
- * child process in a test (see docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tradition.md).
- * Extracted from the near-identical code duplicated across every
- * tests/Feature/*ServiceBridgeTest.php file.
+ * Shared boilerplate for temporarily pointing a bridge's env var somewhere
+ * other than the shared migration service (see SharedMigrationService and
+ * docs/php-to-js-migration/phase4-shared-test-migration-service.md), most
+ * commonly at an unreachable address to prove "throws/falls back when
+ * unreachable" behaviour.
+ *
+ * Every *ServiceBridgeTest that wants a genuine live-service run instead
+ * calls SharedMigrationService::ensureRunning() directly — this trait no
+ * longer starts or stops any process itself.
  *
  * Members are declared `static` (rather than per-instance) so the same
- * three methods work both for a per-test start/stop (called from a test
- * method and torn down in tearDown()) and a once-per-class start/stop
- * (called from setUpBeforeClass()/tearDownAfterClass(), which have no
- * $this). Each class that uses this trait gets its own copy of the static
- * state — it is not shared between classes.
+ * methods work both for a per-test override (called from a test method
+ * and restored in tearDown()) and a once-per-class override (called from
+ * setUpBeforeClass()/tearDownAfterClass(), which have no $this). Each
+ * class that uses this trait gets its own copy of the static state — it
+ * is not shared between classes.
  */
 trait UsesMigrationServiceTrait
 {
-    /** @var resource|null */
-    private static $migration_service_process = null;
+    private static string|false $saved_migration_service_env_value = false;
 
-    /**
-     * Port this class's service instance listens on. Must be distinct from
-     * every other *ServiceBridgeTest's port so parallel/overlapping runs
-     * don't collide.
-     */
-    abstract private static function migrationServicePort(): int;
+    private static bool $migration_service_url_overridden = false;
 
     /**
      * The WEBTREES_*_SERVICE_URL env var this bridge reads.
@@ -70,56 +62,42 @@ trait UsesMigrationServiceTrait
     abstract private static function migrationServiceUnavailableFlagClass(): string;
 
     /**
-     * Starts the real Node service as a child process and waits (up to
-     * ~2.5s) for its /health endpoint to respond, so tests don't race a
-     * cold start.
+     * Saves the env var's current value (normally pointing at the shared
+     * migration service — see SharedMigrationService) and points it at
+     * $url instead. Pair with restoreMigrationServiceUrl() in
+     * tearDown()/tearDownAfterClass() so later tests in the same process
+     * keep working.
      */
-    private static function startMigrationService(): bool
+    private static function overrideMigrationServiceUrl(string $url): void
     {
-        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $script      = escapeshellarg(__DIR__ . '/../../server/migration-service.mjs');
-        $command     = 'PORT=' . self::migrationServicePort() . ' node ' . $script;
+        self::$saved_migration_service_env_value = getenv(self::migrationServiceEnvVar());
+        self::$migration_service_url_overridden  = true;
 
-        $process = proc_open($command, $descriptors, $pipes, __DIR__ . '/../../');
-
-        if (!is_resource($process)) {
-            return false;
-        }
-
-        self::$migration_service_process = $process;
-
-        $client = new Client(['timeout' => 0.2, 'connect_timeout' => 0.2]);
-
-        for ($attempt = 0; $attempt < 25; $attempt++) {
-            try {
-                $response = $client->get('http://127.0.0.1:' . self::migrationServicePort() . '/health');
-
-                if ($response->getStatusCode() === 200) {
-                    return true;
-                }
-            } catch (GuzzleException) {
-                // Not ready yet.
-            }
-
-            usleep(100_000); // 100ms
-        }
-
-        return false;
+        putenv(self::migrationServiceEnvVar() . '=' . $url);
+        self::resetMigrationServiceUnavailableFlag();
     }
 
     /**
-     * Kills the child process (if running), clears the env var, and resets
-     * the bridge's circuit breaker.
+     * Restores the env var to exactly what it was before
+     * overrideMigrationServiceUrl() — unset if it was genuinely unset,
+     * never just blanked, so a shared default set earlier in the process
+     * isn't lost for tests that run afterwards. A no-op if this test never
+     * called overrideMigrationServiceUrl() in the first place, so it's
+     * safe to call unconditionally from tearDown()/tearDownAfterClass().
      */
-    private static function stopMigrationService(): void
+    private static function restoreMigrationServiceUrl(): void
     {
-        if (is_resource(self::$migration_service_process)) {
-            proc_terminate(self::$migration_service_process);
-            proc_close(self::$migration_service_process);
-            self::$migration_service_process = null;
+        if (!self::$migration_service_url_overridden) {
+            return;
         }
 
-        putenv(self::migrationServiceEnvVar());
+        if (self::$saved_migration_service_env_value === false) {
+            putenv(self::migrationServiceEnvVar());
+        } else {
+            putenv(self::migrationServiceEnvVar() . '=' . self::$saved_migration_service_env_value);
+        }
+
+        self::$migration_service_url_overridden = false;
         self::resetMigrationServiceUnavailableFlag();
     }
 

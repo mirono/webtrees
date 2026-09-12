@@ -25,12 +25,11 @@ use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\SurnameTradition\BridgedSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\LithuanianSurnameTradition;
 use Fisharebest\Webtrees\SurnameTradition\PatrilinealSurnameTradition;
+use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
 use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTrait;
 use Fisharebest\Webtrees\Tests\TestCase;
 use Illuminate\Support\Collection;
 use PHPUnit\Framework\Attributes\CoversClass;
-
-use function putenv;
 
 /**
  * Cutover test (see docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tradition.md,
@@ -53,25 +52,18 @@ class SurnameTraditionServiceBridgeTest extends TestCase
 {
     use UsesMigrationServiceTrait;
 
-    // Dedicated to this test, distinct from the other bridge tests
-    // (8194/8195/8196/8198/8199) and the dev default (8090).
-    private const int PORT = 8193;
-
     protected function tearDown(): void
     {
         parent::tearDown();
 
-        self::stopMigrationService();
+        self::restoreMigrationServiceUrl();
     }
 
     public function testRoutesThroughLiveServiceAndAppliesLithuanianInflection(): void
     {
-        if (!self::startMigrationService()) {
+        if (!SharedMigrationService::ensureRunning()) {
             self::markTestSkipped('Could not start server/migration-service.mjs (node/npm unavailable?)');
         }
-
-        putenv('WEBTREES_SURNAME_TRADITION_SERVICE_URL=http://127.0.0.1:' . self::PORT);
-        self::resetMigrationServiceUnavailableFlag();
 
         $lithuanian = new BridgedSurnameTradition(new LithuanianSurnameTradition(), 'lithuanian');
         $litFather  = $this->individualNamed('John /Whitis/'); // exercises the 'ytė' inflection fix
@@ -88,8 +80,7 @@ class SurnameTraditionServiceBridgeTest extends TestCase
 
         // Nothing listens on this port — connection should be refused
         // quickly, not hang for the full timeout.
-        putenv('WEBTREES_SURNAME_TRADITION_SERVICE_URL=http://127.0.0.1:1');
-        self::resetMigrationServiceUnavailableFlag();
+        self::overrideMigrationServiceUrl('http://127.0.0.1:1');
 
         self::expectException(HttpServiceUnavailableException::class);
 
@@ -105,11 +96,6 @@ class SurnameTraditionServiceBridgeTest extends TestCase
         $individual->method('facts')->willReturn(new Collection([$fact]));
 
         return $individual;
-    }
-
-    private static function migrationServicePort(): int
-    {
-        return self::PORT;
     }
 
     private static function migrationServiceEnvVar(): string

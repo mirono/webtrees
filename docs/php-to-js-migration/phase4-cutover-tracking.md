@@ -46,10 +46,24 @@ enabled" — the Node service is now a mandatory runtime dependency for
 these two modules specifically. All 4 remaining bridged modules
 (`Soundex`, `GedcomService`, `GedcomExportService::wrapLongLines()`,
 `GedcomImportService::reformatRecord()`) are unaffected and still fall
-back to native PHP as before; they're deliberately deferred to a later
-cutover phase (see that doc for why — entanglement with the shared
-`tests/TestCase.php::importTree()` fixture helper used by ~28 test
-files, and no CI-wide convention yet for starting a live Node service).
+back to native PHP as before; cutting each over is still a separate,
+future per-module decision.
+
+## Shared test infrastructure (2026-09-13)
+
+The cross-cutting blocker noted above — the ~28 `importTree()`-dependent
+test files needing a live Node service before any of the 4 remaining
+modules could be cut over — is resolved: see
+[phase4-shared-test-migration-service.md](phase4-shared-test-migration-service.md).
+Every bridge test file (and `FactSortServiceTest.php`/
+`FactSortServiceCharacterizationTest.php`) now shares **one** lazily-started
+Node process on the dev-default port (8090) for the whole PHPUnit run,
+via `tests/Concerns/SharedMigrationService.php`. The previous per-file
+dedicated-port table (8193-8200) is retired — no test file owns its own
+port or process any more. CI (`.github/workflows/phpunit.yaml`) now
+installs Node before running `vendor/bin/phpunit` so the shared service
+can start there too. This is infra only; none of the 4 remaining
+modules' native fallback code was touched.
 
 ## Bridge-activation status (2026-09-11)
 

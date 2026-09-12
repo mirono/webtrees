@@ -37,6 +37,7 @@ use Fisharebest\Webtrees\Services\ModuleService;
 use Fisharebest\Webtrees\Services\TreeService;
 use Fisharebest\Webtrees\Session;
 use Fisharebest\Webtrees\Site;
+use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
 use Fisharebest\Webtrees\Tree;
 use Fisharebest\Webtrees\Webtrees;
 use PHPUnit\Framework\Constraint\Callback;
@@ -180,6 +181,10 @@ class TestCase extends \PHPUnit\Framework\TestCase
 
     protected function importTree(string $gedcom_file): Tree
     {
+        if (!SharedMigrationService::ensureRunning()) {
+            self::markTestSkipped('Could not start server/migration-service.mjs (node/npm unavailable?)');
+        }
+
         $gedcom_import_service = new GedcomImportService();
         $tree_service          = new TreeService($gedcom_import_service);
         $tree                  = $tree_service->create(basename($gedcom_file), basename($gedcom_file));

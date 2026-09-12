@@ -29,6 +29,7 @@ use Fisharebest\Webtrees\Services\GedcomImportService;
 use Fisharebest\Webtrees\Services\TreeService;
 use Fisharebest\Webtrees\Services\UserService;
 use Fisharebest\Webtrees\Site;
+use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
 use Fisharebest\Webtrees\Tests\TestCase;
 use Fisharebest\Webtrees\Tree;
 use InvalidArgumentException;
@@ -297,6 +298,11 @@ class TreeTest extends TestCase
     public function testExportGedcom(): void
     {
         $tree = $this->importTree('demo.ged');
+
+        // importTree() already starts the shared service, but wrapLongLines()
+        // needs it too — make that dependency explicit rather than relying on
+        // the call above having done it as a side effect.
+        SharedMigrationService::ensureRunning();
 
         $gedcom_export_service = new GedcomExportService(new Psr17Factory(), new Psr17Factory());
 

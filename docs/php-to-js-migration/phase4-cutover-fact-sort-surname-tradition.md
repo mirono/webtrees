@@ -123,10 +123,14 @@ local dev sandbox.
 Don't assume the next cutover phase is simply "pick the next module from
 the list." The remaining four (`Soundex`, `GedcomService`,
 `GedcomExportService::wrapLongLines()`,
-`GedcomImportService::reformatRecord()`) need a real answer to "how does
+`GedcomImportService::reformatRecord()`) needed a real answer to "how does
 the test suite get a live Node service for ~28 files that call
-`importTree()`" before any of their native code can be deleted safely.
-That's a cross-cutting test-infrastructure decision (e.g., a
-suite-wide `setUpBeforeClass` in `TestCase` itself, or a CI job that
-starts the service once for the whole run), not a per-module task — treat
-it as its own planning pass when that phase starts.
+`importTree()`" before any of their native code could be deleted safely.
+That cross-cutting test-infrastructure question has now been answered —
+see [phase4-shared-test-migration-service.md](phase4-shared-test-migration-service.md):
+every test file now shares one lazily-started Node process for the whole
+PHPUnit run, so the 28-file entanglement is no longer a blocker. Cutting
+over any of these four is still a separate per-module decision (their
+native fallback code is untouched by that infra work), but it can now be
+made and executed independently, the same way this doc's two modules
+were, without a fresh cross-cutting investigation first.

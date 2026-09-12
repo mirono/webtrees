@@ -28,8 +28,6 @@ use Fisharebest\Webtrees\Tests\TestCase;
 use Illuminate\Support\Collection;
 use PHPUnit\Framework\Attributes\CoversClass;
 
-use function putenv;
-
 /**
  * Cutover test (see docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tradition.md):
  * FactSortService::sort() no longer has a native fallback, so this file no
@@ -46,14 +44,11 @@ class FactSortServiceBridgeTest extends TestCase
 
     protected static bool $uses_database = true;
 
-    // Dedicated to this test, distinct from the other bridge tests and the dev default (8090).
-    private const int PORT = 8195;
-
     protected function tearDown(): void
     {
         parent::tearDown();
 
-        self::stopMigrationService();
+        self::restoreMigrationServiceUrl();
     }
 
     public function testThrowsWhenServiceUnreachable(): void
@@ -63,8 +58,7 @@ class FactSortServiceBridgeTest extends TestCase
 
         // Nothing listens on this port — connection should be refused
         // quickly, not hang for the full timeout.
-        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1:1');
-        self::resetMigrationServiceUnavailableFlag();
+        self::overrideMigrationServiceUrl('http://127.0.0.1:1');
 
         self::expectException(HttpServiceUnavailableException::class);
 
@@ -84,11 +78,6 @@ class FactSortServiceBridgeTest extends TestCase
             new Fact("1 BIRT\n2 DATE 1 JAN 1900", $individual, 'birth'),
             new Fact('1 OCCU Farmer', $individual, 'occupation'),
         ]);
-    }
-
-    private static function migrationServicePort(): int
-    {
-        return self::PORT;
     }
 
     private static function migrationServiceEnvVar(): string
