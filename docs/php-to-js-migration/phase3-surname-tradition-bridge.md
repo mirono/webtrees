@@ -54,19 +54,23 @@ a real concern for Soundex isn't one here.
   their `Individual` arguments to the `NameFacts` shape
   (`toNameFacts()` — reads `Fact::attribute('TYPE')`/`Fact::value()` off
   each `NAME` fact, exactly what `extractName()` itself would have read),
-  POST to the service, and return its result on success; **any** failure
-  falls straight through to the wrapped native tradition's own method,
-  unchanged. `name()`/`description()`/`defaultName()` always delegate
+  POST to the service, and return its result on success. **Cutover
+  (2026-09-12, see [phase4-cutover-fact-sort-surname-tradition.md](phase4-cutover-fact-sort-surname-tradition.md)):**
+  these three methods no longer fall back to the wrapped native
+  tradition on failure — they throw `HttpServiceUnavailableException`
+  instead. `name()`/`description()`/`defaultName()` always delegate
   straight to native — never bridged, since `name()`/`description()` are
   pure i18n (the service has no locale to translate correctly even if it
   wanted to) and `defaultName()` is trivial enough that offloading it has
   no value. Same circuit breaker as Soundex's bridge (`$service_unavailable`,
   shared across every `BridgedSurnameTradition` instance since they all
-  hit the same service), same 0.5s timeout convention, same
-  `WEBTREES_SURNAME_TRADITION_SERVICE_URL` env-var gate (unset = fully
-  native, byte-for-byte unchanged — this is a **separate** env var from
-  Soundex's, so each bridge can be enabled independently even though they
-  typically point at the same running service).
+  hit the same service — now fail-fast rather than fail-open, per the
+  cutover), same 0.5s timeout convention, same
+  `WEBTREES_SURNAME_TRADITION_SERVICE_URL` env-var gate (this is a
+  **separate** env var from Soundex's, so each bridge is configured
+  independently even though they typically point at the same running
+  service; unset means every call throws, since there is no fallback
+  path left to take).
 
 - **`app/Factories/SurnameTraditionFactory.php`** — wraps all 9 built-in
   registrations in `BridgedSurnameTradition` inside its constructor (and
@@ -95,11 +99,12 @@ to the same service the same way. Wrapping instead:
 ## Verification
 
 - **`tests/Feature/SurnameTraditionServiceBridgeTest.php`** — spins up the
-  real service as a child process, proves the service-routed path matches
-  native for both a plain case (Patrilineal) and the one case that
-  actually exercises a real found-and-fixed divergence (Lithuanian's
-  `'ytė'` inflection, see task 05), then proves the same for an
-  unreachable service (fallback). Skips itself if `node`/`npm` aren't
+  real service as a child process and proves the live bridge produces
+  correct output, including the one case that actually exercises a real
+  found-and-fixed divergence (Lithuanian's `'ytė'` inflection, see task
+  05), then proves an unreachable service makes the bridge throw
+  `HttpServiceUnavailableException` (post-cutover; previously proved
+  fallback instead). Skips the live-service test if `node`/`npm` aren't
   available.
 - The existing `tests/Unit/SurnameTradition/*Test.php` and
   `tests/Unit/Factories/SurnameTraditionFactoryTest.php` suites needed one
@@ -120,7 +125,12 @@ to the same service the same way. Wrapping instead:
 
 ## Cutover status
 
-Not enabled anywhere by default — `WEBTREES_SURNAME_TRADITION_SERVICE_URL`
-is unset in every environment until someone deliberately sets it. Same
-posture as Soundex's bridge: exists, tested, not flipped on — see
-[phase4-cutover-tracking.md](phase4-cutover-tracking.md).
+**Cut over (2026-09-12)** — superseded by
+[phase4-cutover-fact-sort-surname-tradition.md](phase4-cutover-fact-sort-surname-tradition.md).
+`newChildNames()`/`newParentNames()`/`newSpouseNames()` no longer fall
+back to native PHP; they throw `HttpServiceUnavailableException` if
+`WEBTREES_SURNAME_TRADITION_SERVICE_URL` is unset or the service is
+unreachable. This is no longer the same posture as Soundex's bridge
+(which still falls back) — see
+[phase4-cutover-tracking.md](phase4-cutover-tracking.md) for the full
+current status of every bridged module.

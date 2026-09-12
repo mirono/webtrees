@@ -79,7 +79,9 @@ Same posture as `FactComparator` (task 12): a real, high-traffic algorithm with 
 
 </details>
 
-**Update:** a live bridge was built after task 21, as part of a dedicated bridge-decision pass covering `FactSortService`, `wrapLongLines`, `TextWrapper`, and `reformatRecord` together — see [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md). `FactSortService` was the strongest of the four candidates (low call volume — a handful per page, not per-item — and a genuinely clean, non-polymorphic shape). Not enabled by default anywhere; `WEBTREES_FACT_SORT_SERVICE_URL` is unset until a deployer opts in, same posture as every other bridge in this migration.
+**Update:** a live bridge was built after task 21, as part of a dedicated bridge-decision pass covering `FactSortService`, `wrapLongLines`, `TextWrapper`, and `reformatRecord` together — see [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md). `FactSortService` was the strongest of the four candidates (low call volume — a handful per page, not per-item — and a genuinely clean, non-polymorphic shape).
+
+**Cut over (2026-09-12):** the native fallback has been deleted entirely — see [phase4-cutover-fact-sort-surname-tradition.md](phase4-cutover-fact-sort-surname-tradition.md). `sort()` always routes through the Node service; if `WEBTREES_FACT_SORT_SERVICE_URL` is unset or the service is unreachable, it throws `HttpServiceUnavailableException` rather than falling back to native PHP.
 
 ---
 

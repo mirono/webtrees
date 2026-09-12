@@ -20,51 +20,55 @@ declare(strict_types=1);
 namespace Fisharebest\Webtrees\Tests\Feature;
 
 use Fisharebest\Webtrees\Fact;
+use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Services\FactSortService;
+use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTrait;
 use Fisharebest\Webtrees\Tests\TestCase;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Collection;
 use PHPUnit\Framework\Attributes\CoversClass;
-use ReflectionClass;
 
-use function escapeshellarg;
-use function is_resource;
-use function proc_close;
-use function proc_open;
-use function proc_terminate;
 use function putenv;
-use function usleep;
 
 /**
- * Phase 3 bridge test (see docs/php-to-js-migration/phase3-bridge-decision-pass-2.md).
- * Spins up the real Node migration service and proves two things end to
- * end: FactSortService::sort() routes through it and returns the same
- * order as native PHP, and it falls back correctly when unreachable.
+ * Cutover test (see docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tradition.md):
+ * FactSortService::sort() no longer has a native fallback, so this file no
+ * longer proves "matches native" — tests/Unit/Services/FactSortServiceTest.php
+ * already proves the live bridge is correct, exhaustively, via its 36
+ * unchanged test executions now running against a real service. What's
+ * left here is the one behavior specific to the bridge itself: an
+ * unreachable service must make sort() throw, not silently misbehave.
  */
 #[CoversClass(FactSortService::class)]
 class FactSortServiceBridgeTest extends TestCase
 {
+    use UsesMigrationServiceTrait;
+
     protected static bool $uses_database = true;
 
-    private const int PORT = 8195; // dedicated to this test, distinct from the other bridge tests and the dev default (8090)
-
-    /** @var resource|null */
-    private $process = null;
+    // Dedicated to this test, distinct from the other bridge tests and the dev default (8090).
+    private const int PORT = 8195;
 
     protected function tearDown(): void
     {
         parent::tearDown();
 
-        if (is_resource($this->process)) {
-            proc_terminate($this->process);
-            proc_close($this->process);
-            $this->process = null;
-        }
+        self::stopMigrationService();
+    }
 
-        putenv('WEBTREES_FACT_SORT_SERVICE_URL');
-        $this->resetServiceUnavailableFlag();
+    public function testThrowsWhenServiceUnreachable(): void
+    {
+        $service = new FactSortService();
+        $facts   = $this->buildFacts();
+
+        // Nothing listens on this port — connection should be refused
+        // quickly, not hang for the full timeout.
+        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1:1');
+        self::resetMigrationServiceUnavailableFlag();
+
+        self::expectException(HttpServiceUnavailableException::class);
+
+        $service->sort($facts);
     }
 
     /**
@@ -82,77 +86,18 @@ class FactSortServiceBridgeTest extends TestCase
         ]);
     }
 
-    public function testRoutesThroughLiveService(): void
+    private static function migrationServicePort(): int
     {
-        if (!$this->startService()) {
-            self::markTestSkipped('Could not start server/migration-service.mjs (node/npm unavailable?)');
-        }
-
-        $service = new FactSortService();
-        $facts   = $this->buildFacts();
-
-        $native_order = $service->sort($facts)->map(static fn (Fact $f) => $f->id())->all();
-
-        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1:' . self::PORT);
-        $this->resetServiceUnavailableFlag();
-
-        $bridged_order = $service->sort($facts)->map(static fn (Fact $f) => $f->id())->all();
-
-        self::assertSame($native_order, $bridged_order);
+        return self::PORT;
     }
 
-    public function testFallsBackWhenServiceUnreachable(): void
+    private static function migrationServiceEnvVar(): string
     {
-        $service = new FactSortService();
-        $facts   = $this->buildFacts();
-
-        $native_order = $service->sort($facts)->map(static fn (Fact $f) => $f->id())->all();
-
-        // Nothing listens on this port — connection should be refused
-        // quickly, not hang for the full timeout.
-        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1:1');
-        $this->resetServiceUnavailableFlag();
-
-        $fallback_order = $service->sort($facts)->map(static fn (Fact $f) => $f->id())->all();
-
-        self::assertSame($native_order, $fallback_order);
+        return 'WEBTREES_FACT_SORT_SERVICE_URL';
     }
 
-    private function startService(): bool
+    private static function migrationServiceUnavailableFlagClass(): string
     {
-        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $command     = 'PORT=' . self::PORT . ' node ' . escapeshellarg(__DIR__ . '/../../server/migration-service.mjs');
-
-        $process = proc_open($command, $descriptors, $pipes, __DIR__ . '/../../');
-
-        if (!is_resource($process)) {
-            return false;
-        }
-
-        $this->process = $process;
-
-        $client = new Client(['timeout' => 0.2, 'connect_timeout' => 0.2]);
-
-        for ($attempt = 0; $attempt < 25; $attempt++) {
-            try {
-                $response = $client->get('http://127.0.0.1:' . self::PORT . '/health');
-
-                if ($response->getStatusCode() === 200) {
-                    return true;
-                }
-            } catch (GuzzleException) {
-                // Not ready yet.
-            }
-
-            usleep(100_000); // 100ms
-        }
-
-        return false;
-    }
-
-    private function resetServiceUnavailableFlag(): void
-    {
-        $property = (new ReflectionClass(FactSortService::class))->getProperty('service_unavailable');
-        $property->setValue(null, false);
+        return FactSortService::class;
     }
 }

@@ -21,6 +21,8 @@ namespace Fisharebest\Webtrees\SurnameTradition;
 
 use Fig\Http\Message\StatusCodeInterface;
 use Fisharebest\Webtrees\Fact;
+use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
+use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
@@ -36,13 +38,14 @@ use function rtrim;
 use const JSON_THROW_ON_ERROR;
 
 /**
- * Phase 3 bridge for the PHP->JS strangler-fig migration (see
- * docs/php-to-js-migration/phase3-surname-tradition-bridge.md). Wraps a
- * native SurnameTraditionInterface implementation; newChildNames()/
- * newParentNames()/newSpouseNames() try the migration service first
- * (server/migration-service.mjs) and fall back to the wrapped native
- * implementation, unchanged, on any failure — the service is never a
- * single point of failure.
+ * Cutover (see docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tradition.md,
+ * supersedes docs/php-to-js-migration/phase3-surname-tradition-bridge.md's
+ * original bridge description). Wraps a native SurnameTraditionInterface
+ * implementation; newChildNames()/newParentNames()/newSpouseNames() have
+ * no native fallback any more — they always route through the migration
+ * service (server/migration-service.mjs) and throw
+ * HttpServiceUnavailableException if it is unreachable or returns
+ * something unusable.
  *
  * name()/description()/defaultName() always delegate straight to the
  * native implementation, never the service — they're either pure i18n
@@ -63,8 +66,12 @@ final class BridgedSurnameTradition implements SurnameTraditionInterface
 
     // Shared across every BridgedSurnameTradition instance (all traditions
     // share one underlying service) — once one call fails, stop trying
-    // the service for the rest of this process, same reasoning as
-    // Soundex's bridge (app/Soundex.php).
+    // the service for the rest of this process and throw immediately on
+    // every subsequent call, rather than paying the timeout cost again.
+    // Since there is no fallback any more, this does mean one transient
+    // failure makes every subsequent call in this process throw until it
+    // restarts — a deliberate trade-off for a mandatory dependency (fail
+    // fast and loudly), not an oversight.
     private static bool $service_unavailable = false;
 
     public function __construct(
@@ -108,7 +115,9 @@ final class BridgedSurnameTradition implements SurnameTraditionInterface
             return $result['names'];
         }
 
-        return $this->native->newChildNames($father, $mother, $sex);
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The surname-tradition service is unavailable. Please try again shortly.'),
+        );
     }
 
     public function newParentNames(Individual $child, string $sex): array
@@ -122,7 +131,9 @@ final class BridgedSurnameTradition implements SurnameTraditionInterface
             return $result['names'];
         }
 
-        return $this->native->newParentNames($child, $sex);
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The surname-tradition service is unavailable. Please try again shortly.'),
+        );
     }
 
     public function newSpouseNames(Individual $spouse, string $sex): array
@@ -136,7 +147,9 @@ final class BridgedSurnameTradition implements SurnameTraditionInterface
             return $result['names'];
         }
 
-        return $this->native->newSpouseNames($spouse, $sex);
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The surname-tradition service is unavailable. Please try again shortly.'),
+        );
     }
 
     /**

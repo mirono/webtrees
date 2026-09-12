@@ -23,18 +23,68 @@ use Fisharebest\Webtrees\Fact;
 use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Services\FactSortService;
+use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTrait;
 use Fisharebest\Webtrees\Tests\TestCase;
 use Illuminate\Support\Collection;
 use PHPUnit\Framework\Attributes\CoversClass;
 
+use function putenv;
+
 /**
  * Characterization test for FactSortService (task 18).
  * See docs/php-to-js-migration/task-18-fact-sort-service.md.
+ *
+ * FactSortService::sort() has no native fallback any more (see
+ * docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tradition.md)
+ * — this regenerates golden/fact_sort_service.json via the live bridge
+ * instead of native PHP, using a Node service started once for the whole
+ * class in setUpBeforeClass().
  */
 #[CoversClass(FactSortService::class)]
 class FactSortServiceCharacterizationTest extends TestCase
 {
+    use UsesMigrationServiceTrait;
+
     protected static bool $uses_database = true;
+
+    // Dedicated to this test class, distinct from every other
+    // *ServiceBridgeTest/FactSortServiceTest port (8193-8199) and the dev
+    // default (8090).
+    private const int PORT = 8200;
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+
+        if (!self::startMigrationService()) {
+            self::markTestSkipped('Could not start server/migration-service.mjs (node/npm unavailable?)');
+        }
+
+        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1:' . self::PORT);
+        self::resetMigrationServiceUnavailableFlag();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        self::stopMigrationService();
+
+        parent::tearDownAfterClass();
+    }
+
+    private static function migrationServicePort(): int
+    {
+        return self::PORT;
+    }
+
+    private static function migrationServiceEnvVar(): string
+    {
+        return 'WEBTREES_FACT_SORT_SERVICE_URL';
+    }
+
+    private static function migrationServiceUnavailableFlagClass(): string
+    {
+        return FactSortService::class;
+    }
 
     private function makeIndividual(): Individual
     {

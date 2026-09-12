@@ -32,6 +32,14 @@
 // this service is never a single point of failure for the app, for any
 // module.
 //
+// EXCEPT: as of the cutover documented in
+// phase4-cutover-fact-sort-surname-tradition.md, FactSortService and
+// SurnameTradition (BridgedSurnameTradition's three computational
+// methods) no longer have a native fallback — for those two, this
+// service being down means the PHP call throws
+// HttpServiceUnavailableException. The other modules listed above are
+// unaffected and still fall back as described.
+//
 // Originally soundex-service.mjs (Soundex-only) — renamed when the
 // SurnameTradition bridge was added, since bolting unrelated modules onto
 // a Soundex-named file would only get more misleading with each future
