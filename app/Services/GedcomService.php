@@ -20,7 +20,8 @@ declare(strict_types=1);
 namespace Fisharebest\Webtrees\Services;
 
 use Fig\Http\Message\StatusCodeInterface;
-use Fisharebest\Webtrees\Gedcom;
+use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
+use Fisharebest\Webtrees\I18N;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
 use Throwable;
@@ -37,34 +38,33 @@ use const JSON_THROW_ON_ERROR;
 
 /**
  * Utilities for manipulating GEDCOM data.
+ *
+ * Cutover (see docs/php-to-js-migration/phase4-cutover-gedcom-service.md):
+ * canonicalTag()/readLatitude()/readLongitude() have no native fallback
+ * any more. They always route through the Node service; if it's
+ * unreachable or returns something unusable, they throw
+ * HttpServiceUnavailableException rather than silently degrading.
  */
 class GedcomService
 {
-    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
-    // docs/php-to-js-migration/). When set, canonicalTag()/readLatitude()/
-    // readLongitude() try this Node service first and fall back to the
-    // native PHP implementation below on any failure — the service is
-    // never a single point of failure. Unset by default: with no env var,
-    // behavior is byte-for-byte identical to before this migration started.
+    // Configure the service location with this env var — there is no
+    // default URL, so an unset env var is treated the same as an
+    // unreachable service (explicit configuration is required for this
+    // feature to work at all).
     private const string SERVICE_URL_ENV_VAR = 'WEBTREES_GEDCOM_SERVICE_URL';
 
-    // Once a call to the service fails (timeout, connection refused, bad
-    // response), stop trying it for the rest of this PHP process/request.
-    // Shared across all GedcomService instances (static, not instance
-    // state) — GedcomImportService constructs a fresh GedcomService per
-    // call site in places, and a downed service shouldn't pay its full
-    // timeout cost more than once per process. Same pattern as
-    // Soundex::$service_unavailable.
+    // Circuit breaker: once a call fails, stop trying for the rest of
+    // this process and throw immediately on every subsequent call, rather
+    // than paying the timeout cost again. Shared across all GedcomService
+    // instances (static, not instance state) — GedcomImportService
+    // constructs a fresh GedcomService per call site in places. Since
+    // there is no fallback any more, this does mean one transient failure
+    // makes every subsequent call in this process throw until it
+    // restarts — a deliberate trade-off for a mandatory dependency (fail
+    // fast and loudly), not an oversight.
     private static bool $service_unavailable = false;
 
     /**
-     * Call the Phase 3 bridge service, if configured and not already known
-     * to be unreachable this process. Returns the decoded JSON response
-     * body on success, or null on any failure (service not configured,
-     * unreachable, timed out, or returned something unusable) — callers
-     * must always fall back to the native PHP implementation when this
-     * returns null.
-     *
      * @param array<string,string> $payload
      *
      * @return array<string,bool|float|string|null>|null
@@ -102,146 +102,11 @@ class GedcomService
 
             return is_array($body) ? $body : null;
         } catch (Throwable) {
-            // Service down, network issue, timed out, or returned something
-            // that couldn't be encoded/decoded — stop trying it for the
-            // rest of this process and silently use native PHP.
             self::$service_unavailable = true;
 
             return null;
         }
     }
-
-    // Some applications, such as FTM, use GEDCOM tag names instead of the tags.
-    private const array TAG_NAMES = [
-        'ABBREVIATION'      => 'ABBR',
-        'ADDRESS'           => 'ADDR',
-        'ADDRESS1'          => 'ADR1',
-        'ADDRESS2'          => 'ADR2',
-        'ADDRESS3'          => 'ADR3',
-        'ADOPTION'          => 'ADOP',
-        'AGENCY'            => 'AGNC',
-        'ALIAS'             => 'ALIA',
-        'ANCESTORS'         => 'ANCE',
-        'ANCES_INTEREST'    => 'ANCI',
-        'ANULMENT'          => 'ANUL',
-        'ASSOCIATES'        => 'ASSO',
-        'AUTHOR'            => 'AUTH',
-        'BAPTISM-LDS'       => 'BAPL',
-        'BAPTISM'           => 'BAPM',
-        'BAR_MITZVAH'       => 'BARM',
-        'BAS_MITZVAH'       => 'BASM',
-        'BIRTH'             => 'BIRT',
-        'BLESSING'          => 'BLES',
-        'BURIAL'            => 'BURI',
-        'CALL_NUMBER'       => 'CALN',
-        'CASTE'             => 'CAST',
-        'CAUSE'             => 'CAUS',
-        'CENSUS'            => 'CENS',
-        'CHANGE'            => 'CHAN',
-        'CHARACTER'         => 'CHAR',
-        'CHILD'             => 'CHIL',
-        'CHRISTENING'       => 'CHR',
-        'ADULT_CHRISTENING' => 'CHRA',
-        'CONCATENATION'     => 'CONC',
-        'CONFIRMATION'      => 'CONF',
-        'CONFIRMATION-LDS'  => 'CONL',
-        'CONTINUED'         => 'CONT',
-        'COPYRIGHT'         => 'COPY',
-        'CORPORTATE'        => 'CORP',
-        'CREMATION'         => 'CREM',
-        'COUNTRY'           => 'CTRY',
-        'DEATH'             => 'DEAT',
-        'DESCENDANTS'       => 'DESC',
-        'DESCENDANTS_INT'   => 'DESI',
-        'DESTINATION'       => 'DEST',
-        'DIVORCE'           => 'DIV',
-        'DIVORCE_FILED'     => 'DIVF',
-        'PHY_DESCRIPTION'   => 'DSCR',
-        'EDUCATION'         => 'EDUC',
-        'EMIGRATION'        => 'EMIG',
-        'ENDOWMENT'         => 'ENDL',
-        'ENGAGEMENT'        => 'ENGA',
-        'EVENT'             => 'EVEN',
-        'FAMILY'            => 'FAM',
-        'FAMILY_CHILD'      => 'FAMC',
-        'FAMILY_FILE'       => 'FAMF',
-        'FAMILY_SPOUSE'     => 'FAMS',
-        'FACIMILIE'         => 'FAX',
-        'FIRST_COMMUNION'   => 'FCOM',
-        'FORMAT'            => 'FORM',
-        'PHONETIC'          => 'FONE',
-        'GEDCOM'            => 'GEDC',
-        'GIVEN_NAME'        => 'GIVN',
-        'GRADUATION'        => 'GRAD',
-        'HEADER'            => 'HEAD',
-        'HUSBAND'           => 'HUSB',
-        'IDENT_NUMBER'      => 'IDNO',
-        'IMMIGRATION'       => 'IMMI',
-        'INDIVIDUAL'        => 'INDI',
-        'LANGUAGE'          => 'LANG',
-        'LATITUDE'          => 'LATI',
-        'LONGITUDE'         => 'LONG',
-        'MARRIAGE_BANN'     => 'MARB',
-        'MARR_CONTRACT'     => 'MARC',
-        'MARR_LICENSE'      => 'MARL',
-        'MARRIAGE'          => 'MARR',
-        'MEDIA'             => 'MEDI',
-        'NATIONALITY'       => 'NATI',
-        'NATURALIZATION'    => 'NATU',
-        'CHILDREN_COUNT'    => 'NCHI',
-        'NICKNAME'          => 'NICK',
-        'MARRIAGE_COUNT'    => 'NMR',
-        'NAME_PREFIX'       => 'NPFX',
-        'NAME_SUFFIX'       => 'NSFX',
-        'OBJECT'            => 'OBJE',
-        'OCCUPATION'        => 'OCCU',
-        'ORDINANCE'         => 'ORDI',
-        'ORDINATION'        => 'ORDN',
-        'PEDIGREE'          => 'PEDI',
-        'PHONE'             => 'PHON',
-        'PLACE'             => 'PLAC',
-        'POSTAL_CODE'       => 'POST',
-        'PROBATE'           => 'PROB',
-        'PROPERTY'          => 'PROP',
-        'PUBLICATION'       => 'PUBL',
-        'QUALITY_OF_DATA'   => 'QUAY',
-        'REFERENCE'         => 'REFN',
-        'RELATIONSHIP'      => 'RELA',
-        'RELIGION'          => 'RELI',
-        'REPOSITORY'        => 'REPO',
-        'RESIDENCE'         => 'RESI',
-        'RESTRICTION'       => 'RESN',
-        'RETIREMENT'        => 'RETI',
-        'REC_FILE_NUMBER'   => 'RFN',
-        'REC_ID_NUMBER'     => 'RIN',
-        'ROMANIZED'         => 'ROMN',
-        'SEALING_CHILD'     => 'SLGC',
-        'SEALING_SPOUSE'    => 'SLGS',
-        'SOURCE'            => 'SOUR',
-        'SURN_PREFIX'       => 'SPFX',
-        'SOC_SEC_NUMBER'    => 'SSN',
-        'STATE'             => 'STAE',
-        'STATUS'            => 'STAT',
-        'SUBMITTER'         => 'SUBM',
-        'SUBMISSION'        => 'SUBN',
-        'SURNAME'           => 'SURN',
-        'TEMPLE'            => 'TEMP',
-        'TITLE'             => 'TITL',
-        'TRAILER'           => 'TRLR',
-        'VERSION'           => 'VERS',
-        'WEB'               => 'WWW',
-        '_DEATH_OF_SPOUSE'  => 'DETS',
-        '_DEGREE'           => '_DEG',
-        '_MEDICAL'          => '_MCL',
-        '_MILITARY_SERVICE' => '_MILT',
-    ];
-
-    // Custom GEDCOM tags used by other applications, with direct synonyms
-    private const array TAG_SYNONYMS = [
-        // Convert PhpGedView tag to webtrees
-        '_PGVU'     => '_WT_USER',
-        '_PGV_OBJS' => '_WT_OBJE_SORT',
-    ];
 
     /**
      * Convert a GEDCOM tag to a canonical form.
@@ -254,11 +119,9 @@ class GedcomService
             return $service_result['tag'];
         }
 
-        $tag = strtoupper($tag);
-
-        $tag = self::TAG_NAMES[$tag] ?? self::TAG_SYNONYMS[$tag] ?? $tag;
-
-        return $tag;
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The GEDCOM service is unavailable. Please try again shortly.'),
+        );
     }
 
     public function readLatitude(string $text): float|null
@@ -269,7 +132,9 @@ class GedcomService
             return $service_result['value'] === null ? null : (float) $service_result['value'];
         }
 
-        return $this->readDegrees($text, Gedcom::LATITUDE_NORTH, Gedcom::LATITUDE_SOUTH);
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The GEDCOM service is unavailable. Please try again shortly.'),
+        );
     }
 
     public function readLongitude(string $text): float|null
@@ -280,35 +145,8 @@ class GedcomService
             return $service_result['value'] === null ? null : (float) $service_result['value'];
         }
 
-        return $this->readDegrees($text, Gedcom::LONGITUDE_EAST, Gedcom::LONGITUDE_WEST);
-    }
-
-    private function readDegrees(string $text, string $positive, string $negative): float|null
-    {
-        $text       = trim($text);
-        $hemisphere = substr($text, 0, 1);
-        $degrees    = substr($text, 1);
-
-        // Match a valid GEDCOM format
-        if (is_numeric($degrees)) {
-            $hemisphere = strtoupper($hemisphere);
-            $degrees    = (float) $degrees;
-
-            if ($hemisphere === $positive) {
-                return $degrees;
-            }
-
-            if ($hemisphere === $negative) {
-                return -$degrees;
-            }
-        }
-
-        // Just a number?
-        if (is_numeric($text)) {
-            return (float) $text;
-        }
-
-        // Can't match anything.
-        return null;
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The GEDCOM service is unavailable. Please try again shortly.'),
+        );
     }
 }

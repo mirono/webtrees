@@ -155,6 +155,18 @@ class TestCase extends \PHPUnit\Framework\TestCase
         I18N::init('en-US', true);
 
         if (static::$uses_database) {
+            // TreeService::create() (used directly by many test files, not
+            // only via importTree() below) seeds every new tree with a
+            // default header/individual via GedcomImportService, which can
+            // reach a cut-over bridge (e.g. GedcomService::canonicalTag())
+            // on its native-fallback path. Any $uses_database test can
+            // reach that path, so this is the right common choke point —
+            // not just importTree() callers. Cheap after the first call
+            // (see SharedMigrationService::ensureRunning()).
+            if (!SharedMigrationService::ensureRunning()) {
+                self::markTestSkipped('Could not start server/migration-service.mjs (node/npm unavailable?)');
+            }
+
             self::createTestDatabase();
 
             I18N::init('en-US');
@@ -181,10 +193,9 @@ class TestCase extends \PHPUnit\Framework\TestCase
 
     protected function importTree(string $gedcom_file): Tree
     {
-        if (!SharedMigrationService::ensureRunning()) {
-            self::markTestSkipped('Could not start server/migration-service.mjs (node/npm unavailable?)');
-        }
-
+        // setUp()'s $uses_database branch already ensured the shared
+        // migration service is running (or skipped this test) — importing
+        // a tree always requires the database, so no separate check here.
         $gedcom_import_service = new GedcomImportService();
         $tree_service          = new TreeService($gedcom_import_service);
         $tree                  = $tree_service->create(basename($gedcom_file), basename($gedcom_file));

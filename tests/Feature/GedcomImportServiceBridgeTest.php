@@ -41,6 +41,19 @@ use function putenv;
  * importTree() (called by both tests below) already starts the shared
  * service and skips the test if Node/npm aren't available — see
  * tests/TestCase.php and tests/Concerns/SharedMigrationService.php.
+ *
+ * Note on GedcomService's cutover (see
+ * docs/php-to-js-migration/phase4-cutover-gedcom-service.md):
+ * reformatRecord()'s native-fallback branch calls
+ * GedcomService::canonicalTag(), which itself now has no fallback — if
+ * WEBTREES_GEDCOM_SERVICE_URL were also unreachable at the same time as
+ * WEBTREES_GEDCOM_IMPORT_SERVICE_URL, this test's "falls back" path
+ * would throw instead of returning a native result. Not exercised here:
+ * both tests below only ever override WEBTREES_GEDCOM_IMPORT_SERVICE_URL,
+ * so WEBTREES_GEDCOM_SERVICE_URL stays pointed at the shared live service
+ * throughout (set by importTree()'s SharedMigrationService::ensureRunning()
+ * call), and canonicalTag() succeeds via its own bridge whenever
+ * reformatRecord()'s own bridge is forced to fail.
  */
 #[CoversClass(GedcomImportService::class)]
 class GedcomImportServiceBridgeTest extends TestCase

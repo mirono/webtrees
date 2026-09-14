@@ -94,7 +94,20 @@ final class SharedMigrationService
 
     private static function start(): bool
     {
-        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        // File descriptors, not unread pipes: this process is meant to
+        // outlive the PHPUnit run that started it (killed only via
+        // register_shutdown_function() below). Pipes here would leak a
+        // duplicate of the calling process's own stdout/stderr into this
+        // long-lived child (a known proc_open quirk) — when the caller's
+        // output is itself piped (e.g. `phpunit ... | tail`), that leaked
+        // descriptor keeps the pipe open forever, hanging the reader long
+        // after PHPUnit itself has exited. /dev/null redirection avoids
+        // the pipe-duplication dance entirely.
+        $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['file', '/dev/null', 'w'],
+            2 => ['file', '/dev/null', 'w'],
+        ];
         $script      = escapeshellarg(__DIR__ . '/../../server/migration-service.mjs');
         $command     = 'PORT=' . self::PORT . ' node ' . $script;
 
