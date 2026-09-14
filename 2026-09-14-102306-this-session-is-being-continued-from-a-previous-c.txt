@@ -1,0 +1,2262 @@
+ ▐▛███▛█   Claude Code v2.1.236
+▝▜██████▀  Sonnet 5 · Claude Pro
+  ▝▝ ▝▝    ~/Dev/webtrees
+
+ ▎ [✻] [✻] [✻] · Share Claude Code and earn $10 in usage credits · /passes
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+⏺ The cutover is complete and merged. Summary:
+
+  - FactSortService::sort() and BridgedSurnameTradition's 3 computational
+    methods no longer have a native PHP fallback — both now throw
+    HttpServiceUnavailableException when the Node migration service is
+    unreachable.
+  - New shared trait tests/Concerns/UsesMigrationServiceTrait.php; fixed a
+    pre-existing port collision (8198 shared by two bridge tests); retrofitted 4
+    test files to run against a live Node service; deleted redundant tests,
+    rewrote "falls back" tests to "throws."
+  - Docs updated (phase4-cutover-tracking.md,
+    phase3-surname-tradition-bridge.md, task-18-fact-sort-service.md,
+    migration-service.mjs) plus a new
+    phase4-cutover-fact-sort-surname-tradition.md recording the rationale.
+  - Full suite verified green: PHP 3572/3572, JS 4013/4013, phpcs/phpstan clean.
+  - Branch cutover/fact-sort-surname-tradition was merged into js-migration-1
+    and pushed, then deleted (locally and on origin) — since gh isn't installed
+    here, you asked me to merge directly rather than open a PR, and to do that
+    going forward too. I've updated the standing memory to reflect that as the
+    new default workflow.
+
+  The other four bridged modules (Soundex, GedcomService, wrapLongLines,
+  reformatRecord) remain untouched, deliberately deferred pending a
+  test-infrastructure answer for the ~28 files that share importTree().
+
+✻ Cooked for 17m 16s
+
+※ recap: Migrating webtrees from PHP to JS: just cut over FactSortService and SurnameTradition to require the Node service (no PHP fallback), tests green, merged to js-migration-1. Next: decide when to tackle the remaining 4 bridged modules (Soundex, GedcomService, etc.).
+
+❯ /status
+  ⎿  Settings dialog dismissed
+
+❯ /compact
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Read ../../.claude/projects/-Users-miron-Dev-webtrees/memory/migration_php_
+     to_js.md (45 lines)
+  ⎿  Read ../../.claude/projects/-Users-miron-Dev-webtrees/memory/feedback_git_w
+     orkflow.md (16 lines)
+  ⎿  Read tests/Unit/Services/FactSortServiceCharacterizationTest.php (258
+     lines)
+  ⎿  Read tests/Feature/SurnameTraditionServiceBridgeTest.php (125 lines)
+  ⎿  Read tests/Feature/FactSortServiceBridgeTest.php (104 lines)
+  ⎿  Plan file referenced
+     (~/.claude/plans/plan-the-implementation-of-eager-yao.md)
+
+❯ continue migration
+
+⏺ Bash(git status && echo --- && git log --oneline -5 && echo --- && git branch
+      -a)
+  ⎿  On branch js-migration-1
+     Your branch is up to date with 'origin/js-migration-1'.
+     … +25 lines (ctrl+o to expand)
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+⏺ The cutover work from the plan is fully complete and already merged
+  (5d27b4dc6a on js-migration-1, pushed to origin) — phase4-cutover-tracking.md
+  confirms both rows show "✅ Cut over (2026-09-12)". The plan file's remaining
+  content (task-01 Soundex) is from the very start of this migration and was
+  finished long ago, so there's nothing left to execute from it.
+
+  That leaves one open item, and it's a decision point rather than a task I
+  should just start on: cutting over the remaining 4 bridged modules (Soundex,
+  GedcomService, wrapLongLines, reformatRecord) requires first deciding how the
+  ~28 test files that call tests/TestCase.php::importTree() get a live Node
+  service — a cross-cutting test-infra question, not a per-module port.
+
+  (Side note, not migration-related: there's a stray untracked file
+  2026-09-08-211146-this-session-is-being-continued-from-a-previous-c.txt
+  sitting in the repo root — looks like an accidental terminal-output paste from
+  an earlier session, not something I created. Left it alone; let me know if
+  you want it removed.)
+
+⏺ User answered Claude's questions:
+  ⎿  · The 2 lowest-risk cutovers are done and merged. The remaining 4 bridged
+     modules (Soundex, GedcomService, wrapLongLines, reformatRecord) all touch
+     the ~28 test files that call importTree(), so cutting them over needs a
+     test-infra decision first. How do you want to continue? → Design the
+     test-infra plan
+
+  Searched for 4 patterns, read 1 file, listed 2 directories (ctrl+o to expand)
+
+⏺ I now have enough to design this properly. Two additional findings worth
+  flagging before the plan: importRecord() makes many bridge calls per record
+  (one reformatRecord + N canonicalTag calls inside it, occasional
+  readLatitude/readLongitude, and up to 4 Soundex calls per name) — no batching,
+  so a single importTree() call becomes dozens of HTTP round-trips once cut
+  over. Also, there is currently no CI workflow that installs Node/npm at all —
+  not even to run the existing 4,013 JS vitest tests. That's a pre-existing gap
+  this phase will need to close regardless.
+
+  Let me put together a concrete plan.
+
+⏺ Entered plan mode
+  Claude is now exploring and designing an implementation approach.
+
+⏺ Plan(Design shared Node test-service infra plan)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+⏺ The Plan agent is designing the shared Node test-service infrastructure now —
+  I'll let you know once it's back with a concrete design to review.
+
+✻ Churned for 3m 45s
+
+⏺ Agent "Design shared Node test-service infra plan" finished · 6m 23s
+
+⏺ Bash(sed -n '1,75p' /Users/miron/Dev/webtrees/server/migration-service.mjs |
+      grep -n "^import\|require(" )
+  ⎿  57:import { createServer } from 'node:http';
+     58:import { russell, compare, daitchMokotoff } from '../lib/soundex.js
+     ';
+     … +17 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Updated plan
+  ⎿  /plan to preview
+
+⏺ User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/plan-the-implementation-of-eager-yao.md ·
+     /plan to edit
+     Shared live Node service for the PHPUnit test suite
+
+     Context
+
+     The webtrees PHP→JS strangler-fig migration has 6 modules bridged to
+     server/migration-service.mjs over HTTP. Two of them (FactSortService,
+     SurnameTradition) were just cut over (2026-09-12): their native PHP
+     fallback was deleted, so they now throw HttpServiceUnavailableException
+     if the bridge is unreachable. The remaining 4 (Soundex, GedcomService,
+     GedcomExportService::wrapLongLines, GedcomImportService::reformatRecord)
+     still fall back to native PHP, and their cutover has been deliberately
+     deferred, because 3 of them (Soundex, GedcomService, reformatRecord)
+     are invoked with no bridge check from inside
+     GedcomImportService::importRecord() (confirmed via grep:
+     reformatRecord() at app/Services/GedcomImportService.php:145 calls
+     GedcomService::canonicalTag() at line 170; readLatitude()/
+     readLongitude() around lines 533/539; Soundex::russell()/
+     daitchMokotoff() at lines 712/713/720/721 — up to 4 calls per parsed
+     name). importRecord() is called once per GEDCOM record by
+     tests/TestCase.php::importTree() (tests/TestCase.php:181-208), which
+     is called by 28 test files (confirmed via
+     grep -rln "importTree(" tests/). Once native fallback is deleted for
+     those 3 modules, every one of those 28 files needs a live, reachable Node
+     service or its tests fail outright — with no batching, a single
+     importTree() call produces dozens of HTTP round trips. The 4th module,
+     wrapLongLines, has a much smaller entanglement — only
+     tests/Unit/TreeTest.php's export round-trip test.
+
+     This plan is infra only: it makes it possible for a future,
+     separate, per-module decision to cut over any of the 4 remaining modules
+     without breaking the 28 dependent test files. It does not cut over
+     Soundex/GedcomService/wrapLongLines/reformatRecord themselves — their
+     native fallback code is untouched here.
+
+     Two additional gaps found while investigating, folded into this plan:
+
+     - The existing per-file self-managed Node-process pattern (used today by
+       4 bridge test files, tracked via a hand-allocated port table
+       8193-8200) doesn't scale to 28+ files — spinning up/down that many
+       separate Node children is slow and requires a new port per file
+       forever. tests/Concerns/UsesMigrationServiceTrait.php's static
+       members are also per-using-class copies (its own docblock says so)
+       — structurally the wrong vehicle for state that must be shared across
+       classes, so it can't just be reused as-is for a shared singleton.
+     - .github/workflows/phpunit.yaml sets up PHP only; there is no Node/npm
+       setup step anywhere in .github/workflows/, and no CI workflow runs
+       npx vitest run at all today. Confirmed server/migration-service.mjs
+       imports nothing but node:http and local lib/**/*.js files (no npm
+       packages) — CI only needs a node binary, not npm ci/node_modules,
+       to run the shared service.
+     - A second, separate correctness bug (not just the one originally
+       flagged) affects the 4 not-yet-cut-over bridge tests today:
+       GedcomServiceBridgeTest.php:82-90, SoundexServiceBridgeTest.php, and
+       the analogous blocks in GedcomExportServiceBridgeTest/
+       GedcomImportServiceBridgeTest each measure a "native" baseline by
+       calling the bridged method before setting their own putenv(...),
+       assuming the env var starts unset. Once a shared default service is
+       normally running with its env vars always set, that assumption breaks
+       for any test running later in the same PHPUnit process — the "native"
+       measurement would silently be bridged instead.
+
+     Recommended approach
+
+     1. New class: tests/Concerns/SharedMigrationService.php
+
+     A final, static-only class (not a trait, because it needs state shared
+     across classes, not per-class copies) that lazily starts one
+     server/migration-service.mjs process for the whole PHPUnit run and
+     points all 6 WEBTREES_*_SERVICE_URL env vars at it (all 6, not just
+     the 3 entangled with import — this is what makes the other future
+     cutovers, e.g. wrapLongLines, need zero new TestCase wiring later).
+
+     final class SharedMigrationService
+     {
+         private const int PORT = 8090; // reuse the documented dev-default
+
+         private const array ENV_VARS = [
+             'WEBTREES_SOUNDEX_SERVICE_URL',
+             'WEBTREES_GEDCOM_SERVICE_URL',
+             'WEBTREES_SURNAME_TRADITION_SERVICE_URL',
+             'WEBTREES_FACT_SORT_SERVICE_URL',
+             'WEBTREES_GEDCOM_EXPORT_SERVICE_URL',
+             'WEBTREES_GEDCOM_IMPORT_SERVICE_URL',
+         ];
+
+         /** @var resource|null */
+         private static $process = null;
+         private static bool $start_attempted = false;
+         private static bool $started = false;
+
+         public static function ensureRunning(): bool
+         {
+             if (self::$start_attempted) {
+                 return self::$started; // O(1) after the first call
+             }
+             self::$start_attempted = true;
+
+             // proc_open('PORT=8090 node server/migration-service.mjs', ...),
+             // same command shape + /health poll loop (25x100ms) as today's
+             // per-file code in UsesMigrationServiceTrait. On success: set
+             // self::$process, putenv() every ENV_VARS entry to
+             // http://127.0.0.1:8090, register_shutdown_function to stop it.
+             // On failure: leave everything unset, return false.
+
+             return self::$started;
+         }
+     }
+
+     Reuses port 8090 (today's documented dev default) rather than adding a
+     new number — there is now exactly one port for the whole suite.
+
+     2. TestCase.php hook point
+
+     One line added at the top of the existing importTree()
+     (tests/TestCase.php:181):
+
+     protected function importTree(string $gedcom_file): Tree
+     {
+         if (!SharedMigrationService::ensureRunning()) {
+             self::markTestSkipped('Could not start server/migration-service.mjs
+     (node/npm unavailable?)');
+         }
+         // ...unchanged...
+     }
+
+     This covers 27 of the 28 files automatically — no per-file opt-in needed,
+     mirroring the existing $uses_database precedent but requiring no flag at
+     all since importTree() is already the single funnel point. Calling
+     markTestSkipped() from inside a helper invoked mid-test is legitimate
+     PHPUnit usage (it throws SkippedTestError, which aborts the calling test
+     exactly like any other exception) — the same skip message is already used
+     verbatim in 4 existing files, just one level shallower.
+
+     For tests/Unit/TreeTest.php::testExportGedcom() (the wrapLongLines
+     entanglement): it already calls importTree('demo.ged') on line 299
+     before export() on line 303, so the singleton is already started by the
+     time export runs — but relying on that ordering implicitly is fragile.
+     Add one explicit, idempotent line immediately before the export() call:
+     SharedMigrationService::ensureRunning();.
+
+     3. Fix the env-var save/restore bug, generalized to both cases found
+
+     Repurpose tests/Concerns/UsesMigrationServiceTrait.php: drop its
+     process-spawning responsibility entirely (no file needs its own child
+     process anymore); keep and fix the env-var lifecycle with real
+     save-and-restore instead of blank-and-unset:
+
+     trait UsesMigrationServiceTrait
+     {
+         private static string|false $saved_env_value = false;
+
+         abstract private static function migrationServiceEnvVar(): string;
+         abstract private static function
+     migrationServiceUnavailableFlagClass(): string;
+
+         private static function overrideMigrationServiceUrl(string $url): void
+         {
+             self::$saved_env_value = getenv(self::migrationServiceEnvVar()); //
+     false if unset
+             putenv(self::migrationServiceEnvVar() . '=' . $url);
+             self::resetMigrationServiceUnavailableFlag();
+         }
+
+         private static function restoreMigrationServiceUrl(): void
+         {
+             if (self::$saved_env_value === false) {
+                 putenv(self::migrationServiceEnvVar());
+             } else {
+                 putenv(self::migrationServiceEnvVar() . '=' .
+     self::$saved_env_value);
+             }
+             self::resetMigrationServiceUnavailableFlag();
+         }
+     }
+
+     - The 2 already-cut-over "throws when unreachable" tests
+       (FactSortServiceBridgeTest, SurnameTraditionServiceBridgeTest)
+       switch from raw putenv(...) + blank-unsetting teardown to
+       overrideMigrationServiceUrl('http://127.0.0.1:1') /
+       restoreMigrationServiceUrl() — this is the originally-flagged bug fix.
+     - The 4 not-yet-cut-over bridge tests (GedcomServiceBridgeTest,
+       SoundexServiceBridgeTest, GedcomExportServiceBridgeTest,
+       GedcomImportServiceBridgeTest) get the generalized fix: force a true
+       native baseline via overrideMigrationServiceUrl('') before measuring
+       "native" behavior (since the shared default may already be running and
+       set from an earlier test), then rely on the already-running shared
+       service (no dedicated port/process of their own) for the "matches
+       bridge" half.
+
+     4. Retire the per-file dedicated-port pattern entirely
+
+     Migrate all 6 bridge test files onto the shared singleton, deleting each
+     file's own PORT constant and proc_open/startService() block:
+
+     - "Routes through live service" tests: replace the file's own process
+       startup with SharedMigrationService::ensureRunning().
+     - "Throws/falls back when unreachable" tests: never needed a dedicated
+       process at all (already true today for FactSortServiceBridgeTest,
+       which never calls startMigrationService()) — just
+       overrideMigrationServiceUrl(...) + assert + restoreMigrationServiceUrl().
+     - The 4 files not yet using the trait adopt it now (this is the moment
+       phase4-cutover-fact-sort-surname-tradition.md anticipated when it said
+       they could "adopt the trait during their own cutover phase later" —
+       this is the infra phase, not the cutover itself).
+
+     Net effect: the 8193-8200 port table becomes historical; exactly one port
+     (8090) serves the whole suite. Rejected alternative: leave the existing
+     per-file pattern in place "since it isn't broken" — that would leave the
+     exact code paths that have the save/restore bug live alongside the new
+     shared default, doubling the ways an env var can leak across tests
+     instead of consolidating to one mechanism.
+
+     5. CI workflow: .github/workflows/phpunit.yaml
+
+     Add a Node setup step before the phpunit run (no npm ci needed — the
+     service has zero npm dependencies):
+
+           - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #
+     v7.0.0
+             with:
+               persist-credentials: false
+
+           - uses: actions/setup-node@<pin-to-sha> # vN.N.N
+             with:
+               node-version: '22'
+
+           - run: composer validate
+           - run: composer install --no-progress
+           - run: vendor/bin/phpunit --coverage-clover=tests/coverage.xml
+
+     Pin the action to a SHA with a version comment, matching this file's own
+     existing convention (resolve the actual current SHA at implementation
+     time, not fabricated here).
+
+     Explicitly separate, optional add-on — not part of this plan unless
+     requested: there is no CI workflow running npx vitest run at all
+     today (a pre-existing gap, unrelated to this phase). If wanted later, it
+     would be a new .github/workflows/vitest.yaml with actions/setup-node +
+     npm ci (vitest does need node_modules, unlike the shared migration
+     service) + npx vitest run. Flagging this, not doing it here.
+
+     6. Documentation
+
+     - Update docs/php-to-js-migration/phase4-cutover-tracking.md: replace
+       the port-table language with a note that all bridge tests now share one
+       dev-default port (8090) via SharedMigrationService; per-file ports are
+       retired.
+     - New doc: docs/php-to-js-migration/phase4-shared-test-migration-service.md
+       — explains why a trait couldn't provide cross-class sharing, the
+       lazy-singleton design, the save/restore mechanism and the two distinct
+       bugs it fixes (blank-unset breaking later tests; "native baseline
+       assumes unset" breaking the 4 pre-cutover comparison tests), the
+       decision to retire the per-file port table, and an explicit statement
+       that this phase unblocks but does not perform any of the 4 remaining
+       cutovers.
+     - Update phase4-cutover-fact-sort-surname-tradition.md's "Why the other
+       four modules aren't next" section to point at the new doc as the
+       resolved cross-cutting answer.
+
+     Explicitly out of scope
+
+     No changes to app/Soundex.php, app/Services/GedcomService.php,
+     app/Services/GedcomExportService.php, or
+     app/Services/GedcomImportService.php's native fallback code — that
+     stays exactly as-is. This plan only removes the blocker; cutting over any
+     of the 4 remaining modules is a separate future decision.
+
+     Verification
+
+     # PHP side — lint/static analysis on every touched/new file
+     vendor/bin/phpcs app/... tests/Concerns/SharedMigrationService.php
+     tests/Concerns/UsesMigrationServiceTrait.php tests/TestCase.php
+     tests/Feature/*BridgeTest.php tests/Unit/TreeTest.php
+     vendor/bin/phpstan analyse tests/Concerns/SharedMigrationService.php
+     tests/Concerns/UsesMigrationServiceTrait.php tests/TestCase.php
+     tests/Feature/*BridgeTest.php tests/Unit/TreeTest.php --memory-limit=1G
+
+     # Confirm the shared singleton actually starts once and is reused: run a
+     # sampling of importTree()-dependent files together and confirm only one
+     # `node` child process exists for the whole run (e.g. via `ps` during a
+     # manually-inserted sleep, or by logging in SharedMigrationService during
+     # development — remove before landing).
+     vendor/bin/phpunit tests/Unit/Module/ tests/Unit/Report/
+     tests/Unit/TreeTest.php tests/Feature/
+
+     # Confirm the 2 already-cut-over modules' tests still pass after migrating
+     # off their dedicated ports
+     vendor/bin/phpunit tests/Feature/FactSortServiceBridgeTest.php
+     tests/Feature/SurnameTraditionServiceBridgeTest.php
+     tests/Unit/Services/FactSortServiceTest.php
+     tests/Unit/Services/FactSortServiceCharacterizationTest.php
+
+     # Confirm the 4 not-yet-cut-over bridge tests still pass, with their
+     # "native baseline" now genuinely forced native
+     vendor/bin/phpunit tests/Feature/GedcomServiceBridgeTest.php
+     tests/Feature/SoundexServiceBridgeTest.php
+     tests/Feature/GedcomExportServiceBridgeTest.php
+     tests/Feature/GedcomImportServiceBridgeTest.php
+
+     # Full suite, both languages
+     vendor/bin/phpunit
+     npx vitest run
+
+     # Confirm a Node-less environment still degrades gracefully (skips, not
+     # hard failures) — e.g. temporarily rename/hide the `node` binary on PATH
+     # for one local run of the 28-file set, confirm markTestSkipped fires
+     # rather than an error.
+
+     Definition of done:
+
+     - [ ] tests/Concerns/SharedMigrationService.php created: lazy, one
+       process for the whole PHPUnit run, all 6 env vars set on success,
+       shutdown-function cleanup.
+     - [ ] TestCase::importTree() calls ensureRunning() and skips
+       gracefully on failure; TreeTest::testExportGedcom() calls it
+       explicitly before export().
+     - [ ] UsesMigrationServiceTrait repurposed: no more per-file process
+       spawning; save/restore env-var semantics instead of blank-unset.
+     - [ ] All 6 bridge test files (2 already-cut-over + 4 not-yet) migrated
+       onto the shared singleton; per-file PORT constants and
+       proc_open blocks deleted.
+     - [ ] The 4 not-yet-cut-over bridge tests' "native baseline" is measured
+       with the service explicitly overridden off, not assumed-unset.
+     - [ ] .github/workflows/phpunit.yaml installs Node before running
+       vendor/bin/phpunit.
+     - [ ] phpcs/phpstan clean on every touched file.
+     - [ ] Full PHP suite and full JS suite both green.
+     - [ ] Docs updated per item 6.
+     - [ ] None of the 4 remaining modules' native fallback code touched.
+
+⏺ Bash(git status && git checkout js-migration-1 && git pull --ff-only && git
+      checkout -b test-infra/shared-migration-service)
+  ⎿  On branch js-migration-1
+     Your branch is up to date with 'origin/js-migration-1'.
+     … +11 lines (ctrl+o to expand)
+
+  Read 5 files (ctrl+o to expand)
+
+⏺ Write(tests/Concerns/SharedMigrationService.php)
+  ⎿  Wrote 146 lines to tests/Concerns/SharedMigrationService.php
+       1 <?php
+       3 /**
+       4  * webtrees: online genealogy
+       5  * Copyright (C) 2026 webtrees development team
+          modify
+       7  * it under the terms of the GNU General Public License as publi
+       8  * the Free Software Foundation, either version 3 of the License
+         , or
+       9  * (at your option) any later version.
+         l,
+     … +156 lines (ctrl+o to expand)
+
+⏺ Now updating the trait to drop process-spawning and add save/restore env-var
+  semantics.
+
+⏺ Write(tests/Concerns/UsesMigrationServiceTrait.php)
+  ⎿  Added 34 lines, removed 66 lines
+      19
+      20  namespace Fisharebest\Webtrees\Tests\Concerns;
+      21
+      22 -use GuzzleHttp\Client;
+      23 -use GuzzleHttp\Exception\GuzzleException;
+      22  use ReflectionClass;
+      23
+      26 -use function escapeshellarg;
+      27 -use function is_resource;
+      28 -use function proc_close;
+      29 -use function proc_open;
+      30 -use function proc_terminate;
+      24 +use function getenv;
+      25  use function putenv;
+      32 -use function usleep;
+      26
+      27  /**
+      35 - * Shared boilerplate for spinning up a real server/migration-s
+         -ervice.mjs
+      36 - * child process in a test (see docs/php-to-js-migration/phase4
+         --cutover-fact-sort-surname-tradition.md).
+      37 - * Extracted from the near-identical code duplicated across eve
+         -ry
+      38 - * tests/Feature/*ServiceBridgeTest.php file.
+      28 + * Shared boilerplate for temporarily pointing a bridge's env v
+         +ar somewhere
+      29 + * other than the shared migration service (see SharedMigration
+         +Service and
+      30 + * docs/php-to-js-migration/phase4-shared-test-migration-servic
+         +e.md), most
+      31 + * commonly at an unreachable address to prove "throws/falls ba
+         +ck when
+      32 + * unreachable" behaviour.
+      33   *
+      34 + * Every *ServiceBridgeTest that wants a genuine live-service r
+         +un instead
+      35 + * calls SharedMigrationService::ensureRunning() directly — thi
+         +s trait no
+      36 + * longer starts or stops any process itself.
+      37 + *
+      38   * Members are declared `static` (rather than per-instance) so
+          the same
+      41 - * three methods work both for a per-test start/stop (called fr
+         -om a test
+      42 - * method and torn down in tearDown()) and a once-per-class sta
+         -rt/stop
+      43 - * (called from setUpBeforeClass()/tearDownAfterClass(), which
+         -have no
+      44 - * $this). Each class that uses this trait gets its own copy of
+         - the static
+      45 - * state — it is not shared between classes.
+      39 + * methods work both for a per-test override (called from a tes
+         +t method
+      40 + * and restored in tearDown()) and a once-per-class override (c
+         +alled from
+      41 + * setUpBeforeClass()/tearDownAfterClass(), which have no $this
+         +). Each
+      42 + * class that uses this trait gets its own copy of the static s
+         +tate — it
+      43 + * is not shared between classes.
+      44   */
+      45  trait UsesMigrationServiceTrait
+      46  {
+      49 -    /** @var resource|null */
+      50 -    private static $migration_service_process = null;
+      47 +    private static string|false $saved_migration_service_env_va
+         +lue = false;
+      48
+      49      /**
+      53 -     * Port this class's service instance listens on. Must be d
+         -istinct from
+      54 -     * every other *ServiceBridgeTest's port so parallel/overla
+         -pping runs
+      55 -     * don't collide.
+      56 -     */
+      57 -    abstract private static function migrationServicePort(): in
+         -t;
+      58 -
+      59 -    /**
+      50       * The WEBTREES_*_SERVICE_URL env var this bridge reads.
+      51       */
+      52      abstract private static function migrationServiceEnvVar():
+          string;
+     ...
+       60      abstract private static function migrationServiceUnavailab
+           leFlagClass(): string;
+       61
+       62      /**
+       73 -     * Starts the real Node service as a child process and wai
+          -ts (up to
+       74 -     * ~2.5s) for its /health endpoint to respond, so tests do
+          -n't race a
+       75 -     * cold start.
+       63 +     * Saves the env var's current value (normally pointing at
+          + the shared
+       64 +     * migration service — see SharedMigrationService) and poi
+          +nts it at
+       65 +     * $url instead. Pair with restoreMigrationServiceUrl() in
+       66 +     * tearDown()/tearDownAfterClass() so later tests in the s
+          +ame process
+       67 +     * keep working.
+       68       */
+       77 -    private static function startMigrationService(): bool
+       69 +    private static function overrideMigrationServiceUrl(string
+          + $url): void
+       70      {
+       79 -        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']
+          -];
+       80 -        $script      = escapeshellarg(__DIR__ . '/../../server
+          -/migration-service.mjs');
+       81 -        $command     = 'PORT=' . self::migrationServicePort()
+          -. ' node ' . $script;
+       71 +        self::$saved_migration_service_env_value = getenv(self
+          +::migrationServiceEnvVar());
+       72
+       83 -        $process = proc_open($command, $descriptors, $pipes, _
+          -_DIR__ . '/../../');
+       84 -
+       85 -        if (!is_resource($process)) {
+       86 -            return false;
+       87 -        }
+       88 -
+       89 -        self::$migration_service_process = $process;
+       90 -
+       91 -        $client = new Client(['timeout' => 0.2, 'connect_timeo
+          -ut' => 0.2]);
+       92 -
+       93 -        for ($attempt = 0; $attempt < 25; $attempt++) {
+       94 -            try {
+       95 -                $response = $client->get('http://127.0.0.1:' .
+          - self::migrationServicePort() . '/health');
+       96 -
+       97 -                if ($response->getStatusCode() === 200) {
+       98 -                    return true;
+       99 -                }
+      100 -            } catch (GuzzleException) {
+      101 -                // Not ready yet.
+      102 -            }
+      103 -
+      104 -            usleep(100_000); // 100ms
+      105 -        }
+      106 -
+      107 -        return false;
+       73 +        putenv(self::migrationServiceEnvVar() . '=' . $url);
+       74 +        self::resetMigrationServiceUnavailableFlag();
+       75      }
+       76
+       77      /**
+      111 -     * Kills the child process (if running), clears the env va
+          -r, and resets
+      112 -     * the bridge's circuit breaker.
+       78 +     * Restores the env var to exactly what it was before
+       79 +     * overrideMigrationServiceUrl() — unset if it was genuine
+          +ly unset,
+       80 +     * never just blanked, so a shared default set earlier in
+          +the process
+       81 +     * isn't lost for tests that run afterwards.
+       82       */
+      114 -    private static function stopMigrationService(): void
+       83 +    private static function restoreMigrationServiceUrl(): void
+       84      {
+      116 -        if (is_resource(self::$migration_service_process)) {
+      117 -            proc_terminate(self::$migration_service_process);
+      118 -            proc_close(self::$migration_service_process);
+      119 -            self::$migration_service_process = null;
+       85 +        if (self::$saved_migration_service_env_value === false
+          +) {
+       86 +            putenv(self::migrationServiceEnvVar());
+       87 +        } else {
+       88 +            putenv(self::migrationServiceEnvVar() . '=' . self
+          +::$saved_migration_service_env_value);
+       89          }
+       90
+      122 -        putenv(self::migrationServiceEnvVar());
+       91          self::resetMigrationServiceUnavailableFlag();
+       92      }
+       93
+
+⏺ Update(tests/TestCase.php)
+  ⎿  Added 1 line
+      36  use Fisharebest\Webtrees\Services\ModuleService;
+      37  use Fisharebest\Webtrees\Services\TreeService;
+      38  use Fisharebest\Webtrees\Session;
+      39 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      40  use Fisharebest\Webtrees\Site;
+      41  use Fisharebest\Webtrees\Tree;
+      42  use Fisharebest\Webtrees\Webtrees;
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(tests/TestCase.php)
+  ⎿  Added 1 line, removed 1 line
+      36  use Fisharebest\Webtrees\Services\ModuleService;
+      37  use Fisharebest\Webtrees\Services\TreeService;
+      38  use Fisharebest\Webtrees\Session;
+      39 -use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      39  use Fisharebest\Webtrees\Site;
+      40 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      41  use Fisharebest\Webtrees\Tree;
+      42  use Fisharebest\Webtrees\Webtrees;
+      43  use PHPUnit\Framework\Constraint\Callback;
+
+⏺ Now updating importTree() itself:
+
+⏺ Update(tests/TestCase.php)
+  ⎿  Added 4 lines
+      181
+      182      protected function importTree(string $gedcom_file): Tree
+      183      {
+      184 +        if (!SharedMigrationService::ensureRunning()) {
+      185 +            self::markTestSkipped('Could not start server/migr
+          +ation-service.mjs (node/npm unavailable?)');
+      186 +        }
+      187 +
+      188          $gedcom_import_service = new GedcomImportService();
+      189          $tree_service          = new TreeService($gedcom_impor
+           t_service);
+      190          $tree                  = $tree_service->create(basenam
+           e($gedcom_file), basename($gedcom_file));
+
+  Searched for 1 pattern (ctrl+o to expand)
+⏺ Update(tests/Unit/TreeTest.php)
+  ⎿  Added 1 line
+      29  use Fisharebest\Webtrees\Services\TreeService;
+      30  use Fisharebest\Webtrees\Services\UserService;
+      31  use Fisharebest\Webtrees\Site;
+      32 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      33  use Fisharebest\Webtrees\Tests\TestCase;
+      34  use Fisharebest\Webtrees\Tree;
+      35  use InvalidArgumentException;
+
+⏺ Update(tests/Unit/TreeTest.php)
+  ⎿  Added 5 lines
+      299      {
+      300          $tree = $this->importTree('demo.ged');
+      301
+      302 +        // importTree() already starts the shared service, but
+          + wrapLongLines()
+      303 +        // needs it too — make that dependency explicit rather
+          + than relying on
+      304 +        // the call above having done it as a side effect.
+      305 +        SharedMigrationService::ensureRunning();
+      306 +
+      307          $gedcom_export_service = new GedcomExportService(new P
+           sr17Factory(), new Psr17Factory());
+      308
+      309          $resource = $gedcom_export_service->export($tree, true
+           );
+
+⏺ Update(tests/Feature/FactSortServiceBridgeTest.php)
+  ⎿  Added 2 lines, removed 6 lines
+      46
+      47      protected static bool $uses_database = true;
+      48
+      49 -    // Dedicated to this test, distinct from the other bridge t
+         -ests and the dev default (8090).
+      50 -    private const int PORT = 8195;
+      51 -
+      49      protected function tearDown(): void
+      50      {
+      51          parent::tearDown();
+      52
+      56 -        self::stopMigrationService();
+      53 +        self::restoreMigrationServiceUrl();
+      54      }
+      55
+      56      public function testThrowsWhenServiceUnreachable(): void
+     ...
+      60
+      61          // Nothing listens on this port — connection should be
+          refused
+      62          // quickly, not hang for the full timeout.
+      66 -        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1
+         -:1');
+      67 -        self::resetMigrationServiceUnavailableFlag();
+      63 +        self::overrideMigrationServiceUrl('http://127.0.0.1:1')
+         +;
+      64
+      65          self::expectException(HttpServiceUnavailableException::
+          class);
+      66
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(tests/Feature/FactSortServiceBridgeTest.php)
+  ⎿  Removed 2 lines
+      28  use Illuminate\Support\Collection;
+      29  use PHPUnit\Framework\Attributes\CoversClass;
+      30
+      31 -use function putenv;
+      32 -
+      31  /**
+      32   * Cutover test (see docs/php-to-js-migration/phase4-cutover-fa
+          ct-sort-surname-tradition.md):
+      33   * FactSortService::sort() no longer has a native fallback, so
+          this file no
+
+⏺ Update(tests/Feature/FactSortServiceBridgeTest.php)
+  ⎿  Removed 5 lines
+      80          ]);
+      81      }
+      82
+      83 -    private static function migrationServicePort(): int
+      84 -    {
+      85 -        return self::PORT;
+      86 -    }
+      87 -
+      83      private static function migrationServiceEnvVar(): string
+      84      {
+      85          return 'WEBTREES_FACT_SORT_SERVICE_URL';
+
+⏺ Update(tests/Concerns/UsesMigrationServiceTrait.php)
+  ⎿  Added 2 lines
+      46  {
+      47      private static string|false $saved_migration_service_env_va
+          lue = false;
+      48
+      49 +    private static bool $migration_service_url_overridden = fal
+         +se;
+      50 +
+      51      /**
+      52       * The WEBTREES_*_SERVICE_URL env var this bridge reads.
+      53       */
+
+⏺ Update(tests/Concerns/UsesMigrationServiceTrait.php)
+  ⎿  Added 9 lines, removed 1 line
+      71      private static function overrideMigrationServiceUrl(string
+          $url): void
+      72      {
+      73          self::$saved_migration_service_env_value = getenv(self:
+          :migrationServiceEnvVar());
+      74 +        self::$migration_service_url_overridden  = true;
+      75
+      76          putenv(self::migrationServiceEnvVar() . '=' . $url);
+      77          self::resetMigrationServiceUnavailableFlag();
+     ...
+       81       * Restores the env var to exactly what it was before
+       82       * overrideMigrationServiceUrl() — unset if it was genuine
+           ly unset,
+       83       * never just blanked, so a shared default set earlier in
+           the process
+       83 -     * isn't lost for tests that run afterwards.
+       84 +     * isn't lost for tests that run afterwards. A no-op if th
+          +is test never
+       85 +     * called overrideMigrationServiceUrl() in the first place
+          +, so it's
+       86 +     * safe to call unconditionally from tearDown()/tearDownAf
+          +terClass().
+       87       */
+       88      private static function restoreMigrationServiceUrl(): void
+       89      {
+       90 +        if (!self::$migration_service_url_overridden) {
+       91 +            return;
+       92 +        }
+       93 +
+       94          if (self::$saved_migration_service_env_value === false
+           ) {
+       95              putenv(self::migrationServiceEnvVar());
+       96          } else {
+       97              putenv(self::migrationServiceEnvVar() . '=' . self
+           ::$saved_migration_service_env_value);
+       98          }
+       99
+      100 +        self::$migration_service_url_overridden = false;
+      101          self::resetMigrationServiceUnavailableFlag();
+      102      }
+      103
+
+⏺ Update(tests/Feature/SurnameTraditionServiceBridgeTest.php)
+  ⎿  Added 1 line, removed 2 lines
+      25  use Fisharebest\Webtrees\SurnameTradition\BridgedSurnameTraditi
+          on;
+      26  use Fisharebest\Webtrees\SurnameTradition\LithuanianSurnameTrad
+          ition;
+      27  use Fisharebest\Webtrees\SurnameTradition\PatrilinealSurnameTra
+          dition;
+      28 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      29  use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTra
+          it;
+      30  use Fisharebest\Webtrees\Tests\TestCase;
+      31  use Illuminate\Support\Collection;
+      32  use PHPUnit\Framework\Attributes\CoversClass;
+      33
+      33 -use function putenv;
+      34 -
+      34  /**
+      35   * Cutover test (see docs/php-to-js-migration/phase4-cutover-fa
+          ct-sort-surname-tradition.md,
+      36   * supersedes docs/php-to-js-migration/phase3-surname-tradition
+          -bridge.md's
+
+⏺ Update(tests/Feature/SurnameTraditionServiceBridgeTest.php)
+  ⎿  Added 2 lines, removed 9 lines
+      52  {
+      53      use UsesMigrationServiceTrait;
+      54
+      55 -    // Dedicated to this test, distinct from the other bridge t
+         -ests
+      56 -    // (8194/8195/8196/8198/8199) and the dev default (8090).
+      57 -    private const int PORT = 8193;
+      58 -
+      55      protected function tearDown(): void
+      56      {
+      57          parent::tearDown();
+      58
+      63 -        self::stopMigrationService();
+      59 +        self::restoreMigrationServiceUrl();
+      60      }
+      61
+      62      public function testRoutesThroughLiveServiceAndAppliesLithu
+          anianInflection(): void
+      63      {
+      68 -        if (!self::startMigrationService()) {
+      64 +        if (!SharedMigrationService::ensureRunning()) {
+      65              self::markTestSkipped('Could not start server/migra
+          tion-service.mjs (node/npm unavailable?)');
+      66          }
+      67
+      72 -        putenv('WEBTREES_SURNAME_TRADITION_SERVICE_URL=http://1
+         -27.0.0.1:' . self::PORT);
+      73 -        self::resetMigrationServiceUnavailableFlag();
+      74 -
+      68          $lithuanian = new BridgedSurnameTradition(new Lithuania
+          nSurnameTradition(), 'lithuanian');
+      69          $litFather  = $this->individualNamed('John /Whitis/');
+          // exercises the 'ytė' inflection fix
+      70
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(tests/Feature/SurnameTraditionServiceBridgeTest.php)
+  ⎿  Added 1 line, removed 2 lines
+      80
+      81          // Nothing listens on this port — connection should be
+          refused
+      82          // quickly, not hang for the full timeout.
+      83 -        putenv('WEBTREES_SURNAME_TRADITION_SERVICE_URL=http://1
+         -27.0.0.1:1');
+      84 -        self::resetMigrationServiceUnavailableFlag();
+      83 +        self::overrideMigrationServiceUrl('http://127.0.0.1:1')
+         +;
+      84
+      85          self::expectException(HttpServiceUnavailableException::
+          class);
+      86
+
+⏺ Update(tests/Feature/SurnameTraditionServiceBridgeTest.php)
+  ⎿  Removed 5 lines
+       98          return $individual;
+       99      }
+      100
+      101 -    private static function migrationServicePort(): int
+      102 -    {
+      103 -        return self::PORT;
+      104 -    }
+      105 -
+      101      private static function migrationServiceEnvVar(): string
+      102      {
+      103          return 'WEBTREES_SURNAME_TRADITION_SERVICE_URL';
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Write(tests/Feature/GedcomServiceBridgeTest.php)
+  ⎿  Added 22 lines, removed 70 lines
+      20  namespace Fisharebest\Webtrees\Tests\Feature;
+      21
+      22  use Fisharebest\Webtrees\Services\GedcomService;
+      23 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      24 +use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTra
+         +it;
+      25  use Fisharebest\Webtrees\Tests\TestCase;
+      24 -use GuzzleHttp\Client;
+      25 -use GuzzleHttp\Exception\GuzzleException;
+      26  use PHPUnit\Framework\Attributes\CoversClass;
+      27 -use ReflectionClass;
+      27
+      29 -use function escapeshellarg;
+      30 -use function is_resource;
+      31 -use function proc_close;
+      32 -use function proc_open;
+      33 -use function proc_terminate;
+      28  use function putenv;
+      35 -use function usleep;
+      29
+      30  /**
+      38 - * Phase 3 bridge test (see docs/php-to-js-migration/). Spins u
+         -p the real
+      39 - * Node migration service (server/migration-service.mjs) as a c
+         -hild process
+      40 - * and proves two things end to end:
+      31 + * Phase 3 bridge test (see docs/php-to-js-migration/), now run
+         +ning against
+      32 + * the whole-suite shared service (see
+      33 + * docs/php-to-js-migration/phase4-shared-test-migration-servic
+         +e.md) rather
+      34 + * than a dedicated per-file process. Proves two things end to
+         +end:
+      35   *
+      36   * 1. When WEBTREES_GEDCOM_SERVICE_URL points at a live service
+          ,
+      37   *    GedcomService::canonicalTag()/readLatitude()/readLongitud
+          e() route
+     ...
+      46  #[CoversClass(GedcomService::class)]
+      47  class GedcomServiceBridgeTest extends TestCase
+      48  {
+      55 -    private const int PORT = 8198; // dedicated to this test, d
+         -istinct from SoundexServiceBridgeTest's 8199 and the dev defaul
+         -t 8090
+      49 +    use UsesMigrationServiceTrait;
+      50
+      57 -    /** @var resource|null */
+      58 -    private $process = null;
+      59 -
+      51      protected function tearDown(): void
+      52      {
+      53          parent::tearDown();
+      54
+      64 -        if (is_resource($this->process)) {
+      65 -            proc_terminate($this->process);
+      66 -            proc_close($this->process);
+      67 -            $this->process = null;
+      68 -        }
+      69 -
+      70 -        putenv('WEBTREES_GEDCOM_SERVICE_URL');
+      71 -        $this->resetServiceUnavailableFlag();
+      55 +        self::restoreMigrationServiceUrl();
+      56      }
+      57
+      58      public function testRoutesThroughLiveService(): void
+      59      {
+      76 -        if (!$this->startService()) {
+      60 +        if (!SharedMigrationService::ensureRunning()) {
+      61              self::markTestSkipped('Could not start server/migra
+          tion-service.mjs (node/npm unavailable?)');
+      62          }
+      63
+      64          $service = new GedcomService();
+      65
+      82 -        // Native results, computed with the bridge disabled —
+         -the baseline
+      83 -        // this test proves the service-routed path matches.
+      66 +        // Force a genuine native baseline — the shared service
+         + may already
+      67 +        // be live and its env var set from an earlier test in
+         +this process.
+      68 +        self::overrideMigrationServiceUrl('');
+      69 +
+      70          $native_tag       = $service->canonicalTag('birth');
+      71          $native_latitude  = $service->readLatitude('N52.1234');
+      72          $native_longitude = $service->readLongitude('W010.5');
+      73          $native_null      = $service->readLatitude('not a numbe
+          r');
+      74
+      89 -        putenv('WEBTREES_GEDCOM_SERVICE_URL=http://127.0.0.1:'
+         -. self::PORT);
+      90 -        $this->resetServiceUnavailableFlag();
+      75 +        // Point back at the live shared service to prove the b
+         +ridge matches.
+      76 +        self::restoreMigrationServiceUrl();
+      77
+      78          self::assertSame($native_tag, $service->canonicalTag('b
+          irth'));
+      79          self::assertSame($native_latitude, $service->readLatitu
+          de('N52.1234'));
+     ...
+       85      {
+       86          $service = new GedcomService();
+       87
+       88 +        self::overrideMigrationServiceUrl(''); // force a genu
+          +ine native baseline
+       89 +
+       90          $native_tag      = $service->canonicalTag('birth');
+       91          $native_latitude = $service->readLatitude('N52.1234');
+       92
+       93          // Nothing listens on this port — connection should be
+            refused
+       94          // quickly, not hang for the full timeout.
+       95          putenv('WEBTREES_GEDCOM_SERVICE_URL=http://127.0.0.1:1
+           ');
+      108 -        $this->resetServiceUnavailableFlag();
+       96 +        self::resetMigrationServiceUnavailableFlag();
+       97
+       98          self::assertSame($native_tag, $service->canonicalTag('
+           birth'));
+       99          self::assertSame($native_latitude, $service->readLatit
+           ude('N52.1234'));
+      100      }
+      101
+      114 -    private function startService(): bool
+      102 +    private static function migrationServiceEnvVar(): string
+      103      {
+      116 -        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']
+          -];
+      117 -        $command     = 'PORT=' . self::PORT . ' node ' . escap
+          -eshellarg(__DIR__ . '/../../server/migration-service.mjs');
+      118 -
+      119 -        $process = proc_open($command, $descriptors, $pipes, _
+          -_DIR__ . '/../../');
+      120 -
+      121 -        if (!is_resource($process)) {
+      122 -            return false;
+      123 -        }
+      124 -
+      125 -        $this->process = $process;
+      126 -
+      127 -        $client = new Client(['timeout' => 0.2, 'connect_timeo
+          -ut' => 0.2]);
+      128 -
+      129 -        for ($attempt = 0; $attempt < 25; $attempt++) {
+      130 -            try {
+      131 -                $response = $client->get('http://127.0.0.1:' .
+          - self::PORT . '/health');
+      132 -
+      133 -                if ($response->getStatusCode() === 200) {
+      134 -                    return true;
+      135 -                }
+      136 -            } catch (GuzzleException) {
+      137 -                // Not ready yet.
+      138 -            }
+      139 -
+      140 -            usleep(100_000); // 100ms
+      141 -        }
+      142 -
+      143 -        return false;
+      104 +        return 'WEBTREES_GEDCOM_SERVICE_URL';
+      105      }
+      106
+      146 -    /**
+      147 -     * GedcomService::$service_unavailable is a private static
+          - "circuit
+      148 -     * breaker" that latches true after the first failed call
+          -and is never
+      149 -     * reset in production (a fresh PHP process starts fresh).
+          - Tests share
+      150 -     * one process across many test methods, so it has to be r
+          -eset by hand
+      151 -     * between scenarios — there's no production reason to exp
+          -ose a public
+      152 -     * reset method for this.
+      153 -     */
+      154 -    private function resetServiceUnavailableFlag(): void
+      107 +    private static function migrationServiceUnavailableFlagCla
+          +ss(): string
+      108      {
+      156 -        $property = (new ReflectionClass(GedcomService::class)
+          -)->getProperty('service_unavailable');
+      157 -        $property->setValue(null, false);
+      109 +        return GedcomService::class;
+      110      }
+      111  }
+
+⏺ Write(tests/Feature/SoundexServiceBridgeTest.php)
+  ⎿  Added 25 lines, removed 73 lines
+      20  namespace Fisharebest\Webtrees\Tests\Feature;
+      21
+      22  use Fisharebest\Webtrees\Soundex;
+      23 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      24 +use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTra
+         +it;
+      25  use Fisharebest\Webtrees\Tests\TestCase;
+      24 -use GuzzleHttp\Client;
+      25 -use GuzzleHttp\Exception\GuzzleException;
+      26  use PHPUnit\Framework\Attributes\CoversClass;
+      27 -use ReflectionClass;
+      27
+      29 -use function escapeshellarg;
+      30 -use function is_resource;
+      31 -use function proc_close;
+      32 -use function proc_open;
+      33 -use function proc_terminate;
+      28  use function putenv;
+      35 -use function usleep;
+      29
+      30  /**
+      38 - * Phase 3 bridge test (see docs/php-to-js-migration/). Spins u
+         -p the real
+      39 - * Node migration service (server/migration-service.mjs) as a c
+         -hild process
+      40 - * and proves two things end to end:
+      31 + * Phase 3 bridge test (see docs/php-to-js-migration/), now run
+         +ning against
+      32 + * the whole-suite shared service (see
+      33 + * docs/php-to-js-migration/phase4-shared-test-migration-servic
+         +e.md) rather
+      34 + * than a dedicated per-file process. Proves two things end to
+         +end:
+      35   *
+      36   * 1. When WEBTREES_SOUNDEX_SERVICE_URL points at a live servic
+          e,
+      37   *    Soundex::russell()/compare()/daitchMokotoff() route throu
+          gh it and
+     ...
+      45  #[CoversClass(Soundex::class)]
+      46  class SoundexServiceBridgeTest extends TestCase
+      47  {
+      54 -    private const int PORT = 8199; // dedicated to this test, d
+         -istinct from the dev default (8090)
+      48 +    use UsesMigrationServiceTrait;
+      49
+      56 -    /** @var resource|null */
+      57 -    private $process = null;
+      58 -
+      50      protected function tearDown(): void
+      51      {
+      52          parent::tearDown();
+      53
+      63 -        if (is_resource($this->process)) {
+      64 -            proc_terminate($this->process);
+      65 -            proc_close($this->process);
+      66 -            $this->process = null;
+      67 -        }
+      68 -
+      69 -        putenv('WEBTREES_SOUNDEX_SERVICE_URL');
+      70 -        $this->resetServiceUnavailableFlag();
+      54 +        self::restoreMigrationServiceUrl();
+      55      }
+      56
+      57      public function testRoutesThroughLiveService(): void
+      58      {
+      75 -        if (!$this->startService()) {
+      59 +        if (!SharedMigrationService::ensureRunning()) {
+      60              self::markTestSkipped('Could not start server/migra
+          tion-service.mjs (node/npm unavailable?)');
+      61          }
+      62
+      79 -        // Native results, computed with the bridge disabled —
+         -the baseline
+      80 -        // this test proves the service-routed path matches.
+      63 +        // Force a genuine native baseline — the shared service
+         + may already
+      64 +        // be live and its env var set from an earlier test in
+         +this process.
+      65 +        self::overrideMigrationServiceUrl('');
+      66 +
+      67          $native_russell = Soundex::russell('Ashcraft');
+      82 -        $native_dm       = Soundex::daitchMokotoff('Moskowitz')
+         -;
+      83 -        $native_compare  = Soundex::compare('S530', 'S530:X000'
+         -);
+      68 +        $native_dm      = Soundex::daitchMokotoff('Moskowitz');
+      69 +        $native_compare = Soundex::compare('S530', 'S530:X000')
+         +;
+      70
+      85 -        putenv('WEBTREES_SOUNDEX_SERVICE_URL=http://127.0.0.1:'
+         - . self::PORT);
+      86 -        $this->resetServiceUnavailableFlag();
+      71 +        // Point back at the live shared service to prove the b
+         +ridge matches.
+      72 +        self::restoreMigrationServiceUrl();
+      73
+      74          self::assertSame($native_russell, Soundex::russell('Ash
+          craft'));
+      75          self::assertSame($native_dm, Soundex::daitchMokotoff('M
+          oskowitz'));
+     ...
+       78
+       79      public function testFallsBackWhenServiceUnreachable(): voi
+           d
+       80      {
+       81 +        self::overrideMigrationServiceUrl(''); // force a genu
+          +ine native baseline
+       82 +
+       83          $native_russell = Soundex::russell('Ashcraft');
+       96 -        $native_dm       = Soundex::daitchMokotoff('Moskowitz'
+          -);
+       84 +        $native_dm      = Soundex::daitchMokotoff('Moskowitz')
+          +;
+       85
+       86          // Nothing listens on this port — connection should be
+            refused
+       87          // quickly, not hang for the full timeout.
+       88          putenv('WEBTREES_SOUNDEX_SERVICE_URL=http://127.0.0.1:
+           1');
+      101 -        $this->resetServiceUnavailableFlag();
+       89 +        self::resetMigrationServiceUnavailableFlag();
+       90
+       91          self::assertSame($native_russell, Soundex::russell('As
+           hcraft'));
+       92          self::assertSame($native_dm, Soundex::daitchMokotoff('
+           Moskowitz'));
+       93      }
+       94
+      107 -    private function startService(): bool
+       95 +    private static function migrationServiceEnvVar(): string
+       96      {
+      109 -        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']
+          -];
+      110 -        $command     = 'PORT=' . self::PORT . ' node ' . escap
+          -eshellarg(__DIR__ . '/../../server/migration-service.mjs');
+      111 -
+      112 -        $process = proc_open($command, $descriptors, $pipes, _
+          -_DIR__ . '/../../');
+      113 -
+      114 -        if (!is_resource($process)) {
+      115 -            return false;
+      116 -        }
+      117 -
+      118 -        $this->process = $process;
+      119 -
+      120 -        $client = new Client(['timeout' => 0.2, 'connect_timeo
+          -ut' => 0.2]);
+      121 -
+      122 -        for ($attempt = 0; $attempt < 25; $attempt++) {
+      123 -            try {
+      124 -                $response = $client->get('http://127.0.0.1:' .
+          - self::PORT . '/health');
+      125 -
+      126 -                if ($response->getStatusCode() === 200) {
+      127 -                    return true;
+      128 -                }
+      129 -            } catch (GuzzleException) {
+      130 -                // Not ready yet.
+      131 -            }
+      132 -
+      133 -            usleep(100_000); // 100ms
+      134 -        }
+      135 -
+      136 -        return false;
+       97 +        return 'WEBTREES_SOUNDEX_SERVICE_URL';
+       98      }
+       99
+      139 -    /**
+      140 -     * Soundex::$service_unavailable is a private static "circ
+          -uit breaker"
+      141 -     * that latches true after the first failed call and is ne
+          -ver reset in
+      142 -     * production (a fresh PHP process starts fresh). Tests sh
+          -are one
+      143 -     * process across many test methods, so it has to be reset
+          - by hand
+      144 -     * between scenarios — there's no production reason to exp
+          -ose a public
+      145 -     * reset method for this.
+      146 -     */
+      147 -    private function resetServiceUnavailableFlag(): void
+      100 +    private static function migrationServiceUnavailableFlagCla
+          +ss(): string
+      101      {
+      149 -        $property = (new ReflectionClass(Soundex::class))->get
+          -Property('service_unavailable');
+      150 -        $property->setValue(null, false);
+      102 +        return Soundex::class;
+      103      }
+      104  }
+
+⏺ Now GedcomExportServiceBridgeTest.php:
+
+⏺ Write(tests/Feature/GedcomExportServiceBridgeTest.php)
+  ⎿  Added 24 lines, removed 61 lines
+      20  namespace Fisharebest\Webtrees\Tests\Feature;
+      21
+      22  use Fisharebest\Webtrees\Services\GedcomExportService;
+      23 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      24 +use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTra
+         +it;
+      25  use Fisharebest\Webtrees\Tests\TestCase;
+      24 -use GuzzleHttp\Client;
+      25 -use GuzzleHttp\Exception\GuzzleException;
+      26  use Nyholm\Psr7\Factory\Psr17Factory;
+      27  use PHPUnit\Framework\Attributes\CoversClass;
+      28 -use ReflectionClass;
+      28
+      30 -use function escapeshellarg;
+      31 -use function is_resource;
+      32 -use function proc_close;
+      33 -use function proc_open;
+      34 -use function proc_terminate;
+      29  use function putenv;
+      30  use function str_repeat;
+      37 -use function usleep;
+      31
+      32  /**
+      40 - * Phase 3 bridge test (see docs/php-to-js-migration/phase3-bri
+         -dge-decision-pass-2.md).
+      41 - * Spins up the real Node migration service and proves two thin
+         -gs end to
+      42 - * end: GedcomExportService::wrapLongLines() routes through it
+         -and returns
+      43 - * the same result as native PHP, and it falls back correctly w
+         -hen
+      33 + * Phase 3 bridge test (see docs/php-to-js-migration/phase3-bri
+         +dge-decision-pass-2.md),
+      34 + * now running against the whole-suite shared service (see
+      35 + * docs/php-to-js-migration/phase4-shared-test-migration-servic
+         +e.md) rather
+      36 + * than a dedicated per-file process. Proves two things end to
+         +end:
+      37 + * GedcomExportService::wrapLongLines() routes through it and r
+         +eturns the
+      38 + * same result as native PHP, and it falls back correctly when
+      39   * unreachable.
+      40   */
+      41  #[CoversClass(GedcomExportService::class)]
+      42  class GedcomExportServiceBridgeTest extends TestCase
+      43  {
+      49 -    private const int PORT = 8196; // dedicated to this test, d
+         -istinct from the other bridge tests and the dev default (8090)
+      44 +    use UsesMigrationServiceTrait;
+      45
+      51 -    /** @var resource|null */
+      52 -    private $process = null;
+      53 -
+      46      protected function tearDown(): void
+      47      {
+      48          parent::tearDown();
+      49
+      58 -        if (is_resource($this->process)) {
+      59 -            proc_terminate($this->process);
+      60 -            proc_close($this->process);
+      61 -            $this->process = null;
+      62 -        }
+      63 -
+      64 -        putenv('WEBTREES_GEDCOM_EXPORT_SERVICE_URL');
+      65 -        $this->resetServiceUnavailableFlag();
+      50 +        self::restoreMigrationServiceUrl();
+      51      }
+      52
+      53      private function makeService(): GedcomExportService
+     ...
+      59
+      60      public function testRoutesThroughLiveService(): void
+      61      {
+      77 -        if (!$this->startService()) {
+      62 +        if (!SharedMigrationService::ensureRunning()) {
+      63              self::markTestSkipped('Could not start server/migra
+          tion-service.mjs (node/npm unavailable?)');
+      64          }
+      65
+      66          $service = $this->makeService();
+      67          $gedcom  = '1 NOTE ' . str_repeat('A', 15);
+      68
+      69 +        // Force a genuine native baseline — the shared service
+         + may already
+      70 +        // be live and its env var set from an earlier test in
+         +this process.
+      71 +        self::overrideMigrationServiceUrl('');
+      72 +
+      73          $native_result = $service->wrapLongLines($gedcom, 20);
+      74
+      86 -        putenv('WEBTREES_GEDCOM_EXPORT_SERVICE_URL=http://127.0
+         -.0.1:' . self::PORT);
+      87 -        $this->resetServiceUnavailableFlag();
+      75 +        // Point back at the live shared service to prove the b
+         +ridge matches.
+      76 +        self::restoreMigrationServiceUrl();
+      77
+      78          self::assertSame($native_result, $service->wrapLongLine
+          s($gedcom, 20));
+      79      }
+     ...
+       83          $service = $this->makeService();
+       84          $gedcom  = '1 NOTE ' . str_repeat('A', 15);
+       85
+       86 +        self::overrideMigrationServiceUrl(''); // force a genu
+          +ine native baseline
+       87 +
+       88          $native_result = $service->wrapLongLines($gedcom, 20);
+       89
+       90          // Nothing listens on this port — connection should be
+            refused
+       91          // quickly, not hang for the full timeout.
+       92          putenv('WEBTREES_GEDCOM_EXPORT_SERVICE_URL=http://127.
+           0.0.1:1');
+      102 -        $this->resetServiceUnavailableFlag();
+       93 +        self::resetMigrationServiceUnavailableFlag();
+       94
+       95          self::assertSame($native_result, $service->wrapLongLin
+           es($gedcom, 20));
+       96      }
+       97
+      107 -    private function startService(): bool
+       98 +    private static function migrationServiceEnvVar(): string
+       99      {
+      109 -        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']
+          -];
+      110 -        $command     = 'PORT=' . self::PORT . ' node ' . escap
+          -eshellarg(__DIR__ . '/../../server/migration-service.mjs');
+      111 -
+      112 -        $process = proc_open($command, $descriptors, $pipes, _
+          -_DIR__ . '/../../');
+      113 -
+      114 -        if (!is_resource($process)) {
+      115 -            return false;
+      116 -        }
+      117 -
+      118 -        $this->process = $process;
+      119 -
+      120 -        $client = new Client(['timeout' => 0.2, 'connect_timeo
+          -ut' => 0.2]);
+      121 -
+      122 -        for ($attempt = 0; $attempt < 25; $attempt++) {
+      123 -            try {
+      124 -                $response = $client->get('http://127.0.0.1:' .
+          - self::PORT . '/health');
+      125 -
+      126 -                if ($response->getStatusCode() === 200) {
+      127 -                    return true;
+      128 -                }
+      129 -            } catch (GuzzleException) {
+      130 -                // Not ready yet.
+      131 -            }
+      132 -
+      133 -            usleep(100_000); // 100ms
+      134 -        }
+      135 -
+      136 -        return false;
+      100 +        return 'WEBTREES_GEDCOM_EXPORT_SERVICE_URL';
+      101      }
+      102
+      139 -    private function resetServiceUnavailableFlag(): void
+      103 +    private static function migrationServiceUnavailableFlagCla
+          +ss(): string
+      104      {
+      141 -        $property = (new ReflectionClass(GedcomExportService::
+          -class))->getProperty('service_unavailable');
+      142 -        $property->setValue(null, false);
+      105 +        return GedcomExportService::class;
+      106      }
+      107  }
+⏺ Write(tests/Feature/GedcomImportServiceBridgeTest.php)
+  ⎿  Added 28 lines, removed 65 lines
+      20  namespace Fisharebest\Webtrees\Tests\Feature;
+      21
+      22  use Fisharebest\Webtrees\Services\GedcomImportService;
+      23 +use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTra
+         +it;
+      24  use Fisharebest\Webtrees\Tests\TestCase;
+      25  use Fisharebest\Webtrees\Tree;
+      25 -use GuzzleHttp\Client;
+      26 -use GuzzleHttp\Exception\GuzzleException;
+      26  use PHPUnit\Framework\Attributes\CoversClass;
+      27  use ReflectionClass;
+      28
+      30 -use function escapeshellarg;
+      31 -use function is_resource;
+      32 -use function proc_close;
+      33 -use function proc_open;
+      34 -use function proc_terminate;
+      29  use function putenv;
+      36 -use function usleep;
+      30
+      31  /**
+      39 - * Phase 3 bridge test (see docs/php-to-js-migration/phase3-bri
+         -dge-decision-pass-2.md).
+      40 - * Spins up the real Node migration service and proves two thin
+         -gs end to
+      41 - * end: GedcomImportService::reformatRecord() routes through it
+         - and
+      42 - * returns the same result as native PHP, and it falls back cor
+         -rectly
+      43 - * when unreachable. reformatRecord() is private, so it's invok
+         -ed via
+      32 + * Phase 3 bridge test (see docs/php-to-js-migration/phase3-bri
+         +dge-decision-pass-2.md),
+      33 + * now running against the whole-suite shared service (see
+      34 + * docs/php-to-js-migration/phase4-shared-test-migration-servic
+         +e.md) rather
+      35 + * than a dedicated per-file process. Proves two things end to
+         +end:
+      36 + * GedcomImportService::reformatRecord() routes through it and
+         +returns the
+      37 + * same result as native PHP, and it falls back correctly when
+      38 + * unreachable. reformatRecord() is private, so it's invoked vi
+         +a
+      39   * ReflectionMethod, same as the task-21 characterization test.
+      40 + *
+      41 + * importTree() (called by both tests below) already starts the
+         + shared
+      42 + * service and skips the test if Node/npm aren't available — se
+         +e
+      43 + * tests/TestCase.php and tests/Concerns/SharedMigrationService
+         +.php.
+      44   */
+      45  #[CoversClass(GedcomImportService::class)]
+      46  class GedcomImportServiceBridgeTest extends TestCase
+      47  {
+      48 +    use UsesMigrationServiceTrait;
+      49 +
+      50      protected static bool $uses_database = true;
+      51
+      51 -    private const int PORT = 8194; // dedicated to this test, d
+         -istinct from the other bridge tests and the dev default (8090)
+      52 -
+      53 -    /** @var resource|null */
+      54 -    private $process = null;
+      55 -
+      52      protected function tearDown(): void
+      53      {
+      54          parent::tearDown();
+      55
+      60 -        if (is_resource($this->process)) {
+      61 -            proc_terminate($this->process);
+      62 -            proc_close($this->process);
+      63 -            $this->process = null;
+      64 -        }
+      65 -
+      66 -        putenv('WEBTREES_GEDCOM_IMPORT_SERVICE_URL');
+      67 -        $this->resetServiceUnavailableFlag();
+      56 +        self::restoreMigrationServiceUrl();
+      57      }
+      58
+      59      private function callReformatRecord(GedcomImportService $se
+          rvice, string $rec, Tree $tree): string
+     ...
+      65
+      66      public function testRoutesThroughLiveService(): void
+      67      {
+      79 -        if (!$this->startService()) {
+      80 -            self::markTestSkipped('Could not start server/migra
+         -tion-service.mjs (node/npm unavailable?)');
+      81 -        }
+      82 -
+      68          $tree    = $this->importTree('demo.ged');
+      69          $service = new GedcomImportService();
+      70          $rec     = "0 @I1@ INDI\n1 NAME   John   /Smith/\n1 SEX
+           m\n1 BIRT y\n2 DATE cir 1900";
+      71
+      72 +        // Force a genuine native baseline — the shared service
+         + may already
+      73 +        // be live and its env var set from an earlier test in
+         +this process.
+      74 +        self::overrideMigrationServiceUrl('');
+      75 +
+      76          $native_result = $this->callReformatRecord($service, $r
+          ec, $tree);
+      77
+      89 -        putenv('WEBTREES_GEDCOM_IMPORT_SERVICE_URL=http://127.0
+         -.0.1:' . self::PORT);
+      90 -        $this->resetServiceUnavailableFlag();
+      78 +        // Point back at the live shared service to prove the b
+         +ridge matches.
+      79 +        self::restoreMigrationServiceUrl();
+      80
+      81          self::assertSame($native_result, $this->callReformatRec
+          ord($service, $rec, $tree));
+      82      }
+     ...
+       87          $service = new GedcomImportService();
+       88          $rec     = "0 @I1@ INDI\n1 NAME   John   /Smith/\n1 SE
+           X m\n1 BIRT y\n2 DATE cir 1900";
+       89
+       90 +        self::overrideMigrationServiceUrl(''); // force a genu
+          +ine native baseline
+       91 +
+       92          $native_result = $this->callReformatRecord($service, $
+           rec, $tree);
+       93
+       94          // Nothing listens on this port — connection should be
+            refused
+       95          // quickly, not hang for the full timeout.
+       96          putenv('WEBTREES_GEDCOM_IMPORT_SERVICE_URL=http://127.
+           0.0.1:1');
+      106 -        $this->resetServiceUnavailableFlag();
+       97 +        self::resetMigrationServiceUnavailableFlag();
+       98
+       99          self::assertSame($native_result, $this->callReformatRe
+           cord($service, $rec, $tree));
+      100      }
+      101
+      111 -    private function startService(): bool
+      102 +    private static function migrationServiceEnvVar(): string
+      103      {
+      113 -        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']
+          -];
+      114 -        $command     = 'PORT=' . self::PORT . ' node ' . escap
+          -eshellarg(__DIR__ . '/../../server/migration-service.mjs');
+      115 -
+      116 -        $process = proc_open($command, $descriptors, $pipes, _
+          -_DIR__ . '/../../');
+      117 -
+      118 -        if (!is_resource($process)) {
+      119 -            return false;
+      120 -        }
+      121 -
+      122 -        $this->process = $process;
+      123 -
+      124 -        $client = new Client(['timeout' => 0.2, 'connect_timeo
+          -ut' => 0.2]);
+      125 -
+      126 -        for ($attempt = 0; $attempt < 25; $attempt++) {
+      127 -            try {
+      128 -                $response = $client->get('http://127.0.0.1:' .
+          - self::PORT . '/health');
+      129 -
+      130 -                if ($response->getStatusCode() === 200) {
+      131 -                    return true;
+      132 -                }
+      133 -            } catch (GuzzleException) {
+      134 -                // Not ready yet.
+      135 -            }
+      136 -
+      137 -            usleep(100_000); // 100ms
+      138 -        }
+      139 -
+      140 -        return false;
+      104 +        return 'WEBTREES_GEDCOM_IMPORT_SERVICE_URL';
+      105      }
+      106
+      143 -    private function resetServiceUnavailableFlag(): void
+      107 +    private static function migrationServiceUnavailableFlagCla
+          +ss(): string
+      108      {
+      145 -        $property = (new ReflectionClass(GedcomImportService::
+          -class))->getProperty('service_unavailable');
+      146 -        $property->setValue(null, false);
+      109 +        return GedcomImportService::class;
+      110      }
+      111  }
+
+⏺ Bash(git ls-remote --tags https://github.com/actions/setup-node.git 2>&1 |
+      tail -20)
+  ⎿  8f152de45cc393bb48ce5d89d36b731f54556e65   refs/tags/v4.0.0
+     b39b52d1213e96004bfcb1c61a8a6fa8ab84f3e8   refs/tags/v4.0.1
+     60edb5dd545a775178f52524783378180af0d1f8   refs/tags/v4.0.2
+     … +17 lines (ctrl+o to expand)
+
+⏺ Update(.github/workflows/phpunit.yaml)
+  ⎿  Added 4 lines
+      35            # Don't leave GITHUB_TOKEN in .git/config
+      36            persist-credentials: false
+      37
+      38 +      - uses: actions/setup-node@820762786026740c76f36085b0efc4
+         +7a31fe5020 # v7.0.0
+      39 +        with:
+      40 +          node-version: '22'
+      41 +
+      42        - run: composer validate
+      43
+      44        - run: composer install --no-progress
+
+⏺ Bash(vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength \
+        tests/Concerns/SharedMigrationService.php \…)
+  ⎿  Time: 83ms; Memory: 10MB
+
+⏺ phpcs is clean. Now phpstan:
+
+⏺ Bash(vendor/bin/phpstan analyse --memory-limit=1G \
+        tests/Concerns/SharedMigrationService.php \…)
+  ⎿  Note: Using configuration file /Users/miron/Dev/webtrees/phpstan.neon.
+     dist.
+       0/10 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%
+     … +4 lines (ctrl+o to expand)
+
+⏺ Clean. Now running the targeted PHPUnit subsets from the plan's verification
+  list.
+
+⏺ Bash(which node npm; node --version)
+  ⎿  /Users/miron/.nvm/versions/node/v22.18.0/bin/node
+     /Users/miron/.nvm/versions/node/v22.18.0/bin/npm
+     v22.18.0
+
+⏺ Bash(vendor/bin/phpunit tests/Feature/FactSortServiceBridgeTest.php
+      tests/Feature/SurnameTraditionServiceBridgeTest.php
+      tests/Unit/Services/FactSortServiceTest.php t…)
+  ⎿  PHPUnit 12.5.30 by Sebastian Bergmann and contributors.
+
+     Runtime:       PHP 8.5.10
+     … +25 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(tests/Unit/Services/FactSortServiceTest.php)
+  ⎿  Added 4 lines, removed 28 lines
+      23  use Fisharebest\Webtrees\Family;
+      24  use Fisharebest\Webtrees\Individual;
+      25  use Fisharebest\Webtrees\Services\FactSortService;
+      26 -use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTra
+         -it;
+      26 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      27  use Fisharebest\Webtrees\Tests\TestCase;
+      28  use Illuminate\Support\Collection;
+      29  use PHPUnit\Framework\Attributes\CoversClass;
+      30  use PHPUnit\Framework\Attributes\DataProvider;
+      31
+      32  use function array_map;
+      33 -use function putenv;
+      33
+      34  /**
+      35   * FactSortService::sort() has no native fallback any more (see
+      36   * docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tr
+          adition.md)
+      37   * — it always routes through server/migration-service.mjs. The
+           23 test
+      38   * methods below are unchanged from before the cutover; they no
+          w exercise
+      40 - * the real live bridge instead of native PHP, via a Node servi
+         -ce started
+      41 - * once for the whole class in setUpBeforeClass().
+      39 + * the real live bridge instead of native PHP, via the whole-su
+         +ite shared
+      40 + * service (see docs/php-to-js-migration/phase4-shared-test-mig
+         +ration-service.md).
+      41   */
+      42  #[CoversClass(FactSortService::class)]
+      43  class FactSortServiceTest extends TestCase
+      44  {
+      46 -    use UsesMigrationServiceTrait;
+      47 -
+      45      protected static bool $uses_database = true;
+      46
+      50 -    // Dedicated to this test class, distinct from every *Servi
+         -ceBridgeTest's
+      51 -    // port (8193/8194/8195/8196/8198/8199) and the dev default
+         - (8090).
+      52 -    private const int PORT = 8197;
+      53 -
+      47      private FactSortService $fact_sort_service;
+      48
+      49      public static function setUpBeforeClass(): void
+      50      {
+      51          parent::setUpBeforeClass();
+      52
+      60 -        if (!self::startMigrationService()) {
+      53 +        if (!SharedMigrationService::ensureRunning()) {
+      54              self::markTestSkipped('Could not start server/migra
+          tion-service.mjs (node/npm unavailable?)');
+      55          }
+      63 -
+      64 -        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1
+         -:' . self::PORT);
+      65 -        self::resetMigrationServiceUnavailableFlag();
+      56      }
+      57
+      68 -    public static function tearDownAfterClass(): void
+      69 -    {
+      70 -        self::stopMigrationService();
+      71 -
+      72 -        parent::tearDownAfterClass();
+      73 -    }
+      74 -
+      58      protected function setUp(): void
+      59      {
+      60          parent::setUp();
+      61          $this->fact_sort_service = new FactSortService();
+      62      }
+      80 -
+      81 -    private static function migrationServicePort(): int
+      63      {
+      83 -        return self::PORT;
+      84 -    }
+      85 -
+      86 -    private static function migrationServiceEnvVar(): string
+      87 -    {
+      64          return 'WEBTREES_FACT_SORT_SERVICE_URL';
+      65      }
+      66
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Need to clean up the leftover dead trait-method remnants:
+
+⏺ Update(tests/Unit/Services/FactSortServiceTest.php)
+  ⎿  Removed 8 lines
+      60          parent::setUp();
+      61          $this->fact_sort_service = new FactSortService();
+      62      }
+      63 -    {
+      64 -        return 'WEBTREES_FACT_SORT_SERVICE_URL';
+      65 -    }
+      63
+      67 -    private static function migrationServiceUnavailableFlagClas
+         -s(): string
+      68 -    {
+      69 -        return FactSortService::class;
+      70 -    }
+      71 -
+      64      public function testEmptyCollection(): void
+      65      {
+      66          $sorted = $this->fact_sort_service->sort(new Collection
+          ());
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Clean. Now the same treatment for FactSortServiceCharacterizationTest.php:
+
+⏺ Update(tests/Unit/Services/FactSortServiceCharacterizationTest.php)
+  ⎿  Added 4 lines, removed 38 lines
+      23  use Fisharebest\Webtrees\Family;
+      24  use Fisharebest\Webtrees\Individual;
+      25  use Fisharebest\Webtrees\Services\FactSortService;
+      26 -use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTra
+         -it;
+      26 +use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
+      27  use Fisharebest\Webtrees\Tests\TestCase;
+      28  use Illuminate\Support\Collection;
+      29  use PHPUnit\Framework\Attributes\CoversClass;
+      30
+      31 -use function putenv;
+      32 -
+      31  /**
+      32   * Characterization test for FactSortService (task 18).
+      33   * See docs/php-to-js-migration/task-18-fact-sort-service.md.
+     ...
+      35   * FactSortService::sort() has no native fallback any more (see
+      36   * docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tr
+          adition.md)
+      37   * — this regenerates golden/fact_sort_service.json via the liv
+          e bridge
+      40 - * instead of native PHP, using a Node service started once for
+         - the whole
+      41 - * class in setUpBeforeClass().
+      38 + * instead of native PHP, using the whole-suite shared service
+         +(see
+      39 + * docs/php-to-js-migration/phase4-shared-test-migration-servic
+         +e.md).
+      40   */
+      41  #[CoversClass(FactSortService::class)]
+      42  class FactSortServiceCharacterizationTest extends TestCase
+      43  {
+      46 -    use UsesMigrationServiceTrait;
+      47 -
+      44      protected static bool $uses_database = true;
+      45
+      50 -    // Dedicated to this test class, distinct from every other
+      51 -    // *ServiceBridgeTest/FactSortServiceTest port (8193-8199)
+         -and the dev
+      52 -    // default (8090).
+      53 -    private const int PORT = 8200;
+      54 -
+      46      public static function setUpBeforeClass(): void
+      47      {
+      48          parent::setUpBeforeClass();
+      49
+      59 -        if (!self::startMigrationService()) {
+      50 +        if (!SharedMigrationService::ensureRunning()) {
+      51              self::markTestSkipped('Could not start server/migra
+          tion-service.mjs (node/npm unavailable?)');
+      52          }
+      62 -
+      63 -        putenv('WEBTREES_FACT_SORT_SERVICE_URL=http://127.0.0.1
+         -:' . self::PORT);
+      64 -        self::resetMigrationServiceUnavailableFlag();
+      53      }
+      54
+      67 -    public static function tearDownAfterClass(): void
+      68 -    {
+      69 -        self::stopMigrationService();
+      70 -
+      71 -        parent::tearDownAfterClass();
+      72 -    }
+      73 -
+      74 -    private static function migrationServicePort(): int
+      75 -    {
+      76 -        return self::PORT;
+      77 -    }
+      78 -
+      79 -    private static function migrationServiceEnvVar(): string
+      80 -    {
+      81 -        return 'WEBTREES_FACT_SORT_SERVICE_URL';
+      82 -    }
+      83 -
+      84 -    private static function migrationServiceUnavailableFlagClas
+         -s(): string
+      85 -    {
+      86 -        return FactSortService::class;
+      87 -    }
+      88 -
+      55      private function makeIndividual(): Individual
+      56      {
+      57          $individual = self::createStub(Individual::class);
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Now re-running phpcs/phpstan on these two plus the full targeted test run:
+
+⏺ Bash(vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength \
+        tests/Unit/Services/FactSortServiceTest.php \…)
+  ⎿  Time: 63ms; Memory: 12MB
+     ---phpstan---
+     Note: Using configuration file /Users/miron/Dev/webtrees/phpstan.neon.
+     … +6 lines (ctrl+o to expand)
+
+⏺ Clean. Now re-running the targeted PHPUnit subset for the already-cut-over
+  modules:
+
+⏺ Bash(vendor/bin/phpunit tests/Feature/FactSortServiceBridgeTest.php
+      tests/Feature/SurnameTraditionServiceBridgeTest.php
+      tests/Unit/Services/FactSortServiceTest.php t…)  ⎿  PHPUnit 12.5.30 by Sebastian Bergmann and contributors.
+
+     Runtime:       PHP 8.5.10
+     … +8 lines (ctrl+o to expand)
+
+⏺ All 40 pass in 0.6s (vs. previously spinning up multiple separate Node
+  processes). Now the 4 not-yet-cut-over bridge tests:
+
+⏺ Bash(vendor/bin/phpunit tests/Feature/GedcomServiceBridgeTest.php
+      tests/Feature/SoundexServiceBridgeTest.php
+      tests/Feature/GedcomExportServiceBridgeTest.php tests/Fe…)
+  ⎿  PHPUnit 12.5.30 by Sebastian Bergmann and contributors.
+
+     Runtime:       PHP 8.5.10
+     … +8 lines (ctrl+o to expand)
+
+⏺ All 8 pass. Now the broader importTree()-dependent sample and TreeTest.php:
+
+⏺ Bash(vendor/bin/phpunit tests/Unit/Module/ tests/Unit/Report/
+      tests/Unit/TreeTest.php tests/Feature/ 2>&1 | tail -80)
+  ⎿  PHPUnit 12.5.30 by Sebastian Bergmann and contributors.
+
+     Runtime:       PHP 8.5.10
+     … +19 lines (ctrl+o to expand)
+
+⏺ Now the full PHP suite and full JS suite:
+
+⏺ Bash(vendor/bin/phpunit 2>&1 | tail -40)
+  ⎿  ............................................................. 2196 / 3
+     572 ( 61%)
+     ............................................................. 2257 / 3
+     … +72 lines (ctrl+o to expand)
+  ⎿  (timeout 5m)
+
+⏺ Bash(npx vitest run 2>&1 | tail -40)
+  ⎿   RUN  v4.1.11 /Users/miron/Dev/webtrees
+     … +5 lines (ctrl+o to expand)
+
+⏺ Bash(php -i | grep memory_limit)
+  ⎿  max_memory_limit => -1 => -1
+     memory_limit => 128M => 128M
+
+⏺ Bash(vendor/bin/phpunit -d memory_limit=512M 2>&1 | tail -40)
+  ⎿  ............................................................. 1464 / 3
+     572 ( 40%)
+     ............................................................. 1525 / 3
+     … +40 lines (ctrl+o to expand)
+  ⎿  (timeout 5m)
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(docs/php-to-js-migration/phase4-cutover-fact-sort-surname-tradition.md)
+  ⎿  Added 10 lines, removed 6 lines
+      123  Don't assume the next cutover phase is simply "pick the next m
+           odule from
+      124  the list." The remaining four (`Soundex`, `GedcomService`,
+      125  `GedcomExportService::wrapLongLines()`,
+      126 -`GedcomImportService::reformatRecord()`) need a real answer to
+          - "how does
+      126 +`GedcomImportService::reformatRecord()`) needed a real answer
+          +to "how does
+      127  the test suite get a live Node service for ~28 files that call
+      128 -`importTree()`" before any of their native code can be deleted
+          - safely.
+      129 -That's a cross-cutting test-infrastructure decision (e.g., a
+      130 -suite-wide `setUpBeforeClass` in `TestCase` itself, or a CI jo
+          -b that
+      131 -starts the service once for the whole run), not a per-module t
+          -ask — treat
+      132 -it as its own planning pass when that phase starts.
+      128 +`importTree()`" before any of their native code could be delet
+          +ed safely.
+      129 +That cross-cutting test-infrastructure question has now been a
+          +nswered —
+      130 +see [phase4-shared-test-migration-service.md](phase4-shared-te
+          +st-migration-service.md):
+      131 +every test file now shares one lazily-started Node process for
+          + the whole
+      132 +PHPUnit run, so the 28-file entanglement is no longer a blocke
+          +r. Cutting
+      133 +over any of these four is still a separate per-module decision
+          + (their
+      134 +native fallback code is untouched by that infra work), but it
+          +can now be
+      135 +made and executed independently, the same way this doc's two m
+          +odules
+      136 +were, without a fresh cross-cutting investigation first.
+
+⏺ Now the new dedicated doc:
+
+⏺ Write(docs/php-to-js-migration/phase4-shared-test-migration-service.md)
+  ⎿  Wrote 121 lines to
+     docs/php-to-js-migration/phase4-shared-test-migration-service.md
+       1 # Phase 4 — Shared test infrastructure for the Node migration se
+       2
+       3 ## Context
+       4
+         ition`)
+       6 have had their native PHP fallback deleted (see
+         act-sort-surname-tradition.md)).
+       8 The other four (`Soundex`, `GedcomService`,
+       9 `GedcomExportService::wrapLongLines()`,
+         reatment
+     … +164 lines (ctrl+o to expand)
+
+⏺ Now updating phase4-cutover-tracking.md's port-table language:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(docs/php-to-js-migration/phase4-cutover-tracking.md)
+  ⎿  Added 18 lines, removed 4 lines
+      46  these two modules specifically. All 4 remaining bridged modules
+      47  (`Soundex`, `GedcomService`, `GedcomExportService::wrapLongLine
+          s()`,
+      48  `GedcomImportService::reformatRecord()`) are unaffected and sti
+          ll fall
+      49 -back to native PHP as before; they're deliberately deferred to
+         -a later
+      50 -cutover phase (see that doc for why — entanglement with the sha
+         -red
+      51 -`tests/TestCase.php::importTree()` fixture helper used by ~28 t
+         -est
+      52 -files, and no CI-wide convention yet for starting a live Node s
+         -ervice).
+      49 +back to native PHP as before; cutting each over is still a sepa
+         +rate,
+      50 +future per-module decision.
+      51
+      52 +## Shared test infrastructure (2026-09-13)
+      53 +
+      54 +The cross-cutting blocker noted above — the ~28 `importTree()`-
+         +dependent
+      55 +test files needing a live Node service before any of the 4 rema
+         +ining
+      56 +modules could be cut over — is resolved: see
+      57 +[phase4-shared-test-migration-service.md](phase4-shared-test-mi
+         +gration-service.md).
+      58 +Every bridge test file (and `FactSortServiceTest.php`/
+      59 +`FactSortServiceCharacterizationTest.php`) now shares **one** l
+         +azily-started
+      60 +Node process on the dev-default port (8090) for the whole PHPUn
+         +it run,
+      61 +via `tests/Concerns/SharedMigrationService.php`. The previous p
+         +er-file
+      62 +dedicated-port table (8193-8200) is retired — no test file owns
+         + its own
+      63 +port or process any more. CI (`.github/workflows/phpunit.yaml`)
+         + now
+      64 +installs Node before running `vendor/bin/phpunit` so the shared
+         + service
+      65 +can start there too. This is infra only; none of the 4 remainin
+         +g
+      66 +modules' native fallback code was touched.
+      67 +
+      68  ## Bridge-activation status (2026-09-11)
+      69
+      70  **Enabled and verified in this repo's local dev sandbox** (`php
+           -S
+
+⏺ Bash(vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength \
+        tests/Concerns/SharedMigrationService.php \…)
+  ⎿  Time: 99ms; Memory: 12MB
+     ===PHPSTAN===
+     Note: Using configuration file /Users/miron/Dev/webtrees/phpstan.neon.
+     … +6 lines (ctrl+o to expand)
+
+⏺ Clean. Now the final full-suite re-verification and a git diff review before
+  committing:
+
+⏺ Bash(vendor/bin/phpunit -d memory_limit=512M 2>&1 | tail -15)
+  ⎿  ............................................................. 2989 / 3
+     572 ( 83%)
+     ............................................................. 3050 / 3
+     … +18 lines (ctrl+o to expand)
+  ⎿  (timeout 5m)
+
+⏺ Bash(npx vitest run 2>&1 | tail -15)
+  ⎿   RUN  v4.1.11 /Users/miron/Dev/webtrees
+     … +5 lines (ctrl+o to expand)
+
+⏺ Both suites fully green. Let's confirm the graceful-skip behavior when Node
+  isn't on PATH, then review the diff before committing.
+
+⏺ Bash(mkdir -p /tmp/no-node-path && for b in $(echo "$PATH" | tr ':' '\n'); do
+      [ -d "$b" ] || continue; for f in "$b"/*; do bn=$(basename "$f"); if [
+      "$bn" != "node"…)
+  ⎿  PHPUnit 12.5.30 by Sebastian Bergmann and contributors.
+
+     Runtime:       PHP 8.5.10
+     … +8 lines (ctrl+o to expand)
+⏺ Bash(PATH=/tmp/no-node-path which node; echo "exit=$?"; PATH=/tmp/no-node-path
+      command -v node; echo "exit2=$?")
+  ⎿  node not found
+     exit=1
+     exit2=1
+
+⏺ Bash(lsof -i :8090 2>/dev/null; echo "---"; ps aux | grep migration-service |
+      grep -v grep)
+  ⎿  COMMAND   PID  USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+     node    67793 miron   12u  IPv6 0x5f36738fabe01e16      0t0  TCP *:809
+     0 (LISTEN)
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(rm -rf /tmp/no-node-path)
+  ⎿  Done
+
+⏺ Bash(git status && echo --- && git diff --stat)
+  ⎿  On branch test-infra/shared-migration-service
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +39 lines (ctrl+o to expand)
+
+⏺ This looks right — that stray .txt file stays untracked and out of the commit.
+  Let me stage and commit exactly the intended files.
+
+⏺ Bash(git add \
+        .github/workflows/phpunit.yaml \…)
+  ⎿  On branch test-infra/shared-migration-service
+     Changes to be committed:
+       (use "git restore --staged <file>..." to unstage)
+     … +20 lines (ctrl+o to expand)
+
+⏺ Bash(git commit -m "$(cat <<'EOF'
+      Share one Node migration-service process across the whole test suite…)
+  ⎿  [test-infra/shared-migration-service dad463b972] Share one Node migrat
+     ion-service process across the whole test suite
+      16 files changed, 466 insertions(+), 449 deletions(-)
+     … +8 lines (ctrl+o to expand)
+
+⏺ Per the standing git workflow (branch → verify → merge directly, no PR gate),
+  merging into js-migration-1 now:
+
+⏺ Bash(git checkout js-migration-1 && git pull --ff-only && git merge --ff-only
+      test-infra/shared-migration-service && git push origin js-migration-1)
+  ⎿  Switched to branch 'js-migration-1'
+     Your branch is up to date with 'origin/js-migration-1'.
+     Already up to date.
+     … +23 lines (ctrl+o to expand)
+
+⏺ Now cleaning up the merged feature branch:
+
+⏺ Bash(git branch -d test-infra/shared-migration-service && git push origin
+      --delete test-infra/shared-migration-service)
+  ⎿  Error: Exit code 1
+     Deleted branch test-infra/shared-migration-service (was dad463b972).
+     error: unable to delete 'test-infra/shared-migration-service': remote ref
+     does not exist
+     error: failed to push some refs to 'github.com:mirono/webtrees.git'
+
+⏺ That's expected — the feature branch was only local, never pushed. Everything
+  is merged and cleaned up. Now updating the persistent migration-status memory:
+
+  Wrote 1 memory (ctrl+o to expand)
+
+⏺ Shared Node test-service infrastructure is designed, implemented, verified,
+  and merged into js-migration-1 (commit dad463b972).
+
+  What changed:
+  - New tests/Concerns/SharedMigrationService.php: one Node process, lazily
+    started, shared for the whole PHPUnit run (reuses the dev-default
+    port 8090), sets all 6 WEBTREES_*_SERVICE_URL env vars on success.
+  - TestCase::importTree() now starts it (or skips gracefully) — this is the
+    funnel point for the 28 test files entangled with GedcomImportService.
+  - Retired the old per-file dedicated-port pattern (6 bridge test files each
+    spun up their own Node child on their own port, 8193–8200) — all 6 now share
+    the one service.
+  - UsesMigrationServiceTrait repurposed: no longer spawns processes, just
+    save/restores a bridge's env var. Fixed two real bugs found while designing
+    this: the old blank-unset teardown (would've broken later tests once a
+    shared default exists), and the 4 not-yet-cut-over bridge tests' "native
+    baseline" measurement (assumed the env var started unset).
+  - CI (.github/workflows/phpunit.yaml) now installs Node before running
+    vendor/bin/phpunit.
+  - New doc phase4-shared-test-migration-service.md; updated
+    phase4-cutover-tracking.md and
+    phase4-cutover-fact-sort-surname-tradition.md.
+
+  Verified: phpcs/phpstan clean on all touched files; full PHPUnit suite
+  3572/3572 and full vitest suite 4013/4013 both green; targeted runs of all 6
+  bridge tests + the 603-test Module/Report/Feature sample all pass fast (~0.6s)
+  against the shared service.
+
+  Scope discipline held: none of the 4 remaining modules' (Soundex,
+  GedcomService, wrapLongLines, reformatRecord) native fallback code was touched
+  — this only removes the shared-infra blocker. Cutting each over is still a
+  separate future decision, now unblocked whenever you want to make it.
+
+✻ Sautéed for 2h 11m 43s
+
+※ recap: Migrating webtrees from PHP to JS. Just finished and merged shared Node test-infra so the remaining 4 bridged modules can be cut over later; next step is picking one of those to actually cut over, whenever you're ready.
+
+⏺ Remote Control disconnected — Claude.ai login expired — run /login to
+  restore Remote Control
+
+
+
+Resume this session with:
+claude --resume aeaeaaad-5346-4234-8cc2-dece0ffc1a21
