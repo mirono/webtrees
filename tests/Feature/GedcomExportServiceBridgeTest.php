@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Fisharebest\Webtrees\Tests\Feature;
 
+use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
 use Fisharebest\Webtrees\Services\GedcomExportService;
 use Fisharebest\Webtrees\Tests\Concerns\SharedMigrationService;
 use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTrait;
@@ -26,17 +27,17 @@ use Fisharebest\Webtrees\Tests\TestCase;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\Attributes\CoversClass;
 
-use function putenv;
 use function str_repeat;
 
 /**
- * Phase 3 bridge test (see docs/php-to-js-migration/phase3-bridge-decision-pass-2.md),
- * now running against the whole-suite shared service (see
- * docs/php-to-js-migration/phase4-shared-test-migration-service.md) rather
- * than a dedicated per-file process. Proves two things end to end:
- * GedcomExportService::wrapLongLines() routes through it and returns the
- * same result as native PHP, and it falls back correctly when
- * unreachable.
+ * Cutover test (see docs/php-to-js-migration/phase4-cutover-gedcom-export-service.md):
+ * GedcomExportService::wrapLongLines() no longer has a native fallback, so
+ * this file no longer proves "matches native" — there's nothing native
+ * left to compare against. Instead, testRoutesThroughLiveService() asserts
+ * the live bridge against known-good values cross-checked against the
+ * committed golden fixture (golden/wrap_long_lines.json), and
+ * testThrowsWhenServiceUnreachable() proves an unreachable service makes
+ * wrapLongLines() throw, not silently misbehave.
  */
 #[CoversClass(GedcomExportService::class)]
 class GedcomExportServiceBridgeTest extends TestCase
@@ -66,33 +67,21 @@ class GedcomExportServiceBridgeTest extends TestCase
         $service = $this->makeService();
         $gedcom  = '1 NOTE ' . str_repeat('A', 15);
 
-        // Force a genuine native baseline — the shared service may already
-        // be live and its env var set from an earlier test in this process.
-        self::overrideMigrationServiceUrl('');
-
-        $native_result = $service->wrapLongLines($gedcom, 20);
-
-        // Point back at the live shared service to prove the bridge matches.
-        self::restoreMigrationServiceUrl();
-
-        self::assertSame($native_result, $service->wrapLongLines($gedcom, 20));
+        self::assertSame(
+            "1 NOTE AAAAAAAAAAAAA\n2 CONC AA",
+            $service->wrapLongLines($gedcom, 20),
+        );
     }
 
-    public function testFallsBackWhenServiceUnreachable(): void
+    public function testThrowsWhenServiceUnreachable(): void
     {
-        $service = $this->makeService();
-        $gedcom  = '1 NOTE ' . str_repeat('A', 15);
-
-        self::overrideMigrationServiceUrl(''); // force a genuine native baseline
-
-        $native_result = $service->wrapLongLines($gedcom, 20);
-
         // Nothing listens on this port — connection should be refused
         // quickly, not hang for the full timeout.
-        putenv('WEBTREES_GEDCOM_EXPORT_SERVICE_URL=http://127.0.0.1:1');
-        self::resetMigrationServiceUnavailableFlag();
+        self::overrideMigrationServiceUrl('http://127.0.0.1:1');
 
-        self::assertSame($native_result, $service->wrapLongLines($gedcom, 20));
+        self::expectException(HttpServiceUnavailableException::class);
+
+        $this->makeService()->wrapLongLines('1 NOTE ' . str_repeat('A', 15), 20);
     }
 
     private static function migrationServiceEnvVar(): string

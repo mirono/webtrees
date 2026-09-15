@@ -30,6 +30,8 @@ use Fisharebest\Webtrees\Gedcom;
 use Fisharebest\Webtrees\GedcomFilters\GedcomEncodingFilter;
 use Fisharebest\Webtrees\GedcomRecord;
 use Fisharebest\Webtrees\Header;
+use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
+use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\Site;
 use Fisharebest\Webtrees\Tree;
@@ -51,7 +53,6 @@ use ZipArchive;
 
 use function addcslashes;
 use function date;
-use function explode;
 use function fclose;
 use function fopen;
 use function fwrite;
@@ -67,7 +68,6 @@ use function rtrim;
 use function stream_filter_append;
 use function stream_get_meta_data;
 use function strlen;
-use function strpos;
 use function strtolower;
 use function strtoupper;
 use function tmpfile;
@@ -89,15 +89,14 @@ class GedcomExportService
         'none'     => Auth::PRIV_HIDE,
     ];
 
-    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
-    // docs/php-to-js-migration/). When set, wrapLongLines() tries this
-    // Node service first and falls back to the native PHP implementation
-    // below on any failure — the service is never a single point of
-    // failure. Unset by default: with no env var, behavior is
-    // byte-for-byte identical to before this migration started. Known
-    // tradeoff (same as the Soundex bridge): wrapLongLines() is called
-    // once per exported record with no request batching yet, so a bulk
-    // export pays one HTTP round-trip per record.
+    // Cut over for the PHP->JS strangler-fig migration (see
+    // docs/php-to-js-migration/phase4-cutover-gedcom-export-service.md):
+    // wrapLongLines() has no native PHP implementation left — it always
+    // routes through server/migration-service.mjs and throws
+    // HttpServiceUnavailableException if the service is unreachable.
+    // Known tradeoff (same as the Soundex/GedcomService cutovers):
+    // wrapLongLines() is called once per exported record with no request
+    // batching yet, so a bulk export pays one HTTP round-trip per record.
     private const string SERVICE_URL_ENV_VAR = 'WEBTREES_GEDCOM_EXPORT_SERVICE_URL';
 
     // Same static circuit-breaker pattern as GedcomService/Soundex/FactSortService.
@@ -412,36 +411,9 @@ class GedcomExportService
             return $service_result['result'];
         }
 
-        $lines = [];
-
-        foreach (explode("\n", $gedcom) as $line) {
-            // Split long lines
-            // The total length of a GEDCOM line, including level number, cross-reference number,
-            // tag, value, delimiters, and terminator, must not exceed 255 (wide) characters.
-            if (mb_strlen($line) > $max_line_length) {
-                [$level, $tag] = explode(' ', $line, 3);
-                if ($tag !== 'CONT') {
-                    $level++;
-                }
-                do {
-                    // Split after $pos chars
-                    $pos = $max_line_length;
-                    // Split on a non-space (standard gedcom behavior)
-                    while (mb_substr($line, $pos - 1, 1) === ' ') {
-                        --$pos;
-                    }
-                    if ($pos === strpos($line, ' ', 3)) {
-                        // No non-spaces in the data! Can’t split it :-(
-                        break;
-                    }
-                    $lines[] = mb_substr($line, 0, $pos);
-                    $line    = $level . ' CONC ' . mb_substr($line, $pos);
-                } while (mb_strlen($line) > $max_line_length);
-            }
-            $lines[] = $line;
-        }
-
-        return implode("\n", $lines);
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The GEDCOM export service is unavailable. Please try again shortly.'),
+        );
     }
 
     private function familyQuery(Tree $tree, bool $sort_by_xref): Builder
