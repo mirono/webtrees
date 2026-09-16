@@ -1,0 +1,57 @@
+name: webtrees-dev
+
+# Local dev stack: runs the PHP app and the Node migration-service
+# together so the two are never accidentally out of sync (the "Soundex
+# service is unavailable" error happens when the app is pointed at a
+# migration-service URL but nothing is listening there).
+#
+# Both services bind-mount the whole repo — no code is baked into an
+# image, so edits on the host take effect immediately, same as running
+# `php -S` / `node server/migration-service.mjs` directly. vendor/ and
+# node_modules/ must already exist on the host (composer install / npm
+# install), same prerequisite as running natively.
+#
+# Usage:
+#   docker compose up          # start both, foreground
+#   docker compose up -d       # start both, background
+#   docker compose down        # stop both
+# Then open http://localhost:8000 — data/webtrees.sqlite and
+# data/config.ini.php (already present in this repo) are used as-is.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php.Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    ports:
+      - "8000:8000"
+    environment:
+      WEBTREES_SOUNDEX_SERVICE_URL: http://migration:8090
+      WEBTREES_SURNAME_TRADITION_SERVICE_URL: http://migration:8090
+      WEBTREES_GEDCOM_SERVICE_URL: http://migration:8090
+      WEBTREES_FACT_SORT_SERVICE_URL: http://migration:8090
+      WEBTREES_GEDCOM_EXPORT_SERVICE_URL: http://migration:8090
+      WEBTREES_GEDCOM_IMPORT_SERVICE_URL: http://migration:8090
+    depends_on:
+      migration:
+        condition: service_healthy
+
+  migration:
+    image: node:22-alpine
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: "8090"
+    command: ["node", "server/migration-service.mjs"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8090/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 5s

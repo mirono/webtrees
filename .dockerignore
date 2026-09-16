@@ -1,0 +1,6 @@
+# Code is bind-mounted at runtime (see docker-compose.yml), not copied
+# into the image, so this only trims what gets sent as build context.
+.git
+node_modules
+vendor
+.phpunit.cache
