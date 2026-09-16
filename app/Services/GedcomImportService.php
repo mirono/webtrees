@@ -26,6 +26,8 @@ use Fisharebest\Webtrees\Exceptions\GedcomErrorException;
 use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\Gedcom;
 use Fisharebest\Webtrees\Header;
+use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
+use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Location;
 use Fisharebest\Webtrees\Media;
@@ -50,7 +52,6 @@ use function array_map;
 use function array_unique;
 use function array_values;
 use function date;
-use function explode;
 use function getenv;
 use function is_array;
 use function is_string;
@@ -62,16 +63,12 @@ use function mb_substr;
 use function preg_match;
 use function preg_match_all;
 use function preg_replace;
-use function round;
 use function rtrim;
 use function str_contains;
 use function str_replace;
 use function str_starts_with;
-use function strlen;
 use function strtoupper;
 use function strtr;
-use function substr;
-use function trim;
 
 use const JSON_THROW_ON_ERROR;
 use const PREG_SET_ORDER;
@@ -81,15 +78,14 @@ use const PREG_SET_ORDER;
  */
 class GedcomImportService
 {
-    // Phase 3 bridge target for the PHP->JS strangler-fig migration (see
-    // docs/php-to-js-migration/). When set, reformatRecord() tries this
-    // Node service first and falls back to the native PHP implementation
-    // below on any failure — the service is never a single point of
-    // failure. Unset by default: with no env var, behavior is
-    // byte-for-byte identical to before this migration started. Known
-    // tradeoff (same as the Soundex bridge): reformatRecord() is called
-    // once per imported record with no request batching yet, so a bulk
-    // import pays one HTTP round-trip per record.
+    // Cut over for the PHP->JS strangler-fig migration (see
+    // docs/php-to-js-migration/phase4-cutover-gedcom-import-service.md):
+    // reformatRecord() has no native PHP implementation left — it always
+    // routes through server/migration-service.mjs and throws
+    // HttpServiceUnavailableException if the service is unreachable.
+    // Known tradeoff (same as the other cut-over bridges): reformatRecord()
+    // is called once per imported record with no request batching yet, so
+    // a bulk import pays one HTTP round-trip per record.
     private const string SERVICE_URL_ENV_VAR = 'WEBTREES_GEDCOM_IMPORT_SERVICE_URL';
 
     // Same static circuit-breaker pattern as GedcomService/Soundex/FactSortService/GedcomExportService.
@@ -154,147 +150,9 @@ class GedcomImportService
             return $service_result['result'];
         }
 
-        $gedcom_service = Registry::container()->get(GedcomService::class);
-
-        // Strip out mac/msdos line endings
-        $rec = preg_replace("/[\r\n]+/", "\n", $rec);
-
-        // Extract lines from the record; lines consist of: level + optional xref + tag + optional data
-        $num_matches = preg_match_all('/^[ \t]*(\d+)[ \t]*(@[^@]*@)?[ \t]*(\w+)[ \t]?(.*)$/m', $rec, $matches, PREG_SET_ORDER);
-
-        // Process the record line-by-line
-        $newrec = '';
-        foreach ($matches as $n => $match) {
-            [, $level, $xref, $tag, $data] = $match;
-
-            $tag = $gedcom_service->canonicalTag($tag);
-
-            switch ($tag) {
-                case 'DATE':
-                    // Preserve text from INT dates
-                    if (str_contains($data, '(')) {
-                        [$date, $text] = explode('(', $data, 2);
-                        $text = ' (' . $text;
-                    } else {
-                        $date = $data;
-                        $text = '';
-                    }
-                    // Capitals
-                    $date = strtoupper($date);
-                    // Temporarily add leading/trailing spaces, to allow efficient matching below
-                    $date = ' ' . $date . ' ';
-                    // Ensure space digits and letters
-                    $date = preg_replace('/([A-Z])(\d)/', '$1 $2', $date);
-                    $date = preg_replace('/(\d)([A-Z])/', '$1 $2', $date);
-                    // Ensure space before/after calendar escapes
-                    $date = preg_replace('/@#[^@]+@/', ' $0 ', $date);
-                    // "BET." => "BET"
-                    $date = preg_replace('/(\w\w)\./', '$1', $date);
-                    // "CIR" => "ABT"
-                    $date = str_replace(' CIR ', ' ABT ', $date);
-                    $date = str_replace(' APX ', ' ABT ', $date);
-                    // B.C. => BC (temporarily, to allow easier handling of ".")
-                    $date = str_replace(' B.C. ', ' BC ', $date);
-                    // TMG uses "EITHER X OR Y"
-                    $date = preg_replace('/^ EITHER (.+) OR (.+)/', ' BET $1 AND $2', $date);
-                    // "BET X - Y " => "BET X AND Y"
-                    $date = preg_replace('/^(.* BET .+) - (.+)/', '$1 AND $2', $date);
-                    $date = preg_replace('/^(.* FROM .+) - (.+)/', '$1 TO $2', $date);
-                    // "@#ESC@ FROM X TO Y" => "FROM @#ESC@ X TO @#ESC@ Y"
-                    $date = preg_replace('/^ +(@#[^@]+@) +FROM +(.+) +TO +(.+)/', ' FROM $1 $2 TO $1 $3', $date);
-                    $date = preg_replace('/^ +(@#[^@]+@) +BET +(.+) +AND +(.+)/', ' BET $1 $2 AND $1 $3', $date);
-                    // "@#ESC@ AFT X" => "AFT @#ESC@ X"
-                    $date = preg_replace('/^ +(@#[^@]+@) +(FROM|BET|TO|AND|BEF|AFT|CAL|EST|INT|ABT) +(.+)/', ' $2 $1 $3', $date);
-                    // Ignore any remaining punctuation, e.g. "14-MAY, 1900" => "14 MAY 1900"
-                    // (don't change "/" - it is used in NS/OS dates)
-                    $date = preg_replace('/[.,:;-]/', ' ', $date);
-                    // BC => B.C.
-                    $date = str_replace(' BC ', ' B.C. ', $date);
-                    // Append the "INT" text
-                    $data = $date . $text;
-                    break;
-                case 'HEAD':
-                case 'TRLR':
-                    // HEAD and TRLR records do not have an XREF or DATA
-                    if ($level === '0') {
-                        $xref = '';
-                        $data = '';
-                    }
-                    break;
-                case 'NAME':
-                    // Tidy up non-printing characters
-                    $data = preg_replace('/  +/', ' ', trim($data));
-                    break;
-                case 'PLAC':
-                    // Consistent commas
-                    $data = preg_replace('/ *[,，،] */u', ', ', $data);
-                    // The Master Genealogist stores LAT/LONG data in the PLAC field, e.g. Pennsylvania, USA, 395945N0751013W
-                    if (preg_match('/(.*), (\d\d)(\d\d)(\d\d)([NS])(\d\d\d)(\d\d)(\d\d)([EW])$/', $data, $match) === 1) {
-                        $degns = (int) $match[2];
-                        $minns = (int) $match[3];
-                        $secns = (int) $match[4];
-                        $degew = (int) $match[6];
-                        $minew = (int) $match[7];
-                        $secew = (int) $match[8];
-                        $data =
-                            $match[1] . "\n" .
-                            (1 + (int) $level) . " MAP\n" .
-                            (2 + (int) $level) . ' LATI ' . ($match[5] . round($degns + $minns / 60 + $secns / 3600, 4)) . "\n" .
-                            (2 + (int) $level) . ' LONG ' . ($match[9] . round($degew + $minew / 60 + $secew / 3600, 4));
-                    }
-                    break;
-                case 'SEX':
-                    $data = strtoupper($data);
-                    break;
-            }
-            // Suppress "Y", for facts/events with a DATE or PLAC
-            if ($data === 'y') {
-                $data = 'Y';
-            }
-            if ($level === '1' && $data === 'Y') {
-                for ($i = $n + 1; $i < $num_matches - 1 && $matches[$i][1] !== '1'; ++$i) {
-                    if ($matches[$i][3] === 'DATE' || $matches[$i][3] === 'PLAC') {
-                        $data = '';
-                        break;
-                    }
-                }
-            }
-            // Reassemble components back into a single line
-            switch ($tag) {
-                default:
-                    // Remove tabs and multiple/leading/trailing spaces
-                    $data = strtr($data, ["\t" => ' ']);
-                    $data = trim($data, ' ');
-                    while (str_contains($data, '  ')) {
-                        $data = strtr($data, ['  ' => ' ']);
-                    }
-                    $newrec .= ($newrec ? "\n" : '') . $level . ' ' . ($level === '0' && $xref ? $xref . ' ' : '') . $tag . ($data === '' && $tag !== 'NOTE' ? '' : ' ' . $data);
-                    break;
-                case 'NOTE':
-                case 'TEXT':
-                case 'DATA':
-                case 'CONT':
-                    $newrec .= ($newrec ? "\n" : '') . $level . ' ' . ($level === '0' && $xref ? $xref . ' ' : '') . $tag . ($data === '' && $tag !== 'NOTE' ? '' : ' ' . $data);
-                    break;
-                case 'FILE':
-                    // Strip off the user-defined path prefix
-                    $GEDCOM_MEDIA_PATH = $tree->getPreference('GEDCOM_MEDIA_PATH');
-                    if ($GEDCOM_MEDIA_PATH !== '' && str_starts_with($data, $GEDCOM_MEDIA_PATH)) {
-                        $data = substr($data, strlen($GEDCOM_MEDIA_PATH));
-                    }
-                    // convert backslashes in filenames to forward slashes
-                    $data = preg_replace("/\\\\/", '/', $data);
-
-                    $newrec .= ($newrec ? "\n" : '') . $level . ' ' . ($level === '0' && $xref ? $xref . ' ' : '') . $tag . ($data === '' && $tag !== 'NOTE' ? '' : ' ' . $data);
-                    break;
-                case 'CONC':
-                    // Merge CONC lines, to simplify access later on.
-                    $newrec .= ($tree->getPreference('WORD_WRAPPED_NOTES') ? ' ' : '') . $data;
-                    break;
-            }
-        }
-
-        return $newrec;
+        throw new HttpServiceUnavailableException(
+            I18N::translate('The GEDCOM import service is unavailable. Please try again shortly.'),
+        );
     }
 
     /**

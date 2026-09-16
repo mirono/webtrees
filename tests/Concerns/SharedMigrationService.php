@@ -101,15 +101,26 @@ final class SharedMigrationService
         // long-lived child (a known proc_open quirk) — when the caller's
         // output is itself piped (e.g. `phpunit ... | tail`), that leaked
         // descriptor keeps the pipe open forever, hanging the reader long
-        // after PHPUnit itself has exited. /dev/null redirection avoids
-        // the pipe-duplication dance entirely.
+        // after PHPUnit itself has exited. /dev/null redirection handles
+        // fds 0-2, but proc_open() also passes through any OTHER open
+        // descriptor the calling PHP process happens to hold (e.g.
+        // PHPUnit's own printer re-opening `php://stdout`, which is a
+        // second, independent duplicate of the same pipe, at some fd
+        // number PHP doesn't tell us) — confirmed by hitting this exact
+        // hang again with 0-2 alone redirected, tracked via
+        // /proc/<node-pid>/fd to a leaked write end at fd 4. The shell
+        // wrapper below closes every inherited fd above 2 before exec'ing
+        // node, so no descriptor of the calling process — known or not —
+        // survives into the long-lived child.
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
             1 => ['file', '/dev/null', 'w'],
             2 => ['file', '/dev/null', 'w'],
         ];
         $script      = escapeshellarg(__DIR__ . '/../../server/migration-service.mjs');
-        $command     = 'PORT=' . self::PORT . ' node ' . $script;
+        $command     = 'for fd in $(ls /proc/self/fd 2>/dev/null); do '
+            . 'case "$fd" in 0|1|2) ;; *) eval "exec ' . '${fd}>&-" 2>/dev/null ;; esac; '
+            . 'done; exec env PORT=' . self::PORT . ' node ' . $script;
 
         $process = proc_open($command, $descriptors, $pipes, __DIR__ . '/../../');
 

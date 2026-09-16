@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Fisharebest\Webtrees\Tests\Feature;
 
+use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
 use Fisharebest\Webtrees\Services\GedcomImportService;
 use Fisharebest\Webtrees\Tests\Concerns\UsesMigrationServiceTrait;
 use Fisharebest\Webtrees\Tests\TestCase;
@@ -26,34 +27,24 @@ use Fisharebest\Webtrees\Tree;
 use PHPUnit\Framework\Attributes\CoversClass;
 use ReflectionClass;
 
-use function putenv;
-
 /**
- * Phase 3 bridge test (see docs/php-to-js-migration/phase3-bridge-decision-pass-2.md),
- * now running against the whole-suite shared service (see
- * docs/php-to-js-migration/phase4-shared-test-migration-service.md) rather
- * than a dedicated per-file process. Proves two things end to end:
- * GedcomImportService::reformatRecord() routes through it and returns the
- * same result as native PHP, and it falls back correctly when
- * unreachable. reformatRecord() is private, so it's invoked via
- * ReflectionMethod, same as the task-21 characterization test.
+ * Cutover test (see docs/php-to-js-migration/phase4-cutover-gedcom-import-service.md):
+ * GedcomImportService::reformatRecord() no longer has a native fallback,
+ * so this file no longer proves "matches native" — there's nothing
+ * native left to compare against. Instead, testRoutesThroughLiveService()
+ * asserts the live bridge against a known-good value cross-checked
+ * against the committed golden fixture (golden/reformat_record.json —
+ * the "lowercase uppercased" date case, chosen because it doesn't touch
+ * the FILE/CONC branches, so it's independent of the tree's
+ * GEDCOM_MEDIA_PATH/WORD_WRAPPED_NOTES preferences), and
+ * testThrowsWhenServiceUnreachable() proves an unreachable service makes
+ * reformatRecord() throw, not silently misbehave. reformatRecord() is
+ * private, so it's invoked via ReflectionMethod, same as the task-21
+ * characterization test.
  *
  * importTree() (called by both tests below) already starts the shared
  * service and skips the test if Node/npm aren't available — see
  * tests/TestCase.php and tests/Concerns/SharedMigrationService.php.
- *
- * Note on GedcomService's cutover (see
- * docs/php-to-js-migration/phase4-cutover-gedcom-service.md):
- * reformatRecord()'s native-fallback branch calls
- * GedcomService::canonicalTag(), which itself now has no fallback — if
- * WEBTREES_GEDCOM_SERVICE_URL were also unreachable at the same time as
- * WEBTREES_GEDCOM_IMPORT_SERVICE_URL, this test's "falls back" path
- * would throw instead of returning a native result. Not exercised here:
- * both tests below only ever override WEBTREES_GEDCOM_IMPORT_SERVICE_URL,
- * so WEBTREES_GEDCOM_SERVICE_URL stays pointed at the shared live service
- * throughout (set by importTree()'s SharedMigrationService::ensureRunning()
- * call), and canonicalTag() succeeds via its own bridge whenever
- * reformatRecord()'s own bridge is forced to fail.
  */
 #[CoversClass(GedcomImportService::class)]
 class GedcomImportServiceBridgeTest extends TestCase
@@ -80,36 +71,26 @@ class GedcomImportServiceBridgeTest extends TestCase
     {
         $tree    = $this->importTree('demo.ged');
         $service = new GedcomImportService();
-        $rec     = "0 @I1@ INDI\n1 NAME   John   /Smith/\n1 SEX m\n1 BIRT y\n2 DATE cir 1900";
+        $rec     = "0 @I1@ INDI\n1 BIRT\n2 DATE 1 jan 2000";
 
-        // Force a genuine native baseline — the shared service may already
-        // be live and its env var set from an earlier test in this process.
-        self::overrideMigrationServiceUrl('');
-
-        $native_result = $this->callReformatRecord($service, $rec, $tree);
-
-        // Point back at the live shared service to prove the bridge matches.
-        self::restoreMigrationServiceUrl();
-
-        self::assertSame($native_result, $this->callReformatRecord($service, $rec, $tree));
+        self::assertSame(
+            "0 @I1@ INDI\n1 BIRT\n2 DATE 1 JAN 2000",
+            $this->callReformatRecord($service, $rec, $tree),
+        );
     }
 
-    public function testFallsBackWhenServiceUnreachable(): void
+    public function testThrowsWhenServiceUnreachable(): void
     {
         $tree    = $this->importTree('demo.ged');
         $service = new GedcomImportService();
-        $rec     = "0 @I1@ INDI\n1 NAME   John   /Smith/\n1 SEX m\n1 BIRT y\n2 DATE cir 1900";
-
-        self::overrideMigrationServiceUrl(''); // force a genuine native baseline
-
-        $native_result = $this->callReformatRecord($service, $rec, $tree);
 
         // Nothing listens on this port — connection should be refused
         // quickly, not hang for the full timeout.
-        putenv('WEBTREES_GEDCOM_IMPORT_SERVICE_URL=http://127.0.0.1:1');
-        self::resetMigrationServiceUnavailableFlag();
+        self::overrideMigrationServiceUrl('http://127.0.0.1:1');
 
-        self::assertSame($native_result, $this->callReformatRecord($service, $rec, $tree));
+        self::expectException(HttpServiceUnavailableException::class);
+
+        $this->callReformatRecord($service, "0 @I1@ INDI\n1 BIRT\n2 DATE 1 jan 2000", $tree);
     }
 
     private static function migrationServiceEnvVar(): string
