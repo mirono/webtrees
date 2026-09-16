@@ -1,0 +1,240 @@
+# webtrees PHP → JS Migration: Status
+
+**Last updated: 2026-09-16. This is the entry point for "where are we" —
+read this first, then follow links for detail.** Branch: `js-migration-1`
+(a long-lived dev branch off `main`; no branch is literally named
+`js-migration`).
+
+## One-paragraph summary
+
+webtrees (a PHP 8.3+ genealogy app) is partway through a disciplined
+"strangler-fig" migration of self-contained algorithmic logic from PHP to
+JavaScript/Node, with live HTTP bridges connecting the two runtimes where
+it made sense. **The pure-algorithm-porting phase (23 tasks) concluded on
+2026-09-11.** **The bridge-cutover phase (phase 4) concluded on
+2026-09-16: all 6 built bridges now have their native PHP fallback
+deleted entirely** — each one is a hard runtime dependency on
+`server/migration-service.mjs` whenever its own env var is set, and
+inert (100% original PHP behavior) when that env var is unset. There is
+no partial/in-flight bridge left. Two unrelated, pre-existing bugs were
+observed during manual testing this phase and are recorded but not yet
+fixed (see "Open issues" below).
+
+## How to verify this yourself
+
+```bash
+# PHP suite — redirect to a FILE, not a pipe (see "the proc_open fd-leak" below)
+vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/pu_full.txt
+# Expect: 0 failures except 19 known-environment ones (see below), 3571 tests total.
+
+# JS suite
+npx vitest run
+# Expect: 4013 tests, all green.
+
+# Static analysis on any file you touch
+vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
+vendor/bin/phpstan analyse --memory-limit=1G <file>
+```
+
+19 PHP failures are **expected and environment-specific, not
+regressions** (WSL/DrvFs mount quirks — see
+[[environment-wsl-quirks]] / the WSL section below): 17 are
+`ReportRegressionTest::testReportPdfOutputMatchesSnapshot` (byte-level
+PDF/font rendering differences on a fresh environment) and 2 are
+`MaintenanceModeServiceTest` (`chmod()` doesn't actually restrict access
+on this mount).
+
+## The pattern used for every ported module
+
+1. **Characterize** real PHP behavior with a one-off `bin/characterize_*.php`
+   script → golden JSON fixtures under `golden/`, committed to git.
+2. **Port faithfully** to `lib/*.js` (ES modules) — reproduce found bugs
+   exactly, never "improve" on them; document them instead.
+3. **Parity-test** in `js-tests/parity_*.test.js`, byte-for-byte against
+   the golden fixtures.
+4. **Document** in `docs/php-to-js-migration/task-NN-*.md` + update the
+   status table in `phase4-cutover-tracking.md`.
+5. **Bridge** (optional) — only when architecturally justified (see
+   criteria below) — a live PHP↔Node HTTP call, env-var-gated, with an
+   automatic-fallback circuit breaker.
+6. **Cut over** (optional, and only after bridging) — delete the native
+   PHP fallback entirely once the bridge is proven and the module's
+   test-infra blast radius is understood. This is the end state; a
+   cut-over module is fully retired from PHP.
+
+**Bridge decision criteria** (a bridge is only built when ALL hold):
+clean bounded input/output shape (not objects escaping into
+polymorphic call sites), tolerable call volume for one HTTP round-trip
+per call, and bridging actually lets PHP retire real work rather than
+just adding latency.
+
+## Phase-by-phase history
+
+| Phase | What | Status |
+|---|---|---|
+| 0 | Inventory & sequencing | Done — [00-phase0-inventory.md](00-phase0-inventory.md) |
+| 1-2 | Characterize + port, 23 tasks | Done (2026-09-11) — `task-01` through `task-23` docs |
+| 3 | Bridge design + build (3 bridges initially, then 3 more after "bridge decision pass 2") | Done — [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md) et al. |
+| 4a | Shared test infrastructure (one Node process per PHPUnit run) | Done (2026-09-13) — [phase4-shared-test-migration-service.md](phase4-shared-test-migration-service.md) |
+| 4b | Cutover: delete native fallback, module by module | **Done (2026-09-16), all 6 of 6** — see table below |
+
+## The 6 bridges: final state
+
+All 6 are now **cut over** — no native PHP code remains in any of them;
+each throws `HttpServiceUnavailableException` if
+`server/migration-service.mjs` is unreachable while its env var is set,
+and is completely inert if the env var is unset.
+
+| Module | Env var | Cutover doc | Cut over on |
+|---|---|---|---|
+| `FactSortService::sort()` | `WEBTREES_FACT_SORT_SERVICE_URL` | [phase4-cutover-fact-sort-surname-tradition.md](phase4-cutover-fact-sort-surname-tradition.md) | 2026-09-12 |
+| `BridgedSurnameTradition` (3 methods) | `WEBTREES_SURNAME_TRADITION_SERVICE_URL` | [phase4-cutover-fact-sort-surname-tradition.md](phase4-cutover-fact-sort-surname-tradition.md) | 2026-09-12 |
+| `GedcomService` (`canonicalTag`/`readLatitude`/`readLongitude`) | `WEBTREES_GEDCOM_SERVICE_URL` | [phase4-cutover-gedcom-service.md](phase4-cutover-gedcom-service.md) | 2026-09-15 |
+| `Soundex` (`russell`/`compare`/`daitchMokotoff`) | `WEBTREES_SOUNDEX_SERVICE_URL` | [phase4-cutover-soundex.md](phase4-cutover-soundex.md) | 2026-09-15 |
+| `GedcomExportService::wrapLongLines()` | `WEBTREES_GEDCOM_EXPORT_SERVICE_URL` | [phase4-cutover-gedcom-export-service.md](phase4-cutover-gedcom-export-service.md) | 2026-09-16 |
+| `GedcomImportService::reformatRecord()` | `WEBTREES_GEDCOM_IMPORT_SERVICE_URL` | [phase4-cutover-gedcom-import-service.md](phase4-cutover-gedcom-import-service.md) | 2026-09-16 |
+
+The full per-module table (including the ~15 ported-but-not-bridged
+modules, and why each of those wasn't bridged) is
+[phase4-cutover-tracking.md](phase4-cutover-tracking.md) — treat that
+file, not this summary, as authoritative for any single module's exact
+history; it's updated every task/cutover.
+
+**A single Node process** (`server/migration-service.mjs`) serves all 6
+bridges, keyed by route, not 6 separate services.
+
+## Known deliberate trade-off: the circuit breaker
+
+Every bridge shares one pattern: a `private static bool
+$service_unavailable` flag trips on the *first* failed call and stays
+tripped for the rest of the PHP process's lifetime — no per-call retry.
+This means a transient blip mid-request (or mid-import, for the two
+highest-volume modules) fails every remaining call in that process
+fast, rather than degrading gracefully. This is an accepted,
+consistently-applied trade-off across the whole migration, not an
+oversight in any one module.
+
+## Environments where this actually runs
+
+There is **no real production webtrees deployment** for this repo —
+only the local dev sandbox used throughout the migration
+(`php -S localhost:8000` + `node server/migration-service.mjs` on port
+8090). "Bridge activation" (2026-09-11,
+[phase4-cutover-tracking.md](phase4-cutover-tracking.md)'s
+"Bridge-activation status" section) means exactly that: both processes
+running locally with all 6 env vars set, verified live. Whether any
+real deployment should ever set these env vars remains an unmade,
+separate decision — see "Open decisions" below.
+
+## What's NOT done / open decisions
+
+- **Production cutover decision**: no real deployment exists to make
+  this decision for. If one is ever stood up, each `WEBTREES_*_SERVICE_URL`
+  is independently toggleable — enabling all 6 requires
+  `server/migration-service.mjs` running and reachable, or every
+  bridged operation (tree creation, GEDCOM import/export, Soundex
+  search, surname-tradition name generation, fact-list sorting) starts
+  throwing 503s.
+- **No request batching**: every bridge pays one HTTP round-trip per
+  call (per name, per GEDCOM line/record, per fact-list). Accepted for
+  all 6; would need real profiling data before it's worth revisiting.
+- **CI** (`.github/workflows/phpunit.yaml`) installs Node so the shared
+  test-migration-service can start, but nothing in CI actually sets the
+  `WEBTREES_*_SERVICE_URL` env vars for a "real" run — CI runs with
+  bridges available-but-unset except where a test explicitly points at
+  the shared service.
+- **Two unrelated bugs found during manual browser testing** (not
+  migration regressions — see next section) are still open.
+
+## Open issues (found during manual testing, not yet fixed)
+
+Both surfaced when the user manually exercised the app in a browser
+after the `GedcomService`/`Soundex` cutovers. Neither was root-caused to
+completion; both were explicitly deferred by the user ("we can continue
+and handle this later").
+
+1. **Setup-wizard redirect crash**: completing the setup wizard can
+   throw `HttpBadRequestException: The parameter "route" is missing` at
+   `app/Validator.php:348`, surfaced via
+   `HandleExceptions.php`'s `viewResponse('components/alert-danger', ...)`
+   path trying to read `Validator::attributes($request)->route()->name`
+   on a request that never matched a route (no `'route'` attribute set).
+   Confirmed via `git log` that none of the files in this call path were
+   touched by any migration commit — very likely pre-existing, not a
+   regression. Reproduction attempts with a bare `php -S` server on
+   plain 404s did NOT reproduce it; the exact trigger (what URL
+   `SetupWizard.php`'s `redirect($data['baseurl'])` produces in the
+   user's environment) was never pinned down. **Next step if resumed**:
+   get the exact URL from the browser's address bar at the moment of the
+   crash.
+2. **Oversized broken-image placeholder**: an unfound/broken image now
+   renders as a "500 image" that fills the entire individual box, rather
+   than staying confined to the thumbnail area as before. Checked
+   `app/Factories/ImageFactory.php` and `app/Exceptions/ImageException.php`
+   for any reference to the 4 modules cut over so far
+   (`GedcomService`/`Soundex`/`FactSortService`/`SurnameTradition`) —
+   **zero matches**, and `HandleExceptions.php` has a dedicated
+   `ImageException` handling branch entirely separate from the generic
+   `HttpException` path. Very likely unrelated to the migration (a
+   pre-existing layout/CSS issue, possibly specific to running under a
+   bare `php -S` dev server without full static-asset handling) but not
+   fully investigated (`imageExceptionResponse()`'s implementation was
+   never read). **Next step if resumed**: read
+   `HandleExceptions::imageExceptionResponse()` and check what CSS class
+   normally constrains the thumbnail box.
+
+## Environment quirks (WSL/DrvFs at `/mnt/f/Dev/webtrees`)
+
+Full detail in memory ([[environment-wsl-quirks]]); short version:
+
+- Executable-bit noise makes `git status` show thousands of false
+  "modified" files — fixed via `git config core.fileMode false`.
+- `chmod()` doesn't actually restrict access on this mount — 2 known
+  test failures are permanently environment-specific, not bugs.
+- PDF-snapshot byte-comparison tests can diverge on a fresh
+  environment's font rendering — 17 known failures, same category.
+- No toolchain is pre-installed in a fresh container for this repo —
+  install via Homebrew (`brew install php composer node`), and the user
+  runs the install commands themselves rather than delegating that to
+  the agent.
+- `git push`/`pull` needs an `ssh-agent` started fresh **in the same
+  Bash call** as the push/pull (`eval $(ssh-agent -s) && ssh-add
+  ~/.ssh/mirono-github && git push ...`) — it does not persist across
+  separate tool calls.
+
+## The `proc_open` fd-leak (test infra only, fixed twice)
+
+`tests/Concerns/SharedMigrationService.php` spawns one long-lived Node
+process, shared by the whole PHPUnit run. Twice now, running PHPUnit
+piped through another command (`vendor/bin/phpunit ... | tail`) has
+hung indefinitely — the spawned Node child inherits a duplicate of the
+*calling* PHP process's own stdout pipe, and since the Node process
+outlives the PHPUnit run, that duplicate keeps the pipe open forever
+even after PHPUnit itself exits cleanly. First fix (`GedcomService`
+cutover) redirected the child's fds 0/1/2 to `/dev/null`; this was
+real but incomplete — recurred (`GedcomImportService` cutover) via a
+*different*, unnamed fd (PHPUnit's own process apparently holds another
+duplicate of its stdout beyond fd 1 itself). Now fixed by closing
+**every** inherited fd above 2 unconditionally in a shell wrapper before
+exec'ing node, rather than naming specific fd numbers — see
+`SharedMigrationService::start()`. **Always redirect full-suite PHPUnit
+runs to a file, never a pipe**, regardless of this fix, since the fix
+is believed complete but was only proven against the two fd numbers
+actually observed.
+
+## Git workflow (standing convention)
+
+Branch off `js-migration-1` per task/cutover
+(`git checkout -b cutover/<name>`), commit there, verify (lint + full
+suite), then `git checkout js-migration-1 && git merge --ff-only <branch>
+&& git push origin js-migration-1`, delete the local branch. No PR gate
+— `gh` CLI isn't available in this environment. See
+[[feedback-git-workflow]].
+
+## Where to look for more detail
+
+- **Per-module exact status**: [phase4-cutover-tracking.md](phase4-cutover-tracking.md) (the single most up-to-date file, updated every task)
+- **Individual port write-ups**: `task-01-*.md` through `task-23-*.md`
+- **Individual cutover write-ups**: `phase4-cutover-*.md`
+- **Methodology/templates** (generic, reusable): `../php-to-js-migration-checklist.md`
+- **Long-term project memory** (this agent's cross-session notes): `[[migration-php-to-js]]`, `[[environment-wsl-quirks]]`, `[[feedback-git-workflow]]`, `[[feedback-haiku-delegation]]`, `[[project-open-issues]]`
