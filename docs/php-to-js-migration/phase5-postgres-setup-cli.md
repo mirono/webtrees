@@ -220,7 +220,8 @@ a clear error, rather than silently producing a broken install.
 |---|---|
 | `index.mjs` | Entry point / orchestration — 6 step functions matching `SetupWizard.php`'s own step order |
 | `args.mjs` | Flag parsing (`node:util.parseArgs`, no dependency) — deliberately no flag has a `default`, see below |
-| `prompt.mjs` | Interactive prompts (`node:readline`, no dependency), including a masked password prompt |
+| `prompt.mjs` | Interactive prompts (`node:readline`, no dependency), including a masked password prompt and a numbered-list choice prompt |
+| `languages.mjs` | Loads `golden/setup_languages.json` at runtime; case-insensitive tag lookup for `--lang` |
 | `pg.mjs` | `ensureDatabase()`, `runSchemaAndSeed()`, `upsertAdminUser()` |
 | `config-writer.mjs` | Hand-rolled YAML emitter for the one flat shape this CLI ever writes |
 
@@ -242,7 +243,22 @@ exposure).
 
 **Steps** (mirroring `SetupWizard.php`'s `step1Language()` ..
 `step6Install()`):
-1. **Language** — a tag for the admin's `language` preference.
+1. **Language** — "Select language:", a numbered list of every language
+   webtrees actually ships (36, as of this writing), with American
+   English pre-selected as the default (press enter to accept it). Not
+   guessed or hand-typed: `bin/characterize_setup_languages.php` boots
+   the real app and calls the exact same `ModuleService::setupLanguages()`
+   the browser wizard's own step 1 calls, dumping `{languageTag, endonym}`
+   for each into `golden/setup_languages.json` — the display string
+   (`endonym`, e.g. "American English", "Deutsch", "日本語" — a
+   language's name for itself, confirmed via
+   `resources/views/setup/step-1-language.phtml`, the real template step
+   1 renders, which calls `$locale->endonym()`) and tag come from the
+   real list, same order (sorted by `endonymSortable()`, matching
+   `ModuleService::setupLanguages()` exactly), not approximated. `--lang`
+   still works as a flag — validated case-insensitively against this
+   same real list; an unsupported tag fails immediately with the list of
+   what *is* supported, rather than silently accepting garbage.
 2. **Server checks** — `data/` is writable, Node version. (The browser
    wizard's PHP-extension checks don't translate to a Node CLI; this
    step exists for parity of experience, not identical content.)
@@ -347,3 +363,15 @@ install too.
   correctly for right/wrong passwords). All test databases and the
   temporary `config.yaml` were cleaned up afterward; this dev checkout's
   real `config.ini.php`-based install was untouched throughout.
+- **Language-select step, verified against a real Postgres, 3 scenarios**:
+  (1) pressing enter for the default → `en-US` stored in
+  `wt_user_setting`; (2) picking a different number (`6`, Deutsch) →
+  `de` stored; (3) an out-of-range number (`99`) correctly re-prompts
+  with an error rather than crashing or silently accepting it, then a
+  valid number proceeds normally. `--lang=fr` skips the prompt entirely
+  and stores `fr`; `--lang=xx-invalid` fails immediately with the full
+  list of supported tags, exit code 1, no prompt shown. `phpcs`/`phpstan`
+  clean on `bin/characterize_setup_languages.php`; full JS suite still
+  green (no new JS tests added for this change — it's CLI I/O logic
+  exercised by the manual end-to-end runs above, not unit-testable
+  without a much larger mocking investment for a one-off wizard step).

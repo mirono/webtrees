@@ -33,9 +33,10 @@ import { writeFileSync, accessSync, constants as fsConstants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { parseCliArgs, printHelp } from './args.mjs';
-import { promptText, promptPassword, closePrompt } from './prompt.mjs';
+import { promptText, promptPassword, promptChoice, closePrompt } from './prompt.mjs';
 import { ensureDatabase, runSchemaAndSeed, upsertAdminUser } from './pg.mjs';
 import { renderConfigYaml } from './config-writer.mjs';
+import { loadSetupLanguages, findLanguageIndex, DEFAULT_LANGUAGE_TAG } from './languages.mjs';
 
 const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA_DIR = path.join(REPO_ROOT, 'data');
@@ -60,10 +61,30 @@ async function resolveValue(flagValue, envVarName, question, { password = false,
   return password ? promptPassword(question) : promptText(question, defaultValue);
 }
 
-function stepLanguage(args) {
+async function stepLanguage(args) {
   stepHeader(1, 6, 'Language');
 
-  return resolveValue(args.lang, undefined, 'Language tag for the administrator account', { defaultValue: 'en-US' });
+  const languages = loadSetupLanguages();
+  const defaultIndex = findLanguageIndex(DEFAULT_LANGUAGE_TAG);
+
+  if (args.lang !== undefined) {
+    const index = findLanguageIndex(args.lang);
+
+    if (index === -1) {
+      console.error(
+        `\n"${args.lang}" is not one of the languages webtrees supports. ` +
+          `Supported tags: ${languages.map((language) => language.languageTag).join(', ')}.`,
+      );
+      process.exit(1);
+    }
+
+    return languages[index].languageTag;
+  }
+
+  const labels = languages.map((language) => `${language.endonym} (${language.languageTag})`);
+  const chosenIndex = await promptChoice('Select language:', labels, defaultIndex);
+
+  return languages[chosenIndex].languageTag;
 }
 
 function stepServerCheck() {

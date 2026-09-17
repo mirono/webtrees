@@ -111,6 +111,45 @@ export function promptText(question, defaultValue, { silent = false } = {}) {
   });
 }
 
+/**
+ * Prints a numbered list of options and asks for a choice by number -
+ * deliberately not an arrow-key/raw-mode menu, to stay on the same
+ * simple "type it, press enter for the default" pattern as every other
+ * prompt in this file (and to keep working correctly for piped/non-TTY
+ * input, which a raw-mode menu never could). Built on promptText()
+ * rather than talking to readline/stdin directly, so it inherits that
+ * function's TTY/piped handling for free instead of risking a third
+ * copy of the same hard-won logic.
+ *
+ * Re-prompts (recursing through promptText() again) on a number outside
+ * 1..options.length - safe even for piped/non-TTY input, since an
+ * exhausted answer queue makes promptText() fall back to the (always
+ * valid) default index rather than looping forever.
+ *
+ * @param {string} question
+ * @param {string[]} labels
+ * @param {number} defaultIndex 0-based
+ * @returns {Promise<number>} 0-based index of the chosen option
+ */
+export async function promptChoice(question, labels, defaultIndex = 0) {
+  console.log(question);
+
+  labels.forEach((label, i) => {
+    console.log(`  ${i + 1}. ${label}${i === defaultIndex ? ' (default)' : ''}`);
+  });
+
+  for (;;) {
+    const answer = await promptText('Choice', String(defaultIndex + 1));
+    const choice = Number.parseInt(answer, 10);
+
+    if (Number.isInteger(choice) && choice >= 1 && choice <= labels.length) {
+      return choice - 1;
+    }
+
+    console.log(`Please enter a number between 1 and ${labels.length}.`);
+  }
+}
+
 // Control-character code points relevant to raw-mode keystroke handling
 // below (compared via charCodeAt rather than embedding literal control
 // bytes in the source, which is easy to corrupt by accident): ETX

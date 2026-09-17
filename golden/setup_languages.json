@@ -1,0 +1,146 @@
+[
+    {
+        "languageTag": "af",
+        "endonym": "Afrikaans"
+    },
+    {
+        "languageTag": "bs",
+        "endonym": "bosanski"
+    },
+    {
+        "languageTag": "ca",
+        "endonym": "català"
+    },
+    {
+        "languageTag": "cs",
+        "endonym": "čeština"
+    },
+    {
+        "languageTag": "da",
+        "endonym": "dansk"
+    },
+    {
+        "languageTag": "de",
+        "endonym": "Deutsch"
+    },
+    {
+        "languageTag": "et",
+        "endonym": "eesti"
+    },
+    {
+        "languageTag": "en-US",
+        "endonym": "American English"
+    },
+    {
+        "languageTag": "en-GB",
+        "endonym": "British English"
+    },
+    {
+        "languageTag": "es",
+        "endonym": "español"
+    },
+    {
+        "languageTag": "fr",
+        "endonym": "français"
+    },
+    {
+        "languageTag": "gl",
+        "endonym": "galego"
+    },
+    {
+        "languageTag": "hr",
+        "endonym": "hrvatski"
+    },
+    {
+        "languageTag": "is",
+        "endonym": "íslenska"
+    },
+    {
+        "languageTag": "it",
+        "endonym": "italiano"
+    },
+    {
+        "languageTag": "lt",
+        "endonym": "lietuvių"
+    },
+    {
+        "languageTag": "hu",
+        "endonym": "magyar"
+    },
+    {
+        "languageTag": "nl",
+        "endonym": "Nederlands"
+    },
+    {
+        "languageTag": "pl",
+        "endonym": "polski"
+    },
+    {
+        "languageTag": "pt",
+        "endonym": "português"
+    },
+    {
+        "languageTag": "sk",
+        "endonym": "slovenčina"
+    },
+    {
+        "languageTag": "fi",
+        "endonym": "suomi"
+    },
+    {
+        "languageTag": "sv",
+        "endonym": "svenska"
+    },
+    {
+        "languageTag": "vi",
+        "endonym": "Tiếng Việt"
+    },
+    {
+        "languageTag": "tr",
+        "endonym": "Türkçe"
+    },
+    {
+        "languageTag": "el",
+        "endonym": "Ελληνικά"
+    },
+    {
+        "languageTag": "bg",
+        "endonym": "български"
+    },
+    {
+        "languageTag": "ru",
+        "endonym": "русский"
+    },
+    {
+        "languageTag": "uk",
+        "endonym": "українська"
+    },
+    {
+        "languageTag": "kk",
+        "endonym": "қазақ тілі"
+    },
+    {
+        "languageTag": "he",
+        "endonym": "עברית"
+    },
+    {
+        "languageTag": "ar",
+        "endonym": "العربية"
+    },
+    {
+        "languageTag": "hi",
+        "endonym": "हिन्दी"
+    },
+    {
+        "languageTag": "ka",
+        "endonym": "ქართული"
+    },
+    {
+        "languageTag": "zh-Hans",
+        "endonym": "简体中文"
+    },
+    {
+        "languageTag": "zh-Hant",
+        "endonym": "繁體中文"
+    }
+]
