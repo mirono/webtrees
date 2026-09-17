@@ -26,9 +26,6 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 
-use function file_exists;
-use function parse_ini_file;
-
 class ReadConfigIni implements MiddlewareInterface
 {
     private SetupWizard $setup_wizard;
@@ -40,10 +37,10 @@ class ReadConfigIni implements MiddlewareInterface
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        // Read the configuration settings.
-        if (file_exists(Webtrees::CONFIG_FILE)) {
-            $config = parse_ini_file(Webtrees::CONFIG_FILE);
+        // Read the configuration settings (config.yaml, or config.ini.php — see Webtrees::readConfig()).
+        $config = Webtrees::readConfig();
 
+        if ($config !== []) {
             // Store the configuration settings as request attributes.
             foreach ($config as $key => $value) {
                 $request = $request->withAttribute($key, $value);

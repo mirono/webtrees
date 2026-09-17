@@ -12,13 +12,43 @@ name: webtrees-dev
 # install), same prerequisite as running natively.
 #
 # Usage:
-#   docker compose up          # start both, foreground
-#   docker compose up -d       # start both, background
-#   docker compose down        # stop both
+#   docker compose up          # start everything, foreground
+#   docker compose up -d       # start everything, background
+#   docker compose down        # stop everything
+#   docker compose down -v     # also wipe the postgres volume
 # Then open http://localhost:8000 — data/webtrees.sqlite and
-# data/config.ini.php (already present in this repo) are used as-is.
+# data/config.ini.php (already present in this repo) are used as-is by
+# the app service unless data/config.yaml exists (see setup-cli/).
+#
+# `postgres` is a local Postgres, used two ways: (1) as the target for
+# setup-cli/ (the new Node setup tool, phase 5 of the php-to-js
+# migration — see docs/php-to-js-migration/phase5-postgres-setup-cli.md),
+# and (2) it's how golden/postgres-schema.sql / golden/postgres-seed.sql
+# were originally generated (run the real PHP migration system once
+# against a fresh instance of this service, then pg_dump the result —
+# see that doc for the exact repeatable procedure). The app/migration
+# services don't depend on it and work fine without it (they still use
+# data/config.ini.php's sqlite setup by default) — it only matters once
+# you run setup-cli/ to switch to a Postgres-backed install.
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: webtrees
+      POSTGRES_PASSWORD: webtrees
+      POSTGRES_DB: webtrees
+    ports:
+      - "5432:5432"
+    volumes:
+      - webtrees-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webtrees"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+
   app:
     build:
       context: .
@@ -55,3 +85,6 @@ services:
       timeout: 2s
       retries: 5
       start_period: 5s
+
+volumes:
+  webtrees-postgres-data:

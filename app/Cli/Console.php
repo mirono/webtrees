@@ -26,8 +26,6 @@ use Fisharebest\Webtrees\Webtrees;
 use Symfony\Component\Console\Application;
 use Throwable;
 
-use function parse_ini_file;
-
 final class Console extends Application
 {
     private const array COMMANDS = [
@@ -68,7 +66,7 @@ final class Console extends Application
         I18N::init(code: 'en-US', setup: true);
 
         try {
-            $config = parse_ini_file(filename: Webtrees::CONFIG_FILE) ?: [];
+            $config = Webtrees::readConfig();
 
             DB::connect(
                 driver: $config['dbtype'] ?? DB::MYSQL,

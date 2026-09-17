@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-16. This is the entry point for "where are we" —
+**Last updated: 2026-09-17. This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -8,17 +8,24 @@ read this first, then follow links for detail.** Branch: `js-migration-1`
 ## One-paragraph summary
 
 webtrees (a PHP 8.3+ genealogy app) is partway through a disciplined
-"strangler-fig" migration of self-contained algorithmic logic from PHP to
-JavaScript/Node, with live HTTP bridges connecting the two runtimes where
-it made sense. **The pure-algorithm-porting phase (23 tasks) concluded on
-2026-09-11.** **The bridge-cutover phase (phase 4) concluded on
-2026-09-16: all 6 built bridges now have their native PHP fallback
-deleted entirely** — each one is a hard runtime dependency on
+"strangler-fig" migration from PHP to JavaScript/Node. **The end goal,
+stated explicitly by the project owner on 2026-09-17, is full PHP
+elimination** — not just porting/bridging self-contained algorithms.
+Phases 0-4 (23 ported modules, 6 cut-over bridges, concluded 2026-09-16)
+remain necessary groundwork but are not the finish line; full elimination
+is a much larger, multi-phase undertaking (webtrees has 1,431 PHP files
+under `app/` alone) that's only just beginning. **Phase 4** (the
+bridge-cutover phase): all 6 built bridges have their native PHP fallback
+deleted entirely — each is a hard runtime dependency on
 `server/migration-service.mjs` whenever its own env var is set, and
-inert (100% original PHP behavior) when that env var is unset. There is
-no partial/in-flight bridge left. Two unrelated, pre-existing bugs were
-observed during manual testing this phase and are recorded but not yet
-fixed (see "Open issues" below).
+inert (100% original PHP behavior) when that env var is unset. **Phase 5**
+(full-PHP-elimination groundwork) has begun: step 1 is a Node.js CLI
+that provisions a PostgreSQL-backed install end-to-end (schema, seed
+data, admin user) and writes a new YAML config file, replacing the
+browser setup wizard's *provisioning* job for that one path — see
+[phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md). Two
+unrelated, pre-existing bugs were observed during manual testing in
+phase 4 and are recorded but not yet fixed (see "Open issues" below).
 
 ## How to verify this yourself
 
@@ -77,6 +84,23 @@ just adding latency.
 | 3 | Bridge design + build (3 bridges initially, then 3 more after "bridge decision pass 2") | Done — [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md) et al. |
 | 4a | Shared test infrastructure (one Node process per PHPUnit run) | Done (2026-09-13) — [phase4-shared-test-migration-service.md](phase4-shared-test-migration-service.md) |
 | 4b | Cutover: delete native fallback, module by module | **Done (2026-09-16), all 6 of 6** — see table below |
+| 5.1 | Node CLI + YAML config, Postgres-only, replaces the browser wizard's *provisioning* job for that one path | **In progress (started 2026-09-17)** — [phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md) |
+
+## Phase 5: full PHP elimination (in progress)
+
+This is a different kind of phase than 0-4 — infrastructure/tooling work
+toward removing PHP entirely, not algorithm porting. It's just beginning;
+expect many more steps here before anything resembling "PHP is gone" is
+true. Step 1, `setup-cli/` (a Node CLI provisioning a fresh
+PostgreSQL-backed install: schema, seed data, admin user, then a new
+`data/config.yaml`), is **done and fully verified end-to-end**: a real
+login through the real running PHP app, using credentials created
+entirely by the Node CLI, produced a genuine authenticated admin session
+— see the doc above for the full run and the two real bugs it caught
+(a non-executable `pg_dump` artifact, and a missing `WT_SCHEMA_VERSION`
+row that would have crashed every CLI-provisioned site's first request).
+The existing browser wizard, `config.ini.php`, and MySQL/SQLite/SQL
+Server support are all completely unaffected by this step.
 
 ## The 6 bridges: final state
 
@@ -236,5 +260,6 @@ suite), then `git checkout js-migration-1 && git merge --ff-only <branch>
 - **Per-module exact status**: [phase4-cutover-tracking.md](phase4-cutover-tracking.md) (the single most up-to-date file, updated every task)
 - **Individual port write-ups**: `task-01-*.md` through `task-23-*.md`
 - **Individual cutover write-ups**: `phase4-cutover-*.md`
+- **Phase 5 (full PHP elimination) write-ups**: `phase5-*.md`
 - **Methodology/templates** (generic, reusable): `../php-to-js-migration-checklist.md`
 - **Long-term project memory** (this agent's cross-session notes): `[[migration-php-to-js]]`, `[[environment-wsl-quirks]]`, `[[feedback-git-workflow]]`, `[[feedback-haiku-delegation]]`, `[[project-open-issues]]`

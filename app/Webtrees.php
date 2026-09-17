@@ -83,10 +83,14 @@ use Psr\Http\Message\ServerRequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\UploadedFileFactoryInterface;
 use Psr\Http\Message\UriFactoryInterface;
+use Symfony\Component\Yaml\Yaml;
 
 use function date_default_timezone_set;
 use function error_reporting;
+use function file_exists;
+use function is_bool;
 use function mb_internal_encoding;
+use function parse_ini_file;
 use function stream_filter_register;
 
 use const E_ALL;
@@ -108,7 +112,13 @@ class Webtrees
     public const string DATA_DIR = self::ROOT_DIR . 'data/';
 
     // Location of the file containing the database connection details.
-    public const string CONFIG_FILE = self::DATA_DIR . 'config.ini.php';
+    // config.ini.php is written by the browser setup wizard
+    // (SetupWizard.php) and read via parse_ini_file(). config.yaml is
+    // written by setup-cli/ (see docs/php-to-js-migration/phase5-postgres-setup-cli.md)
+    // and read via readConfig() below, which checks it first, falling
+    // back to config.ini.php unchanged if it doesn't exist.
+    public const string CONFIG_FILE      = self::DATA_DIR . 'config.ini.php';
+    public const string CONFIG_FILE_YAML = self::DATA_DIR . 'config.yaml';
 
     // Location of our modules.
     public const string MODULES_PATH = 'modules_v4/';
@@ -257,6 +267,46 @@ class Webtrees
         $console = new Console();
 
         return $console->loadCommands()->bootstrap()->run();
+    }
+
+    /**
+     * Read the site configuration, from whichever config file exists.
+     * config.yaml (written by setup-cli/) takes priority over
+     * config.ini.php (written by the browser setup wizard) if both
+     * exist. Returns [] if neither exists.
+     *
+     * Every value is normalized to a string, matching parse_ini_file()'s
+     * output shape — several downstream consumers (e.g.
+     * Http\Middleware\UseDatabase, LoadRoutes) call
+     * Validator::attributes($request)->string($key) with no default,
+     * which throws HttpBadRequestException on anything that isn't
+     * already a string. A real YAML int/bool/null would break every
+     * request if passed through unnormalized.
+     *
+     * @return array<string,string>
+     */
+    public static function readConfig(): array
+    {
+        if (file_exists(self::CONFIG_FILE_YAML)) {
+            $raw    = Yaml::parseFile(self::CONFIG_FILE_YAML) ?? [];
+            $config = [];
+
+            foreach ($raw as $key => $value) {
+                $config[$key] = match (true) {
+                    is_bool($value) => $value ? '1' : '',
+                    $value === null => '',
+                    default         => (string) $value,
+                };
+            }
+
+            return $config;
+        }
+
+        if (file_exists(self::CONFIG_FILE)) {
+            return parse_ini_file(self::CONFIG_FILE) ?: [];
+        }
+
+        return [];
     }
 
     /**

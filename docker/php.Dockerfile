@@ -16,17 +16,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libonig-dev \
         libcurl4-openssl-dev \
         libsqlite3-dev \
+        libpq-dev \
         unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
         gd \
         intl \
         pdo_sqlite \
+        pdo_pgsql \
         zip \
         mbstring \
         curl \
-    # data/config.ini.php in this repo uses dbtype="sqlite" (pdo_sqlite,
-    # above). Add pdo_mysql/pdo_pgsql here too if you switch dbtype.
+    # data/config.ini.php defaults to dbtype="sqlite" (pdo_sqlite); a
+    # data/config.yaml written by setup-cli/ uses dbtype="pgsql"
+    # (pdo_pgsql) — both drivers are installed so either config file
+    # works. Add pdo_mysql here too if you ever need that dbtype.
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html
