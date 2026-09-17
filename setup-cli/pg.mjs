@@ -56,7 +56,18 @@ const ADMIN_PREFERENCES = (lang) => ({
 export async function ensureDatabase({ host, port, user, password, database }) {
   const client = new Client({ host, port, user, password, database: 'postgres' });
 
-  await client.connect();
+  // client.end() must run even if connect() itself fails (e.g. a retry
+  // loop calling this repeatedly with bad credentials/host) - otherwise
+  // each failed attempt can leave a half-open socket behind, and enough
+  // of those can exhaust the server's own connection limit ("sorry, too
+  // many clients already"), turning a simple wrong-password retry into
+  // a cascading failure for every later attempt too.
+  try {
+    await client.connect();
+  } catch (error) {
+    await client.end().catch(() => {});
+    throw error;
+  }
 
   try {
     const { rows } = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [database]);

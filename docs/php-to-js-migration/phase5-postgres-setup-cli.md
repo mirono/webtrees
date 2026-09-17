@@ -218,9 +218,9 @@ a clear error, rather than silently producing a broken install.
 
 | File | Role |
 |---|---|
-| `index.mjs` | Entry point / orchestration |
-| `args.mjs` | Flag parsing (`node:util.parseArgs`, no dependency) |
-| `prompt.mjs` | Interactive fallback prompts (`node:readline/promises`, no dependency), including a masked password prompt |
+| `index.mjs` | Entry point / orchestration — 6 step functions matching `SetupWizard.php`'s own step order |
+| `args.mjs` | Flag parsing (`node:util.parseArgs`, no dependency) — deliberately no flag has a `default`, see below |
+| `prompt.mjs` | Interactive prompts (`node:readline`, no dependency), including a masked password prompt |
 | `pg.mjs` | `ensureDatabase()`, `runSchemaAndSeed()`, `upsertAdminUser()` |
 | `config-writer.mjs` | Hand-rolled YAML emitter for the one flat shape this CLI ever writes |
 
@@ -230,24 +230,62 @@ design): `pg` (the only realistic native-protocol Postgres client for
 Node) and `bcryptjs` (pure JS, no native compile step — matters for
 Docker portability — needed to match PHP's bcrypt password format).
 
-Run via `npm run setup -- [options]` or `node setup-cli/index.mjs
-[options]`; `--help` lists every flag. Each value not given as a flag
-falls back to an environment variable (`WT_DB_PASSWORD`/`WT_ADMIN_PASSWORD`
-for the two passwords) then an interactive prompt — passwords are never
-required to be passed as plain flags, avoiding shell-history/`ps`/CI-log
-exposure, though `--db-pass`/`--wt-pass` are still accepted for scripted
-use.
+**Run with no options at all** (`npm run setup` or `node
+setup-cli/index.mjs`) and it walks through the same 6 steps as the
+browser wizard, one at a time, prompting for every value — this is the
+primary, expected way to run it, not an edge case. `--help` lists every
+flag; any flag given skips just that one prompt (for scripted/CI use),
+everything else still prompts as normal. `--db-pass`/`--wt-pass` fall
+back to `WT_DB_PASSWORD`/`WT_ADMIN_PASSWORD` env vars before prompting —
+passwords are never required as plain flags (shell history/`ps`/CI-log
+exposure).
 
-Runtime flow: connect to Postgres's `postgres` maintenance database and
-`CREATE DATABASE` if the target doesn't exist yet (Postgres has no
-`CREATE DATABASE IF NOT EXISTS`, unlike the old wizard's MySQL-only path
-— this existence-check-then-create is new, Postgres-specific behavior) →
-run the two golden SQL files verbatim → create or update the admin user
-(idempotent: looked up by email then username, mirroring
-`SetupWizard::createConfigFile()`'s "may already exist" handling —
-re-running against the same database updates the password rather than
-erroring) → upsert the same 4 preferences the browser wizard sets → write
-`data/config.yaml`.
+**Steps** (mirroring `SetupWizard.php`'s `step1Language()` ..
+`step6Install()`):
+1. **Language** — a tag for the admin's `language` preference.
+2. **Server checks** — `data/` is writable, Node version. (The browser
+   wizard's PHP-extension checks don't translate to a Node CLI; this
+   step exists for parity of experience, not identical content.)
+3. **Database type** — always PostgreSQL (no real choice, displayed for
+   parity); table prefix, rejecting anything but `wt_` immediately.
+4. **Database connection** — host/port/user/password/name, then
+   actually tests the connection (`ensureDatabase()`) before proceeding,
+   looping back to re-prompt on failure — capped at 3 attempts when
+   stdin isn't a real terminal (see the finding below for why an
+   uncapped loop is dangerous there), uncapped for a real interactive
+   user (same as the browser wizard, which never limits retries either).
+5. **Administrator account & site settings** — name/username/email/
+   password, base URL, pretty-URLs toggle.
+6. **Install** — runs the golden SQL, creates/updates the admin user
+   (idempotent: looked up by email then username, mirroring
+   `SetupWizard::createConfigFile()`'s "may already exist" handling),
+   upserts the 4 admin preferences, writes `data/config.yaml`.
+
+**A real Node bug found and worked around, not assumed away.**
+`node:readline/promises`'s `question()` — the obvious, modern choice for
+an `async`/`await` step-by-step prompt flow — only resolves correctly
+for the *first* call when stdin is piped/non-TTY (scripted answers,
+CI, or this doc's own testing): every later `question()` call on the
+same interface hangs forever. Root cause, confirmed by direct
+reproduction: when a whole piped input arrives as one chunk, `readline`
+synchronously emits a `'line'` event for *every* complete line in that
+chunk, back-to-back, in one tight loop — before the `await`-deferred
+continuation that would register the *next* `question()`'s one-shot
+`'line'` listener ever gets a turn on the microtask queue. By the time
+that continuation runs, every line has already been emitted into the
+void and consumed, so the newly-registered listener never fires. Proven
+with an isolated repro (plain nested callbacks, no `await` between
+calls, work fine on the exact same piped input; anything that `await`s
+between two `question()` calls doesn't). Fixed by *not* using `readline`
+at all for non-TTY input: `promptText()`/`promptPassword()` detect
+`process.stdin.isTTY` and, when it's `false`, read the entirety of
+stdin synchronously up front (`readFileSync(0, 'utf8')`) and serve
+answers from that pre-split queue instead — which is also just the
+correct behavior for piped input anyway, since there's no real
+back-and-forth to have. Real TTY input still uses a single shared
+`readline` interface normally (proven to work correctly there). **Lesson: never assume a "just use `await`" rewrite of a callback-based
+Node API is behavior-preserving for non-interactive stdin — test the
+exact I/O mode (piped vs. TTY) the code will actually run under.**
 
 ### 4. `docker-compose.yml` / `docker/php.Dockerfile`
 
