@@ -248,6 +248,19 @@ separate decision — see "Open decisions" below.
   `phase5-postgres-setup-cli.md`'s new "Running this against the
   docker-compose.yml stack" section.
 
+- **"My account" 404'd for any logged-in user with a tree** (2026-09-19):
+  PHP's real route is `/my-account{/tree}` — the "My account" link
+  always includes the current tree's name — but `pages-server/index.mjs`
+  did an exact `/my-account` pathname match, 404ing the actual link
+  every tree-browsing user clicks. This step's scope was always
+  "no-tree variant only" (skip the 2 tree-scoped display fields), never
+  "reject a URL with a tree segment". Fixed with a new
+  `pages-server/routes.mjs::isMyAccountPath()` (accepts `/my-account`
+  and `/my-account/<anything>`, still rejects `/my-account-delete`),
+  unit-tested in `js-tests/pages_server_routes.test.js`. **Needs
+  `docker compose restart pages`** to take effect — it's a long-running
+  process, bind-mounted source edits don't restart it.
+
 ## Open issues (found during manual testing, not yet fixed)
 
 Both surfaced when the user manually exercised the app in a browser
