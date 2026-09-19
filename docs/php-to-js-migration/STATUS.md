@@ -210,6 +210,21 @@ separate decision — see "Open decisions" below.
   running `app` container — the PHP code fix itself is bind-mounted and
   live without a rebuild.
 
+- **`setup-cli/` died silently after the password prompt** (2026-09-19):
+  `promptPassword()` opened its own raw-mode `data` listener directly on
+  `stdin` while the shared `readline` interface (used by every other
+  prompt) was still attached to the same stream — doubled every
+  keystroke's echo (`w*e*b*t*r*e*e*s*` instead of `*********`) and left
+  the shared interface desynced afterward, so the very next prompt
+  ("Database name") had nothing listening to keep the event loop alive
+  and Node exited silently — reported live by the user hitting exactly
+  this at step 4. Fixed in `setup-cli/prompt.mjs` by fully closing the
+  shared interface before reading raw keystrokes and letting the next
+  prompt lazily recreate one. Verified with a pty-based harness (piped
+  stdin can't exercise the TTY code path) — see
+  `[[migration-php-to-js]]` for the harness approach if this class of
+  bug needs reproducing again. Full JS suite: 4038 tests, green.
+
 ## Open issues (found during manual testing, not yet fixed)
 
 Both surfaced when the user manually exercised the app in a browser
