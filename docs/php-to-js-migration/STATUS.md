@@ -225,6 +225,16 @@ separate decision — see "Open decisions" below.
   `[[migration-php-to-js]]` for the harness approach if this class of
   bug needs reproducing again. Full JS suite: 4038 tests, green.
 
+- **`setup-cli/` crashed re-running against a database from an earlier
+  install** (2026-09-19): step 6 blindly ran the golden schema SQL,
+  crashing with a raw `relation "wt_block" already exists` instead of
+  asking. Step 4 now checks for existing `wt_`-prefixed tables right
+  after connecting and asks whether to overwrite (drops just those
+  tables, CASCADE, then proceeds) or keep them (loops back to connect
+  to a different database) — see `setup-cli/pg.mjs`'s
+  `findExistingWebtreesTables()`/`dropTables()`. Verified live against
+  a real leftover 32-table Postgres database both ways.
+
 ## Open issues (found during manual testing, not yet fixed)
 
 Both surfaced when the user manually exercised the app in a browser
