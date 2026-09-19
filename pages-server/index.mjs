@@ -28,6 +28,7 @@
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { loadDbConfig } from './config.mjs';
+import { isMyAccountPath } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
 import { renderAccountPage } from './account-view.mjs';
@@ -102,7 +103,7 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (url.pathname !== '/my-account') {
+  if (!isMyAccountPath(url.pathname)) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('Not Found');
     return;
