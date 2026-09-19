@@ -299,6 +299,26 @@ separate decision — see "Open decisions" below.
   `js-tests/pages_server_account_view.test.js`. **Needs `docker
   compose restart pages`** to take effect live.
 
+- **`proxy` crashed the entire site on a late backend parse error**
+  (2026-09-19): PHP's `php -S` dev server can send trailing bytes past
+  its own declared `Connection: close`, which Node's http client
+  surfaces as a LATE `'error'` event on the proxy's outgoing request —
+  *after* the real response had already been sent to the client
+  successfully. `proxy/index.mjs`'s error handler called
+  `clientRes.writeHead()`/`.end()` unconditionally, throwing
+  `ERR_HTTP_HEADERS_SENT` — an uncaught exception from an `'error'`
+  handler is fatal in Node, so this took down the whole `proxy`
+  container, not just the one request. Fixed by checking
+  `clientRes.headersSent` first. Reproduced deterministically with a
+  fake backend that sends the exact same trailing-garbage-after-close
+  bytes; confirmed the crash on the old code and its absence after the
+  fix, both via a live repro and a new permanent regression test
+  (`js-tests/proxy_handler_crash_regression.test.js`). Request-handling
+  logic was split out of `proxy/index.mjs` into a new
+  `proxy/handler.mjs` (`createProxyHandler()`) to make this testable
+  without spawning a real child process. **Needs `docker compose
+  restart proxy`** to take effect.
+
 ## Open issues (found during manual testing, not yet fixed)
 
 Both surfaced when the user manually exercised the app in a browser
