@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-19. This is the entry point for "where are we" —
+**Last updated: 2026-09-19 (setup-wizard MySQL-socket bug fixed). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -187,6 +187,28 @@ separate decision — see "Open decisions" below.
   the shared service.
 - **Two unrelated bugs found during manual browser testing** (not
   migration regressions — see next section) are still open.
+
+## Fixed bugs (found during manual testing)
+
+- **Setup wizard crashed selecting Postgres/SQLite/SQL Server**
+  (2026-09-19): `SetupWizard::step4DatabaseConnection()` and
+  `step5Administrator()`'s catch block both called
+  `PhpService::pdoMysqlDefaultSocket()` unconditionally for every
+  `dbtype`, even though only `step-4-database-mysql.phtml` uses the
+  result. On our Docker image (`pdo_sqlite`/`pdo_pgsql` only, no
+  `pdo_mysql`), this crashed with `Fatal error: Uncaught
+  RuntimeException: Cannot read PHP configuration:
+  pdo_mysql.default_socket` — reported live by the user selecting
+  Postgres in the browser wizard. Fixed by guarding both call sites on
+  `dbtype === DB::MYSQL`, and added `pdo_mysql` to
+  `docker/php.Dockerfile` so the browser wizard's MySQL option (which
+  legitimately needs the extension) still works. Regression test:
+  `tests/Unit/Http/RequestHandlers/SetupWizardTest.php`. Full suite
+  re-verified afterward: still exactly the same 19 known-baseline
+  failures, zero new regressions. **Requires `docker compose up
+  --build`** to pick up the Dockerfile's new `pdo_mysql` extension in a
+  running `app` container — the PHP code fix itself is bind-mounted and
+  live without a rebuild.
 
 ## Open issues (found during manual testing, not yet fixed)
 
