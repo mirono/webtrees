@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-19 (setup-wizard MySQL-socket bug fixed). This is the entry point for "where are we" —
+**Last updated: 2026-09-19 (`/login` ported to Node, phase 5 step 3). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -27,7 +27,12 @@ browser setup wizard's *provisioning* job for that one path — see
 ports the first real HTTP route (`/my-account`) to a standalone Node
 server sitting behind a new reverse proxy, sharing PHP's own login
 session with no PHP-specific parsing needed — see
-[phase5-first-node-route.md](phase5-first-node-route.md). Two
+[phase5-first-node-route.md](phase5-first-node-route.md). Step 3 ports
+`/login` — the first route where Node must *write* a session the real
+PHP app recognizes, not just read one PHP already wrote, requiring a
+small codec for PHP's session serialization format (verified
+byte-for-byte against real PHP) — see
+[phase5-login-route.md](phase5-login-route.md). Two
 unrelated, pre-existing bugs were observed during manual testing in
 phase 4 and are recorded but not yet fixed (see "Open issues" below).
 
@@ -90,6 +95,7 @@ just adding latency.
 | 4b | Cutover: delete native fallback, module by module | **Done (2026-09-16), all 6 of 6** — see table below |
 | 5.1 | Node CLI + YAML config, Postgres-only, replaces the browser wizard's *provisioning* job for that one path | **Done (2026-09-17)** — [phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md) |
 | 5.2 | First real HTTP route (`/my-account`) served entirely by Node, behind a new reverse proxy, sharing PHP's login session | **Done (2026-09-19)** — [phase5-first-node-route.md](phase5-first-node-route.md) |
+| 5.3 | `/login` served entirely by Node — the first route where Node *writes* a session (not just reads one PHP wrote), via a small PHP-session-format codec | **Done (2026-09-19)** — [phase5-login-route.md](phase5-login-route.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -119,6 +125,22 @@ session cookie. Verified twice: directly on the host, then through the
 real `docker compose up --build` stack, both times with a real login
 through PHP, a real account update through Node, and real resulting
 database rows.
+
+**Step 3**, [phase5-login-route.md](phase5-login-route.md), is also
+**done and fully verified end-to-end**: `/login` is now served
+entirely by Node — the first route where Node must *write* a session
+the real PHP app recognizes, not just read one PHP already wrote,
+since `Auth::id()` on every PHP page reads `$_SESSION['wt_user']` from
+the PHP-serialized `session_data` blob, not the denormalized
+`wt_session.user_id` column step 2 got away with reading directly. New
+`pages-server/php-serialize.mjs` implements exactly the 4 value kinds
+(int/bool/string/null) this app's own `$_SESSION` ever stores —
+verified byte-for-byte against real PHP's `session_encode()`, and
+confirmed real PHP's `session_decode()` correctly reads a Node-encoded
+session back. The end-to-end proof: a Node-issued login session
+cookie, handed directly to the real PHP app (not `pages-server`),
+correctly redirected to the "already logged in" destination instead of
+showing the login form.
 
 ## The 6 bridges: final state
 
