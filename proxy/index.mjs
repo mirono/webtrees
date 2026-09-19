@@ -28,47 +28,16 @@
 // ever needs to route by path and stream two directions, not the full
 // generality an npm proxy library would offer.
 
-import { createServer, request as httpRequest } from 'node:http';
-import { isNodeRoute, rewriteForPages, NODE_ROUTE_PATHS } from './routing.mjs';
+import { createServer } from 'node:http';
+import { NODE_ROUTE_PATHS } from './routing.mjs';
+import { createProxyHandler } from './handler.mjs';
 
 const PORT = Number(process.env.PORT) || 8000;
 
 const APP_TARGET = { host: process.env.APP_HOST || 'app', port: Number(process.env.APP_PORT) || 8000 };
 const PAGES_TARGET = { host: process.env.PAGES_HOST || 'pages', port: Number(process.env.PAGES_PORT) || 8092 };
 
-const server = createServer((clientReq, clientRes) => {
-  const url = new URL(clientReq.url, 'http://localhost');
-  const toPages = isNodeRoute(url.pathname, url.searchParams);
-  const target = toPages ? PAGES_TARGET : APP_TARGET;
-  const outgoingPath = toPages ? rewriteForPages(url) : clientReq.url;
-
-  const proxyReq = httpRequest(
-    {
-      host: target.host,
-      port: target.port,
-      path: outgoingPath,
-      method: clientReq.method,
-      headers: {
-        ...clientReq.headers,
-        'x-forwarded-for': clientReq.socket.remoteAddress,
-        'x-forwarded-proto': 'http',
-        'x-forwarded-host': clientReq.headers.host ?? '',
-      },
-    },
-    (proxyRes) => {
-      clientRes.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(clientRes);
-    },
-  );
-
-  proxyReq.on('error', (error) => {
-    console.error(`Proxy error forwarding to ${target.host}:${target.port}:`, error.message);
-    clientRes.writeHead(502, { 'content-type': 'text/plain' });
-    clientRes.end('Bad Gateway');
-  });
-
-  clientReq.pipe(proxyReq);
-});
+const server = createServer(createProxyHandler({ appTarget: APP_TARGET, pagesTarget: PAGES_TARGET }));
 
 server.listen(PORT, () => {
   console.log(
