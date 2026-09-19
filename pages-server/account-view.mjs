@@ -65,8 +65,21 @@ export function renderAccountPage({ user, contactMethods, languages, timezones, 
     ? `<div class="alert alert-${escapeHtml(message.status)}" role="alert">${escapeHtml(message.text)}</div>`
     : '';
 
+  // dir="ltr" is required, not decorative: both vendor.min.css (Bootstrap
+  // 5.3's RTL-aware CSS) and webtrees.min.css scope large numbers of
+  // rules - including .row's own gutter margins/padding and
+  // .wt-page-options-label's background color - behind a "[dir]"
+  // ancestor attribute selector, matching PHP's own
+  // <html dir="<?= I18N::locale()->direction() ?>" ...> (layouts/default.phtml).
+  // Without it, those rules simply never match - confirmed live: this
+  // was the actual cause of a reported "looks awful" page (raw
+  // borderless-gutter inputs, invisible white-on-white labels), not a
+  // stylesheet-loading failure. Hardcoded to "ltr" (not derived from
+  // the user's language) because this page's own copy is hardcoded
+  // English throughout already (see lang="en" below) - matching that
+  // existing scope, not a new one.
   return `<!DOCTYPE html>
-<html lang="en">
+<html dir="ltr" lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
