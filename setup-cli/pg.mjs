@@ -87,10 +87,68 @@ export async function ensureDatabase({ host, port, user, password, database }) {
 }
 
 /**
+ * Lists tables already present in the target database whose name starts
+ * with the given table prefix (e.g. "wt_") - used to detect a prior
+ * install before blindly running the schema SQL, which would otherwise
+ * fail with a raw "relation ... already exists" error partway through.
+ * Every table in golden/postgres-schema.sql uses the "wt_" prefix (all
+ * 32 of them, confirmed directly against that file), so this check is
+ * exhaustive for the one prefix this tool supports.
+ */
+export async function findExistingWebtreesTables(config, tblpfx) {
+  const client = new Client(config);
+
+  await client.connect();
+
+  try {
+    // LIKE wildcards ("_" and "%") can appear in a literal prefix in
+    // principle, so escape them - even though this tool only ever
+    // passes the fixed "wt_" prefix today.
+    const likePattern = tblpfx.replaceAll('\\', '\\\\').replaceAll('_', '\\_').replaceAll('%', '\\%') + '%';
+
+    const { rows } = await client.query(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name LIKE $1
+       ORDER BY table_name`,
+      [likePattern],
+    );
+
+    return rows.map((row) => row.table_name);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Drops the given tables (by exact name) from the target database, with
+ * CASCADE so dependent views/foreign keys don't block the drop - used
+ * to clear out a prior install once the person running this CLI has
+ * explicitly confirmed they want to overwrite it.
+ */
+export async function dropTables(config, tableNames) {
+  if (tableNames.length === 0) {
+    return;
+  }
+
+  const client = new Client(config);
+
+  await client.connect();
+
+  try {
+    const identifiers = tableNames.map((name) => '"' + name.replaceAll('"', '""') + '"').join(', ');
+
+    await client.query(`DROP TABLE IF EXISTS ${identifiers} CASCADE`);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Runs golden/postgres-schema.sql then golden/postgres-seed.sql against
  * the target database, verbatim. Safe to call only against a database
- * that doesn't already have these tables - re-running against a
- * non-empty database is not supported (see the phase 5 doc).
+ * that doesn't already have these tables - callers should check with
+ * findExistingWebtreesTables()/dropTables() first (setup-cli/index.mjs's
+ * stepDatabaseConnection() does this).
  */
 export async function runSchemaAndSeed(config) {
   const client = new Client(config);

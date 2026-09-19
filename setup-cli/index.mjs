@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { parseCliArgs, printHelp } from './args.mjs';
 import { promptText, promptPassword, promptChoice, closePrompt } from './prompt.mjs';
-import { ensureDatabase, runSchemaAndSeed, upsertAdminUser } from './pg.mjs';
+import { ensureDatabase, findExistingWebtreesTables, dropTables, runSchemaAndSeed, upsertAdminUser } from './pg.mjs';
 import { renderConfigYaml } from './config-writer.mjs';
 import { loadSetupLanguages, findLanguageIndex, DEFAULT_LANGUAGE_TAG } from './languages.mjs';
 
@@ -140,7 +140,7 @@ async function stepDatabaseType(args) {
 // loop). Cap it whenever stdin isn't a real terminal.
 const MAX_CONNECTION_ATTEMPTS = process.stdin.isTTY ? Infinity : 3;
 
-async function stepDatabaseConnection(args) {
+async function stepDatabaseConnection(args, tblpfx) {
   stepHeader(4, 6, 'Database connection');
 
   for (let attempt = 1; attempt <= MAX_CONNECTION_ATTEMPTS; attempt++) {
@@ -156,8 +156,6 @@ async function stepDatabaseConnection(args) {
 
     try {
       await ensureDatabase(dbConfig);
-      console.log('  Connection successful.');
-      return dbConfig;
     } catch (error) {
       console.error(`  Connection failed: ${error.message ?? error}`);
 
@@ -172,6 +170,50 @@ async function stepDatabaseConnection(args) {
       }
 
       console.log('  Let\'s try again.');
+      continue;
+    }
+
+    console.log('  Connection successful.');
+
+    // Detect a prior install before step 6 blindly runs the schema SQL,
+    // which would otherwise fail partway through with a raw "relation
+    // ... already exists" error instead of a clear choice - reported
+    // live by a user re-running this CLI against a database from an
+    // earlier attempt.
+    const existingTables = await findExistingWebtreesTables(dbConfig, tblpfx);
+
+    if (existingTables.length === 0) {
+      return dbConfig;
+    }
+
+    console.log(
+      `  Database "${dbName}" already has ${existingTables.length} webtrees table(s) ` +
+        `(e.g. "${existingTables[0]}") - this looks like an existing install.`,
+    );
+
+    const overwrite = (
+      await promptText('Overwrite it and start fresh? All existing data will be lost. (y/N)', 'N')
+    ).toLowerCase().startsWith('y');
+
+    if (overwrite) {
+      console.log('  Dropping existing webtrees tables...');
+      await dropTables(dbConfig, existingTables);
+      return dbConfig;
+    }
+
+    if (args['db-host'] !== undefined) {
+      // Connection details were given as flags, not prompted for -
+      // nothing to usefully retry without human input.
+      throw new Error(
+        `Database "${dbName}" already has webtrees tables, and the connection details were given as flags, ` +
+          'so there is no one to confirm an overwrite with - point --db-name at an empty database instead.',
+      );
+    }
+
+    console.log('  Keeping it untouched - let\'s connect to a different database instead.\n');
+
+    if (attempt === MAX_CONNECTION_ATTEMPTS) {
+      throw new Error(`Gave up after ${attempt} attempts without finding an empty database to install into.`);
     }
   }
 }
@@ -234,7 +276,7 @@ async function main() {
     const lang = await stepLanguage(args);
     stepServerCheck();
     const dbTypeInfo = await stepDatabaseType(args);
-    const dbConfig = await stepDatabaseConnection(args);
+    const dbConfig = await stepDatabaseConnection(args, dbTypeInfo.tblpfx);
     const admin = await stepAdministrator(args);
 
     await stepInstall({ lang, dbTypeInfo, dbConfig, admin });
