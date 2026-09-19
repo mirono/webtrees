@@ -171,6 +171,27 @@ export async function promptPassword(question) {
     return promptText(question, undefined, { silent: true });
   }
 
+  // A masked password prompt has to read raw keystrokes itself -
+  // readline's own line editing always echoes the real character back,
+  // with no built-in "mask with *" mode - which means it can't run
+  // alongside the shared readline interface every other prompt in this
+  // file uses via getInterface(): both would be listening to the same
+  // stdin stream at once. That produced two real bugs, confirmed live:
+  // every keystroke got echoed twice (readline's own echo, plus this
+  // function's own "*", interleaved - "w*e*b*t*r*e*e*s*" for "webtrees"),
+  // and pausing/detaching from stdin afterward left the shared readline
+  // interface's internal state desynced from the stream's actual
+  // paused/flowing state, so the very next promptText() call (e.g. the
+  // "Database name" prompt right after a password) had nothing left
+  // actually listening to keep the event loop alive - Node exited
+  // silently instead of prompting. Fixed by fully closing the shared
+  // interface before reading raw keystrokes here, and letting the next
+  // promptText()/promptChoice() call lazily create a brand new one
+  // afterward via getInterface() rather than trying to hand the same
+  // interface back and forth between two different input-handling
+  // modes.
+  closePrompt();
+
   return new Promise((resolve) => {
     process.stdout.write(`${question}: `);
 
