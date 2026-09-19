@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-19 (`/login` ported to Node, phase 5 step 3). This is the entry point for "where are we" —
+**Last updated: 2026-09-19 (`/logout` ported to Node, phase 5 step 4). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -32,7 +32,12 @@ session with no PHP-specific parsing needed — see
 PHP app recognizes, not just read one PHP already wrote, requiring a
 small codec for PHP's session serialization format (verified
 byte-for-byte against real PHP) — see
-[phase5-login-route.md](phase5-login-route.md). Two
+[phase5-login-route.md](phase5-login-route.md). Step 4 ports `/logout`,
+reusing that same session infrastructure to destroy a session instead
+of creating one, and fixes a real bug found along the way: the "Sign
+out" link's client-side JS has been silently failing on every
+Node-served page since step 2, missing a `<meta name="csrf">` tag its
+own `httpPost()` helper requires. Two
 unrelated, pre-existing bugs were observed during manual testing in
 phase 4 and are recorded but not yet fixed (see "Open issues" below).
 
@@ -96,6 +101,7 @@ just adding latency.
 | 5.1 | Node CLI + YAML config, Postgres-only, replaces the browser wizard's *provisioning* job for that one path | **Done (2026-09-17)** — [phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md) |
 | 5.2 | First real HTTP route (`/my-account`) served entirely by Node, behind a new reverse proxy, sharing PHP's login session | **Done (2026-09-19)** — [phase5-first-node-route.md](phase5-first-node-route.md) |
 | 5.3 | `/login` served entirely by Node — the first route where Node *writes* a session (not just reads one PHP wrote), via a small PHP-session-format codec | **Done (2026-09-19)** — [phase5-login-route.md](phase5-login-route.md) |
+| 5.4 | `/logout` served entirely by Node — destroys the session, reusing step 3's infrastructure; also fixed a live "Sign out" bug | **Done (2026-09-19)** — see phase5-login-route.md's login/logout pairing |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -141,6 +147,24 @@ session back. The end-to-end proof: a Node-issued login session
 cookie, handed directly to the real PHP app (not `pages-server`),
 correctly redirected to the "already logged in" destination instead of
 showing the login form.
+
+**Step 4** ports `/logout`, the natural complement to step 3: reuses
+`session-store.mjs`'s new `destroySession()` (mirrors
+`SessionDatabaseHandler::destroy()`) rather than building new session
+infrastructure. Faithfully replicates a detail easy to miss reading
+`Logout.php` too quickly: hitting `/logout` while already anonymous is
+a **complete no-op** on the PHP side — no log write, no session
+touched at all — `doLogout()` replicates that precisely. Also fixed a
+real, currently-live bug found while tracing the "Sign out" link's
+actual behavior: `resources/js/webtrees/init.js`'s click handler calls
+`httpPost()`, which unconditionally reads `<meta name="csrf">` from the
+page `<head>` and throws *synchronously* (before ever sending a
+request) if that tag is missing. Neither `account-view.mjs` nor
+`login-view.mjs` rendered it, so clicking "Sign out" on the live
+`/my-account` page had been silently doing nothing since step 2
+landed. Both views now include the tag. Verified end-to-end against
+the real Postgres database, including confirming the anonymous-logout
+no-op behavior and that both views now render the CSRF meta tag.
 
 ## The 6 bridges: final state
 

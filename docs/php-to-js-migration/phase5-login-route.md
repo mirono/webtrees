@@ -1,4 +1,4 @@
-# Phase 5, step 3: `/login{/tree}` ported to Node — the first route where Node writes a session
+# Phase 5, steps 3-4: `/login{/tree}` and `/logout` ported to Node
 
 ## Context
 
@@ -161,3 +161,55 @@ distinction, confirmed `x-forwarded-for` was already plumbed by the
 proxy (no proxy change needed for IP logging), and flagged the
 session-ID-charset question (resolved by using hex, a valid subset of
 every possible PHP `sid_bits_per_character` setting).
+
+## Step 4: `/logout`
+
+The natural complement to step 3, landed the same day, reusing step
+3's session infrastructure rather than building anything new:
+`session-store.mjs` gained `destroySession()` (mirrors
+`SessionDatabaseHandler::destroy()`, invoked by `Auth::logout()` →
+`Session::regenerate($destroy=true)`) and
+`sessionClearCookieHeader()` (hygiene — clears the browser's cookie
+for the now-deleted session; PHP doesn't bother with this explicitly
+since `session_regenerate_id()` transparently issues a fresh
+replacement cookie, but there's no equivalent "assign a replacement"
+step in a destroy-only flow).
+
+**A detail easy to miss reading `Logout.php` too quickly**: it only
+touches the session *at all* — log write, `Auth::logout()` — inside
+`if ($user instanceof User)`. Hitting `/logout` while already
+anonymous is a **complete no-op** on the PHP side. `pages-server/logout.mjs`'s
+`doLogout()` replicates this precisely (verified live: an anonymous
+`/logout` leaves the `wt_log` row count unchanged and touches no
+session row), rather than the more obvious-seeming "always destroy
+whatever session cookie was presented."
+
+**A real, currently-live bug found and fixed along the way**: tracing
+how the "Sign out" link (`data-wt-post-url="/logout"`,
+`app/Module/ModuleThemeTrait.php:270`) actually works led to
+`resources/js/webtrees/init.js`'s click handler, which calls
+`httpPost()` (`resources/js/webtrees/http.js`). That function
+unconditionally does
+`document.head.querySelector('meta[name=csrf]').getAttribute('content')`
+— a synchronous `TypeError` if the tag is missing, thrown *before* any
+network request is sent. Neither `account-view.mjs` nor
+`login-view.mjs` rendered that tag, so clicking "Sign out" on the live
+`/my-account` page had been silently doing nothing since step 2
+landed — not a hypothetical, a real dead button. Both views now
+include `<meta name="csrf" content="...">`, reusing each page's own
+already-computed CSRF token.
+
+Response shape matches `Logout.php` exactly: `204` empty body for an
+AJAX request (`x-requested-with: XMLHttpRequest`, which `httpPost()`
+always sends), otherwise a `302` redirect home. No CSRF check — `CheckCsrf.php`
+explicitly excludes `Logout::class`. PHP's route (`/logout`) has no
+optional `{tree}` segment, unlike `/my-account` and `/login` —
+`isLogoutPath()` is accordingly an exact match only.
+
+Verified end-to-end against the real Postgres database (same
+temporarily-localhost-then-restore pattern as step 3): logged in,
+confirmed the session row existed, `POST /logout` with
+`X-Requested-With` → `204` + cleared cookie + the session row actually
+deleted + the correct `wt_log` entry written; separately confirmed the
+anonymous-logout no-op and that both views render the CSRF meta tag.
+Full JS suite: 4102 tests, green.
