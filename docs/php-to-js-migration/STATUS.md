@@ -261,6 +261,22 @@ separate decision — see "Open decisions" below.
   `docker compose restart pages`** to take effect — it's a long-running
   process, bind-mounted source edits don't restart it.
 
+- **"My account" looked unstyled once it finally rendered** (2026-09-19):
+  no visible field labels, no spacing between rows, raw browser-default
+  input boxes — despite both stylesheets loading with a clean 200 and
+  correct bytes (confirmed via DevTools, ruling out a loading bug).
+  Root cause: `vendor.min.css` (Bootstrap 5.3's RTL-aware CSS) and
+  `webtrees.min.css` both scope large numbers of rules — including
+  `.row`'s own gutter margins/padding and
+  `.wt-page-options-label`'s background color — behind a `[dir]`
+  ancestor attribute selector. PHP's real layout always sets
+  `<html dir="...">`; `pages-server/account-view.mjs`'s `<html
+  lang="en">` had no `dir` attribute at all, so those rules never
+  matched. Fixed by hardcoding `dir="ltr"` (matching the page's
+  already-hardcoded English-only copy). New
+  `js-tests/pages_server_account_view.test.js`. **Needs `docker
+  compose restart pages`** to take effect live.
+
 ## Open issues (found during manual testing, not yet fixed)
 
 Both surfaced when the user manually exercised the app in a browser
