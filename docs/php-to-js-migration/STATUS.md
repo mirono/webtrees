@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-17. This is the entry point for "where are we" —
+**Last updated: 2026-09-19. This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -23,7 +23,11 @@ inert (100% original PHP behavior) when that env var is unset. **Phase 5**
 that provisions a PostgreSQL-backed install end-to-end (schema, seed
 data, admin user) and writes a new YAML config file, replacing the
 browser setup wizard's *provisioning* job for that one path — see
-[phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md). Two
+[phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md). Step 2
+ports the first real HTTP route (`/my-account`) to a standalone Node
+server sitting behind a new reverse proxy, sharing PHP's own login
+session with no PHP-specific parsing needed — see
+[phase5-first-node-route.md](phase5-first-node-route.md). Two
 unrelated, pre-existing bugs were observed during manual testing in
 phase 4 and are recorded but not yet fixed (see "Open issues" below).
 
@@ -84,7 +88,8 @@ just adding latency.
 | 3 | Bridge design + build (3 bridges initially, then 3 more after "bridge decision pass 2") | Done — [phase3-bridge-decision-pass-2.md](phase3-bridge-decision-pass-2.md) et al. |
 | 4a | Shared test infrastructure (one Node process per PHPUnit run) | Done (2026-09-13) — [phase4-shared-test-migration-service.md](phase4-shared-test-migration-service.md) |
 | 4b | Cutover: delete native fallback, module by module | **Done (2026-09-16), all 6 of 6** — see table below |
-| 5.1 | Node CLI + YAML config, Postgres-only, replaces the browser wizard's *provisioning* job for that one path | **In progress (started 2026-09-17)** — [phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md) |
+| 5.1 | Node CLI + YAML config, Postgres-only, replaces the browser wizard's *provisioning* job for that one path | **Done (2026-09-17)** — [phase5-postgres-setup-cli.md](phase5-postgres-setup-cli.md) |
+| 5.2 | First real HTTP route (`/my-account`) served entirely by Node, behind a new reverse proxy, sharing PHP's login session | **Done (2026-09-19)** — [phase5-first-node-route.md](phase5-first-node-route.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -101,6 +106,19 @@ entirely by the Node CLI, produced a genuine authenticated admin session
 row that would have crashed every CLI-provisioned site's first request).
 The existing browser wizard, `config.ini.php`, and MySQL/SQLite/SQL
 Server support are all completely unaffected by this step.
+
+**Step 2**, [phase5-first-node-route.md](phase5-first-node-route.md), is
+also **done and fully verified end-to-end**: the first real HTTP route
+(`/my-account`) is now served entirely by a new Node server
+(`pages-server/`), sitting behind a new reverse proxy (`proxy/`) that
+sends that one path to Node and everything else to PHP unchanged. The
+key finding: webtrees already stores sessions in the database with
+`user_id` as its own column, so identifying the logged-in user needed
+no PHP-specific session parsing at all — just a plain SQL lookup on the
+session cookie. Verified twice: directly on the host, then through the
+real `docker compose up --build` stack, both times with a real login
+through PHP, a real account update through Node, and real resulting
+database rows.
 
 ## The 6 bridges: final state
 

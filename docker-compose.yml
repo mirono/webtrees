@@ -20,6 +20,23 @@ name: webtrees-dev
 # data/config.ini.php (already present in this repo) are used as-is by
 # the app service unless data/config.yaml exists (see setup-cli/).
 #
+# BREAKING CHANGE from earlier versions of this file: `app` no longer
+# publishes port 8000 to the host directly — `proxy` does now (see
+# below). If you had localhost:8000 bookmarked pointing straight at the
+# PHP container, it still works, just via a different container in
+# front; nothing else about the app itself changed.
+#
+# `proxy` + `pages` (phase 5, step 2 of the php-to-js migration — see
+# docs/php-to-js-migration/phase5-first-node-route.md) are the first
+# real HTTP-route cutover: `proxy` sends /my-account to `pages` (a
+# real, separate Node server) and everything else to `app` (PHP),
+# unchanged. Both share the same Postgres database and the same login
+# session, so this only works once the site is Postgres-backed (run
+# setup-cli/ first, or see that doc). If you never run setup-cli/, `app`
+# keeps working exactly as before through `proxy` — visiting
+# /my-account just gets you `pages`' error page instead of PHP's, since
+# `pages` can't read a sqlite install.
+#
 # `postgres` is a local Postgres, used two ways: (1) as the target for
 # setup-cli/ (the new Node setup tool, phase 5 of the php-to-js
 # migration — see docs/php-to-js-migration/phase5-postgres-setup-cli.md),
@@ -56,8 +73,8 @@ services:
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       WEBTREES_SOUNDEX_SERVICE_URL: http://migration:8090
       WEBTREES_SURNAME_TRADITION_SERVICE_URL: http://migration:8090
@@ -85,6 +102,39 @@ services:
       timeout: 2s
       retries: 5
       start_period: 5s
+
+  pages:
+    image: node:22-alpine
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    environment:
+      PORT: "8092"
+    command: ["node", "pages-server/index.mjs"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8092/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+
+  proxy:
+    image: node:22-alpine
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      APP_HOST: app
+      APP_PORT: "8000"
+      PAGES_HOST: pages
+      PAGES_PORT: "8092"
+    command: ["node", "proxy/index.mjs"]
+    depends_on:
+      - app
+      - pages
 
 volumes:
   webtrees-postgres-data:
