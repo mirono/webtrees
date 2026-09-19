@@ -29,6 +29,25 @@ step moved to Node here. The PHP app must still be able to read whichever
 config file setup produced, so a small, additive PHP-side change was
 unavoidably part of this task.
 
+**Running this against the `docker-compose.yml` stack**: prefer running
+the CLI itself inside the same Docker network, not from the host:
+
+```
+docker compose exec migration node setup-cli/index.mjs
+```
+
+(`migration` is already bind-mounted to the repo and on the same network
+as `postgres`.) From there, `postgres` is the correct PostgreSQL host to
+type at the prompt — both for the CLI's own connection and for the
+`dbhost` value it writes to `data/config.yaml`, which the dockerized
+`app`/`pages` containers read later. Running the CLI on the host instead
+means typing `localhost` (the only thing the CLI itself can reach) while
+the *containers* need `postgres` — a real, recurring mismatch (hit three
+times during this migration) that now prints an on-screen warning in the
+CLI itself (`setup-cli/index.mjs`'s `warnIfLoopbackHost()`) but still
+requires hand-editing `dbhost` in `data/config.yaml` afterward if you
+don't use the container-based run above.
+
 ## What already existed (reused, not rebuilt)
 
 - `app/Cli/Commands/ConfigIni.php` — a PHP Console command (`config-ini`)

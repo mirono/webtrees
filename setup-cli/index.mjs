@@ -140,11 +140,46 @@ async function stepDatabaseType(args) {
 // loop). Cap it whenever stdin isn't a real terminal.
 const MAX_CONNECTION_ATTEMPTS = process.stdin.isTTY ? Infinity : 3;
 
+// "localhost"/"127.0.0.1"/"::1" only reach Postgres from wherever THIS
+// CLI process itself is running - if webtrees (the PHP app) ends up
+// running somewhere else, e.g. the docker-compose "app" container,
+// "localhost" means that container, not the host machine or the
+// "postgres" container. Confirmed live (2026-09-19): a user provisioned
+// via this CLI running directly on the host (where "localhost" is the
+// only value that lets the CLI itself connect, since "postgres" isn't
+// resolvable outside the Docker network), and the resulting
+// data/config.yaml's "localhost" then broke the dockerized app with
+// "connection to server at localhost ... Connection refused" - fixed
+// by hand-editing dbhost afterward. This is a real, recurring trap
+// (this is the third time in this project), not a hypothetical one.
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+function warnIfLoopbackHost(dbHost) {
+  if (!LOOPBACK_HOSTS.has(dbHost)) {
+    return;
+  }
+
+  console.log(
+    `\n  Note: "${dbHost}" only works if THIS CLI itself can reach Postgres directly right now. If webtrees\n` +
+      '  will run inside the docker-compose "app" container, that container needs the Postgres service\'s\n' +
+      '  Docker network name instead (typically "postgres") - "localhost" inside a container means the\n' +
+      '  container itself, not the host machine or another container.\n' +
+      '  - Running this CLI on the host (as you are now)? Keep going, but expect to edit dbhost in\n' +
+      '    data/config.yaml afterward if webtrees itself runs in Docker.\n' +
+      '  - Want to avoid that extra step? Ctrl+C and re-run this CLI from inside the same Docker network\n' +
+      '    instead, e.g.: docker compose exec migration node setup-cli/index.mjs - then answer "postgres"\n' +
+      '    here and it\'s correct for both this connection and the config file.\n',
+  );
+}
+
 async function stepDatabaseConnection(args, tblpfx) {
   stepHeader(4, 6, 'Database connection');
 
   for (let attempt = 1; attempt <= MAX_CONNECTION_ATTEMPTS; attempt++) {
     const dbHost = await resolveValue(args['db-host'], undefined, 'PostgreSQL host', { defaultValue: 'localhost' });
+
+    warnIfLoopbackHost(dbHost);
+
     const dbPort = await resolveValue(args['db-port'], undefined, 'PostgreSQL port', { defaultValue: '5432' });
     const dbUser = await resolveValue(args['db-user'], undefined, 'PostgreSQL user');
     const dbPass = await resolveValue(args['db-pass'], 'WT_DB_PASSWORD', 'PostgreSQL password', { password: true });
