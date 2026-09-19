@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isMyAccountPath, isLoginPath } from '../pages-server/routes.mjs';
+import { isMyAccountPath, isLoginPath, isLogoutPath } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
   test('the plain, no-tree path matches', () => {
@@ -45,5 +45,28 @@ describe('isLoginPath', () => {
   test('an unrelated path does not match', () => {
     expect(isLoginPath('/my-account')).toBe(false);
     expect(isLoginPath('/')).toBe(false);
+  });
+});
+
+describe('isLogoutPath', () => {
+  test('the plain path matches', () => {
+    expect(isLogoutPath('/logout')).toBe(true);
+  });
+
+  // Unlike /my-account and /login, PHP's route for logout has no
+  // optional {tree} segment at all (app/Http/Routes/WebRoutes.php:
+  // $router->post(Logout::class, '/logout');) - a trailing segment is
+  // not a real route and should not match.
+  test('a trailing segment does not match (no {tree} segment on this route)', () => {
+    expect(isLogoutPath('/logout/ophir')).toBe(false);
+  });
+
+  test('a same-prefix but different route does not match', () => {
+    expect(isLogoutPath('/logout-help')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isLogoutPath('/login')).toBe(false);
+    expect(isLogoutPath('/')).toBe(false);
   });
 });

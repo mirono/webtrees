@@ -27,7 +27,17 @@ const MESSAGE_INCORRECT = 'The username or password is incorrect.';
 const MESSAGE_NOT_VERIFIED = 'This account has not been verified. Please check your email for a verification message.';
 const MESSAGE_NOT_APPROVED = 'This account has not been approved. Please wait for an administrator to approve it.';
 
-async function addAuthenticationLog(pool, message, clientIp, userId) {
+/**
+ * Shared with logout.mjs - both write to the same wt_log 'auth' type,
+ * matching Log::addAuthenticationLog()'s single call site used for
+ * both login and logout messages (app/Log.php:40-43).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {string} message
+ * @param {string} clientIp
+ * @param {number|null} userId
+ */
+export async function addAuthenticationLog(pool, message, clientIp, userId) {
   await pool.query('INSERT INTO wt_log (log_time, log_type, log_message, ip_address, user_id) VALUES (now(), $1, $2, $3, $4)', [
     'auth',
     message,

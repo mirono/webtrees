@@ -74,7 +74,7 @@ describe('proxy handler survives a late parse error on an already-completed resp
     // The first request triggers the misbehaving backend's
     // trailing-garbage response - this is what used to crash the
     // proxy process shortly afterward.
-    const status1 = await requestThroughProxy(proxyPort, '/index.php?route=%2Flogout');
+    const status1 = await requestThroughProxy(proxyPort, '/index.php?route=%2Fhome');
     expect(status1).toBe(204);
 
     // Give the late, stray 'error' event time to fire on the proxy's

@@ -15,13 +15,13 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-3 of the php-to-js migration
+// Phase 5, steps 2-4 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
-// proxy/index.mjs, which sends /my-account* and /login* here and
-// everything else to the PHP app - both processes share the same
+// proxy/index.mjs, which sends /my-account*, /login*, and /logout here
+// and everything else to the PHP app - both processes share the same
 // Postgres database and the same login session (see auth.mjs and, for
-// /login specifically, session-store.mjs + php-serialize.mjs).
+// /login/logout specifically, session-store.mjs + php-serialize.mjs).
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -29,18 +29,21 @@
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { loadDbConfig } from './config.mjs';
-import { isMyAccountPath, isLoginPath } from './routes.mjs';
+import { isMyAccountPath, isLoginPath, isLogoutPath } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
 import { renderAccountPage } from './account-view.mjs';
 import { updateAccount } from './account-update.mjs';
 import { renderLoginPage, isLocalPath } from './login-view.mjs';
 import { doLogin } from './login-action.mjs';
+import { doLogout } from './logout.mjs';
 import {
   loadOrCreateAnonymousSession,
   saveSession,
   regenerateSessionForLogin,
   sessionSetCookieHeader,
+  sessionClearCookieHeader,
+  findSessionCookieValue,
   newCsrfToken,
 } from './session-store.mjs';
 import { loadSetupLanguages } from '../setup-cli/languages.mjs';
@@ -313,6 +316,48 @@ async function handleLogin(req, res, url) {
   res.end('Method Not Allowed');
 }
 
+async function handleLogout(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // No CSRF check here, matching PHP: app/Http/Middleware/CheckCsrf.php
+  // explicitly excludes Logout::class from its check.
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = findSessionCookieValue(cookies);
+
+  const destroyed = await doLogout(pool, { sessionId, user, clientIp: clientIp(req) });
+
+  const headers = {};
+
+  if (destroyed) {
+    headers['set-cookie'] = sessionClearCookieHeader(isSecure(req));
+  }
+
+  if (req.headers['x-requested-with'] === 'XMLHttpRequest') {
+    res.writeHead(204, headers);
+    res.end();
+    return;
+  }
+
+  res.writeHead(302, { ...headers, Location: '/' });
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -325,6 +370,11 @@ const server = createServer(async (req, res) => {
   if (configError !== null) {
     res.writeHead(503, { 'content-type': 'text/plain' });
     res.end(`pages-server is not configured: ${configError}`);
+    return;
+  }
+
+  if (isLogoutPath(url.pathname)) {
+    await handleLogout(req, res);
     return;
   }
 

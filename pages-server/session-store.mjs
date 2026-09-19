@@ -47,7 +47,7 @@ export function newCsrfToken() {
  * @param {Record<string,string>} cookies
  * @returns {string|undefined}
  */
-function findSessionCookieValue(cookies) {
+export function findSessionCookieValue(cookies) {
   return SESSION_COOKIE_NAMES.map((name) => cookies[name]).find((value) => value !== undefined);
 }
 
@@ -151,6 +151,18 @@ export async function regenerateSessionForLogin(session, userId, clientIp, pool)
 }
 
 /**
+ * Deletes a session row outright - mirrors SessionDatabaseHandler::destroy()
+ * (app/SessionDatabaseHandler.php:105-112), invoked by
+ * Auth::logout() -> Session::regenerate($destroy=true).
+ *
+ * @param {string} sessionId
+ * @param {import('pg').Pool} pool
+ */
+export async function destroySession(sessionId, pool) {
+  await pool.query('DELETE FROM wt_session WHERE session_id = $1', [sessionId]);
+}
+
+/**
  * @param {boolean} secure
  * @param {string} sessionId
  * @returns {string} a Set-Cookie header value
@@ -160,4 +172,23 @@ export function sessionSetCookieHeader(secure, sessionId) {
   const secureAttr = secure ? '; Secure' : '';
 
   return `${name}=${sessionId}; Path=/; HttpOnly; SameSite=Lax${secureAttr}`;
+}
+
+/**
+ * Clears the session cookie client-side (Max-Age=0) - hygiene on top
+ * of destroySession()'s server-side row deletion, so the browser isn't
+ * left holding a reference to an already-deleted session_id. Real PHP
+ * doesn't bother with this explicitly (session_regenerate_id()
+ * transparently issues a fresh Set-Cookie for whatever new ID it
+ * assigns instead), but there's no equivalent "assign a replacement"
+ * step here worth replicating - see logout.mjs's doc comment.
+ *
+ * @param {boolean} secure
+ * @returns {string} a Set-Cookie header value
+ */
+export function sessionClearCookieHeader(secure) {
+  const name = secure ? '__Secure-WT-ID' : 'WT2_SESSION';
+  const secureAttr = secure ? '; Secure' : '';
+
+  return `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureAttr}`;
 }

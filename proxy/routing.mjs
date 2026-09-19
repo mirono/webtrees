@@ -22,7 +22,10 @@
 // recognize here, not just read one PHP already wrote (see
 // pages-server/php-serialize.mjs's doc comment for why that's harder
 // than it sounds).
-export const NODE_ROUTE_PATHS = ['/my-account', '/login'];
+// /logout: phase 5 step 4 - the natural complement to /login, reusing
+// the same session infrastructure to destroy a session instead of
+// creating one.
+export const NODE_ROUTE_PATHS = ['/my-account', '/login', '/logout'];
 
 function matchesNodeRoute(path, pathname) {
   return pathname === path || pathname.startsWith(`${path}/`);

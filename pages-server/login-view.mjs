@@ -81,6 +81,7 @@ export function renderLoginPage({ csrfToken, url, username, canRegister, error }
 <html dir="ltr" lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf" content="${escapeHtml(csrfToken)}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sign in</title>
     <link rel="stylesheet" href="/public/css/vendor.min.css">

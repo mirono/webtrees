@@ -48,3 +48,13 @@ export function isMyAccountPath(pathname) {
 export function isLoginPath(pathname) {
   return pathname === '/login' || pathname.startsWith('/login/');
 }
+
+/**
+ * PHP's route is a plain `/logout` (app/Http/Routes/WebRoutes.php) -
+ * no optional tree segment, unlike /my-account and /login.
+ *
+ * @param {string} pathname
+ */
+export function isLogoutPath(pathname) {
+  return pathname === '/logout';
+}

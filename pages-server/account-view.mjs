@@ -82,6 +82,13 @@ export function renderAccountPage({ user, contactMethods, languages, timezones, 
 <html dir="ltr" lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf" content="${escapeHtml(csrfToken)}">
+    <!-- resources/js/webtrees/http.js's httpPost() unconditionally reads
+         this tag and throws (synchronously, before ever sending a
+         request) if it's missing - the "Sign out" link's
+         data-wt-post-url handler (init.js:166-178) calls httpPost(),
+         so without this tag "Sign out" silently does nothing when
+         clicked. Confirmed live as a real bug, not hypothetical. -->
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>My account</title>
     <link rel="stylesheet" href="/public/css/vendor.min.css">

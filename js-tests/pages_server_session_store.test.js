@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { sessionSetCookieHeader, newCsrfToken } from '../pages-server/session-store.mjs';
+import { sessionSetCookieHeader, sessionClearCookieHeader, newCsrfToken } from '../pages-server/session-store.mjs';
 
 describe('sessionSetCookieHeader', () => {
   test('non-secure: uses the plain WT2_SESSION cookie name, no Secure attribute', () => {
@@ -12,6 +12,16 @@ describe('sessionSetCookieHeader', () => {
     const header = sessionSetCookieHeader(true, 'abc123');
 
     expect(header).toBe('__Secure-WT-ID=abc123; Path=/; HttpOnly; SameSite=Lax; Secure');
+  });
+});
+
+describe('sessionClearCookieHeader', () => {
+  test('non-secure: clears the plain WT2_SESSION cookie', () => {
+    expect(sessionClearCookieHeader(false)).toBe('WT2_SESSION=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+  });
+
+  test('secure: clears the __Secure- prefixed cookie', () => {
+    expect(sessionClearCookieHeader(true)).toBe('__Secure-WT-ID=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
   });
 });
 

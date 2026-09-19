@@ -55,6 +55,16 @@ describe('isNodeRoute', () => {
     const url = urlFor('/login-help');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
+
+  test('plain /logout', () => {
+    const url = urlFor('/logout');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/logout', () => {
+    const url = urlFor('/index.php?route=%2Flogout');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
 });
 
 describe('rewriteForPages', () => {
