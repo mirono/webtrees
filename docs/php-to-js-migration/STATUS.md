@@ -235,6 +235,19 @@ separate decision — see "Open decisions" below.
   `findExistingWebtreesTables()`/`dropTables()`. Verified live against
   a real leftover 32-table Postgres database both ways.
 
+- **`setup-cli/` now warns about `localhost` dbhost against Docker**
+  (2026-09-19): the third recurrence of the host-vs-container `dbhost`
+  mismatch — this time the user actually hit it live in the browser
+  (`RuntimeException ... connection to server at "localhost" ...
+  Connection refused`) after a clean CLI run. `stepDatabaseConnection()`
+  now prints a non-blocking warning whenever the resolved host is
+  `localhost`/`127.0.0.1`/`::1`, pointing at the fix: either edit
+  `dbhost` in `data/config.yaml` afterward, or run the CLI itself
+  inside the Docker network (`docker compose exec migration node
+  setup-cli/index.mjs`), where `postgres` is correct throughout — see
+  `phase5-postgres-setup-cli.md`'s new "Running this against the
+  docker-compose.yml stack" section.
+
 ## Open issues (found during manual testing, not yet fixed)
 
 Both surfaced when the user manually exercised the app in a browser
