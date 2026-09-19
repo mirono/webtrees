@@ -24,13 +24,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         intl \
         pdo_sqlite \
         pdo_pgsql \
+        pdo_mysql \
         zip \
         mbstring \
         curl \
     # data/config.ini.php defaults to dbtype="sqlite" (pdo_sqlite); a
     # data/config.yaml written by setup-cli/ uses dbtype="pgsql"
-    # (pdo_pgsql) — both drivers are installed so either config file
-    # works. Add pdo_mysql here too if you ever need that dbtype.
+    # (pdo_pgsql). pdo_mysql is here too so the browser setup wizard's
+    # MySQL option works, and so every pdo_mysql.* ini directive it
+    # reads actually exists — SetupWizard.php used to call
+    # PhpService::pdoMysqlDefaultSocket() unconditionally for every
+    # dbtype (fixed in app/Http/RequestHandlers/SetupWizard.php), which
+    # crashed with "Cannot read PHP configuration: pdo_mysql.default_socket"
+    # on any build missing this extension, even when picking Postgres.
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html

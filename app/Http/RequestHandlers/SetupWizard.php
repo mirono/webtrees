@@ -238,7 +238,14 @@ final class SetupWizard implements RequestHandlerInterface
             return $this->step3DatabaseType($data);
         }
 
-        $data['mysql_local'] = 'localhost:' . $this->php_service->pdoMysqlDefaultSocket();
+        // Only resources/views/setup/step-4-database-mysql.phtml uses this -
+        // computing it unconditionally for every dbtype crashes on any server
+        // where the pdo_mysql extension isn't installed (its ini directives,
+        // including pdo_mysql.default_socket, don't exist at all in that
+        // case), even when the user picked a different database entirely.
+        if ($data['dbtype'] === DB::MYSQL) {
+            $data['mysql_local'] = 'localhost:' . $this->php_service->pdoMysqlDefaultSocket();
+        }
 
         return $this->viewResponse('setup/step-4-database-' . $data['dbtype'], $data);
     }
@@ -257,7 +264,9 @@ final class SetupWizard implements RequestHandlerInterface
             $data['errors']->push($ex->getMessage());
 
             // Don't jump to step 4, as the error will make it jump to step 3.
-            $data['mysql_local'] = 'localhost:' . $this->php_service->pdoMysqlDefaultSocket();
+            if ($data['dbtype'] === DB::MYSQL) {
+                $data['mysql_local'] = 'localhost:' . $this->php_service->pdoMysqlDefaultSocket();
+            }
 
             return $this->viewResponse('setup/step-4-database-' . $data['dbtype'], $data);
         }
