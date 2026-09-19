@@ -16,11 +16,21 @@
 // Pure routing-decision logic, split out from index.mjs so it's
 // testable without a real HTTP server/sockets.
 
-export const NODE_ROUTE_PATH = '/my-account';
+// Every path prefix currently served by pages-server instead of PHP.
+// /my-account: phase 5 step 2 (docs/php-to-js-migration/phase5-first-node-route.md).
+// /login: phase 5 step 3 - Node must WRITE a session PHP will
+// recognize here, not just read one PHP already wrote (see
+// pages-server/php-serialize.mjs's doc comment for why that's harder
+// than it sounds).
+export const NODE_ROUTE_PATHS = ['/my-account', '/login'];
+
+function matchesNodeRoute(path, pathname) {
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
 
 /**
- * True for a direct /my-account request, or the "ugly URL"
- * (rewrite_urls off) form PHP's own Router.php understands:
+ * True for a direct request to one of NODE_ROUTE_PATHS, or the "ugly
+ * URL" (rewrite_urls off) form PHP's own Router.php understands:
  * /index.php?route=/my-account (see app/Http/Middleware/Router.php:54,69-73
  * - ?route= holds a path, not a route name).
  *
@@ -28,13 +38,13 @@ export const NODE_ROUTE_PATH = '/my-account';
  * @param {URLSearchParams} searchParams
  */
 export function isNodeRoute(pathname, searchParams) {
-  if (pathname === NODE_ROUTE_PATH || pathname.startsWith(`${NODE_ROUTE_PATH}/`)) {
+  if (NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, pathname))) {
     return true;
   }
 
   const route = searchParams.get('route');
 
-  return route === NODE_ROUTE_PATH || (route !== null && route.startsWith(`${NODE_ROUTE_PATH}/`));
+  return route !== null && NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, route));
 }
 
 /**

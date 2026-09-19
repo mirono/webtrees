@@ -15,12 +15,13 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, step 2 of the php-to-js migration
-// (docs/php-to-js-migration/phase5-first-node-route.md): the first real
-// HTTP route served entirely by Node instead of PHP. Sits behind
-// proxy/index.mjs, which sends /my-account* here and everything else to
-// the PHP app - both processes share the same Postgres database and the
-// same login session (see auth.mjs).
+// Phase 5, steps 2-3 of the php-to-js migration
+// (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
+// routes served entirely by Node instead of PHP. Sits behind
+// proxy/index.mjs, which sends /my-account* and /login* here and
+// everything else to the PHP app - both processes share the same
+// Postgres database and the same login session (see auth.mjs and, for
+// /login specifically, session-store.mjs + php-serialize.mjs).
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -28,11 +29,20 @@
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { loadDbConfig } from './config.mjs';
-import { isMyAccountPath } from './routes.mjs';
+import { isMyAccountPath, isLoginPath } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
 import { renderAccountPage } from './account-view.mjs';
 import { updateAccount } from './account-update.mjs';
+import { renderLoginPage, isLocalPath } from './login-view.mjs';
+import { doLogin } from './login-action.mjs';
+import {
+  loadOrCreateAnonymousSession,
+  saveSession,
+  regenerateSessionForLogin,
+  sessionSetCookieHeader,
+  newCsrfToken,
+} from './session-store.mjs';
 import { loadSetupLanguages } from '../setup-cli/languages.mjs';
 
 const { Pool } = pg;
@@ -88,27 +98,15 @@ function readRequestBody(req) {
   });
 }
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+function clientIp(req) {
+  return req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+}
 
-  if (url.pathname === '/health') {
-    res.writeHead(configError === null ? 200 : 503, { 'content-type': 'text/plain' });
-    res.end(configError ?? 'ok');
-    return;
-  }
+function isSecure(req) {
+  return req.headers['x-forwarded-proto'] === 'https';
+}
 
-  if (configError !== null) {
-    res.writeHead(503, { 'content-type': 'text/plain' });
-    res.end(`pages-server is not configured: ${configError}`);
-    return;
-  }
-
-  if (!isMyAccountPath(url.pathname)) {
-    res.writeHead(404, { 'content-type': 'text/plain' });
-    res.end('Not Found');
-    return;
-  }
-
+async function handleMyAccount(req, res) {
   let user;
 
   try {
@@ -185,6 +183,163 @@ const server = createServer(async (req, res) => {
 
   res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
   res.end('Method Not Allowed');
+}
+
+async function canRegisterUsers() {
+  const result = await pool.query("SELECT setting_value FROM wt_site_setting WHERE setting_name = 'USE_REGISTRATION_MODULE'");
+
+  return result.rows[0]?.setting_value === '1';
+}
+
+async function handleLogin(req, res, url) {
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (user !== null) {
+    // Already logged in - PHP redirects to a tree-scoped UserPage; the
+    // no-tree variant here just goes home (same simplification as
+    // /my-account's own scope).
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  const ip = clientIp(req);
+
+  if (req.method === 'GET') {
+    const { sessionId, session, isNew } = await loadOrCreateAnonymousSession(req.headers.cookie, ip, pool);
+
+    let tokenJustWritten = false;
+
+    if (typeof session.CSRF_TOKEN !== 'string') {
+      // Mirrors Session::getCsrfToken()'s lazy-generate-and-save
+      // behavior, which fires even on a GET.
+      session.CSRF_TOKEN = newCsrfToken();
+      tokenJustWritten = true;
+    }
+
+    if (!isNew && tokenJustWritten) {
+      await saveSession(sessionId, session, pool);
+    }
+
+    const urlParam = url.searchParams.get('url');
+    const targetUrl = isLocalPath(urlParam) ? urlParam : '/';
+    const username = url.searchParams.get('username') ?? '';
+    const canRegister = await canRegisterUsers();
+
+    const html = renderLoginPage({ csrfToken: session.CSRF_TOKEN, url: targetUrl, username, canRegister, error: null });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (isNew || tokenJustWritten) {
+      headers['set-cookie'] = sessionSetCookieHeader(isSecure(req), sessionId);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+    return;
+  }
+
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+
+    const { sessionId, session, isNew } = await loadOrCreateAnonymousSession(req.headers.cookie, ip, pool);
+
+    const urlParam = formData.get('url');
+    const targetUrl = isLocalPath(urlParam) ? urlParam : '/';
+    const username = formData.get('username') ?? '';
+    const canRegister = await canRegisterUsers();
+
+    if (formData.get('_csrf') !== session.CSRF_TOKEN) {
+      const html = renderLoginPage({
+        csrfToken: session.CSRF_TOKEN,
+        url: targetUrl,
+        username,
+        canRegister,
+        error: 'This form has expired. Try again.',
+      });
+
+      const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+      if (isNew) {
+        headers['set-cookie'] = sessionSetCookieHeader(isSecure(req), sessionId);
+      }
+
+      res.writeHead(200, headers);
+      res.end(html);
+      return;
+    }
+
+    const password = formData.get('password') ?? '';
+    const result = await doLogin(pool, { username, password, clientIp: ip, cookiesPresent: !isNew });
+
+    if (!result.ok) {
+      const html = renderLoginPage({ csrfToken: session.CSRF_TOKEN, url: targetUrl, username, canRegister, error: result.message });
+
+      const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+      if (isNew) {
+        headers['set-cookie'] = sessionSetCookieHeader(isSecure(req), sessionId);
+      }
+
+      res.writeHead(200, headers);
+      res.end(html);
+      return;
+    }
+
+    session.language = result.language;
+    session.theme = result.theme;
+
+    const { newSessionId } = await regenerateSessionForLogin(session, result.userId, ip, pool);
+
+    res.writeHead(302, {
+      Location: targetUrl,
+      'set-cookie': sessionSetCookieHeader(isSecure(req), newSessionId),
+    });
+    res.end();
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+
+  if (url.pathname === '/health') {
+    res.writeHead(configError === null ? 200 : 503, { 'content-type': 'text/plain' });
+    res.end(configError ?? 'ok');
+    return;
+  }
+
+  if (configError !== null) {
+    res.writeHead(503, { 'content-type': 'text/plain' });
+    res.end(`pages-server is not configured: ${configError}`);
+    return;
+  }
+
+  if (isLoginPath(url.pathname)) {
+    await handleLogin(req, res, url);
+    return;
+  }
+
+  if (isMyAccountPath(url.pathname)) {
+    await handleMyAccount(req, res);
+    return;
+  }
+
+  res.writeHead(404, { 'content-type': 'text/plain' });
+  res.end('Not Found');
 });
 
 server.listen(PORT, () => {

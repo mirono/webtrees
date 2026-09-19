@@ -25,7 +25,7 @@
 
 // Same two cookie names PHP's Session class uses (app/Session.php:51-52):
 // plain over HTTP, __Secure- prefixed over HTTPS.
-const SESSION_COOKIE_NAMES = ['WT2_SESSION', '__Secure-WT-ID'];
+export const SESSION_COOKIE_NAMES = ['WT2_SESSION', '__Secure-WT-ID'];
 
 /**
  * @param {string|undefined} cookieHeader

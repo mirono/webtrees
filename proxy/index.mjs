@@ -29,7 +29,7 @@
 // generality an npm proxy library would offer.
 
 import { createServer, request as httpRequest } from 'node:http';
-import { isNodeRoute, rewriteForPages, NODE_ROUTE_PATH } from './routing.mjs';
+import { isNodeRoute, rewriteForPages, NODE_ROUTE_PATHS } from './routing.mjs';
 
 const PORT = Number(process.env.PORT) || 8000;
 
@@ -72,6 +72,6 @@ const server = createServer((clientReq, clientRes) => {
 
 server.listen(PORT, () => {
   console.log(
-    `proxy listening on http://127.0.0.1:${PORT} - ${NODE_ROUTE_PATH}* -> ${PAGES_TARGET.host}:${PAGES_TARGET.port}, everything else -> ${APP_TARGET.host}:${APP_TARGET.port}`,
+    `proxy listening on http://127.0.0.1:${PORT} - ${NODE_ROUTE_PATHS.map((p) => `${p}*`).join(', ')} -> ${PAGES_TARGET.host}:${PAGES_TARGET.port}, everything else -> ${APP_TARGET.host}:${APP_TARGET.port}`,
   );
 });

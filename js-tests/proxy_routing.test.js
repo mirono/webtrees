@@ -22,7 +22,7 @@ describe('isNodeRoute', () => {
   });
 
   test('every other page goes to PHP', () => {
-    const url = urlFor('/index.php?route=%2Flogin');
+    const url = urlFor('/index.php?route=%2Fregister');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -33,6 +33,26 @@ describe('isNodeRoute', () => {
 
   test('no route param and an unrelated path', () => {
     const url = urlFor('/public/css/vendor.min.css');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
+  });
+
+  test('plain /login', () => {
+    const url = urlFor('/login');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/login with a tree sub-path', () => {
+    const url = urlFor('/login/my-tree');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/login', () => {
+    const url = urlFor('/index.php?route=%2Flogin');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('a path that merely starts with the same prefix as /login is not a match', () => {
+    const url = urlFor('/login-help');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 });
@@ -49,5 +69,17 @@ describe('rewriteForPages', () => {
   test('other query params survive the rewrite, route is still dropped', () => {
     const result = rewriteForPages(urlFor('/index.php?route=%2Fmy-account&tree=foo'));
     expect(result).toBe('/my-account?tree=foo');
+  });
+
+  test('plain /login is unchanged', () => {
+    expect(rewriteForPages(urlFor('/login'))).toBe('/login');
+  });
+
+  test('ugly-URL form for /login is rewritten to the plain path', () => {
+    expect(rewriteForPages(urlFor('/index.php?route=%2Flogin'))).toBe('/login');
+  });
+
+  test('ugly-URL form for /login with a tree segment', () => {
+    expect(rewriteForPages(urlFor('/index.php?route=%2Flogin%2Fmy-tree'))).toBe('/login/my-tree');
   });
 });

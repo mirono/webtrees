@@ -37,3 +37,14 @@
 export function isMyAccountPath(pathname) {
   return pathname === '/my-account' || pathname.startsWith('/my-account/');
 }
+
+/**
+ * Same shape as isMyAccountPath() above, for PHP's `/login{/tree}`
+ * route (app/Http/Routes/WebRoutes.php) - the tree segment is accepted
+ * and ignored, same "no-tree variant only" scope decision.
+ *
+ * @param {string} pathname
+ */
+export function isLoginPath(pathname) {
+  return pathname === '/login' || pathname.startsWith('/login/');
+}

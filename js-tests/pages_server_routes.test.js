@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isMyAccountPath } from '../pages-server/routes.mjs';
+import { isMyAccountPath, isLoginPath } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
   test('the plain, no-tree path matches', () => {
@@ -26,5 +26,24 @@ describe('isMyAccountPath', () => {
   test('an unrelated path does not match', () => {
     expect(isMyAccountPath('/login')).toBe(false);
     expect(isMyAccountPath('/')).toBe(false);
+  });
+});
+
+describe('isLoginPath', () => {
+  test('the plain, no-tree path matches', () => {
+    expect(isLoginPath('/login')).toBe(true);
+  });
+
+  test('a path with a trailing tree-name segment matches (PHP route: /login{/tree})', () => {
+    expect(isLoginPath('/login/ophir')).toBe(true);
+  });
+
+  test('a same-prefix but different route does not match', () => {
+    expect(isLoginPath('/login-help')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isLoginPath('/my-account')).toBe(false);
+    expect(isLoginPath('/')).toBe(false);
   });
 });
