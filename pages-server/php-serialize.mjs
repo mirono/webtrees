@@ -13,17 +13,12 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// A minimal codec for PHP's session.serialize_handler=php format (the
-// format wt_session.session_data is stored in - confirmed via
+// A codec for PHP's session.serialize_handler=php format (the format
+// wt_session.session_data is stored in - confirmed via
 // `php -i | grep serialize_handler` => "php", not "php_serialize" or
-// JSON). This is NOT a general PHP serialize()/unserialize()
-// implementation - it only models the 4 value kinds this app's own
-// $_SESSION ever actually stores (confirmed by grepping every
-// Session::put() call site in app/): int (wt_user), bool (initiated),
-// string (CSRF_TOKEN/language/theme), and null. Format: repeated
-// "key|serialized_value" fragments concatenated with NO separator
-// between entries - key names are raw, |-terminated, never
-// serialize()-encoded themselves.
+// JSON). Format: repeated "key|serialized_value" fragments
+// concatenated with NO separator between entries - key names are raw,
+// |-terminated, never serialize()-encoded themselves.
 //
 // Needed because /login is the one route where Node must WRITE a
 // session PHP will recognize, not just read one PHP already wrote (see
@@ -31,13 +26,34 @@
 // route's own doc for the full reasoning) - Auth::id() on every real
 // PHP page reads $_SESSION['wt_user'] from this exact blob, not the
 // denormalized wt_session.user_id column pages-server/auth.mjs reads.
+//
+// This app's own Session::put() call sites (grepped across app/) only
+// ever write int/bool/string/null - but PHP itself writes other value
+// kinds into $_SESSION for features this migration hasn't touched yet
+// (e.g. ClipboardService stores an array under 'clipboard',
+// FlashMessages stores an array of stdClass objects under
+// 'flash_messages' - confirmed live: a real session hit during testing
+// contained exactly this). A route that decodes an EXISTING session
+// (currently just /login, and soon anything else that writes to a
+// session that might already be mid-use) must not lose or corrupt
+// those values just because it doesn't understand them, or a routine
+// action like switching language/theme could silently end an ordinary
+// user's real login session. So: int/bool/string/null decode to real
+// JS values (the only kinds this codebase ever needs to READ or
+// WRITE); float/array/object decode to an opaque wrapper carrying
+// their exact original bytes, which re-encode byte-for-byte unchanged
+// - never interpreted, never lost. Only a genuinely malformed blob (or
+// a value type this scanner can't even bound - none observed in
+// practice; PHP's serialize() only emits i/b/N/d/s/a/O) still throws.
+
+const OPAQUE = Symbol('phpSerializeOpaque');
 
 /**
- * Thrown by decodePhpSession() when a value's type tag isn't one of
- * i/b/N/s (see decodeOneValue()'s default case for why this can't be
- * handled more gracefully). Exported so callers can catch it
- * specifically and fall back to treating the session as unreadable,
- * rather than crashing the whole request.
+ * Thrown by decodePhpSession() only for a value type this scanner
+ * can't bound at all (not one of i/b/N/d/s/a/O) or genuinely malformed
+ * input. Exported so callers can catch it specifically and fall back
+ * to treating the session as unreadable, rather than crashing the
+ * whole request.
  */
 export class UnsupportedPhpValueTypeError extends Error {
   constructor(typeTag, fragmentStart) {
@@ -62,6 +78,10 @@ export function encodePhpSession(session) {
 }
 
 function encodeValue(value) {
+  if (value !== null && typeof value === 'object' && OPAQUE in value) {
+    return value[OPAQUE];
+  }
+
   if (typeof value === 'number') {
     if (!Number.isInteger(value)) {
       throw new TypeError(`php-serialize: only integer numbers are supported, got ${value}`);
@@ -125,6 +145,14 @@ class Cursor {
     return text;
   }
 
+  expect(char) {
+    if (this.data[this.pos] !== char) {
+      throw new Error(`php-serialize: malformed input - expected "${char}" at position ${this.pos}`);
+    }
+
+    this.pos += 1;
+  }
+
   peek() {
     return this.data[this.pos];
   }
@@ -139,9 +167,8 @@ export function decodePhpSession(data) {
   const session = {};
 
   while (!cursor.atEnd()) {
-    const start = cursor.pos;
     const key = cursor.readUntil('|');
-    const [value] = decodeOneValue(cursor, start);
+    const value = decodeOneValue(cursor);
 
     session[key] = value;
   }
@@ -149,69 +176,134 @@ export function decodePhpSession(data) {
   return session;
 }
 
-function decodeOneValue(cursor, fragmentStart) {
+/** Decodes int/bool/null/string to real JS values; wraps float/array/object opaquely. */
+function decodeOneValue(cursor) {
+  const start = cursor.pos;
   const type = cursor.peek();
 
   switch (type) {
     case 'i': {
       cursor.pos += 2; // "i:"
       const raw = cursor.readUntil(';');
-      return [Number.parseInt(raw, 10)];
+      return Number.parseInt(raw, 10);
     }
     case 'b': {
       cursor.pos += 2; // "b:"
       const raw = cursor.readUntil(';');
-      return [raw === '1'];
+      return raw === '1';
     }
     case 'N': {
       cursor.pos += 1; // "N"
-      if (cursor.data[cursor.pos] !== ';') {
-        throw new Error('php-serialize: malformed input - expected ";" after "N"');
-      }
-      cursor.pos += 1;
-      return [null];
+      cursor.expect(';');
+      return null;
     }
     case 's': {
-      cursor.pos += 2; // "s:"
-      const lengthStr = cursor.readUntil(':');
-      const length = Number.parseInt(lengthStr, 10);
+      return readStringValue(cursor);
+    }
+    case 'd':
+    case 'a':
+    case 'O': {
+      skipValue(cursor);
 
-      if (cursor.data[cursor.pos] !== '"') {
-        throw new Error('php-serialize: malformed input - expected opening quote for string value');
-      }
-      cursor.pos += 1;
-
-      const value = cursor.readBytes(length);
-
-      if (cursor.data[cursor.pos] !== '"') {
-        throw new Error('php-serialize: malformed input - string byte length did not land on closing quote');
-      }
-      cursor.pos += 1;
-      if (cursor.data[cursor.pos] !== ';') {
-        throw new Error('php-serialize: malformed input - expected ";" after string value');
-      }
-      cursor.pos += 1;
-
-      return [value];
+      return { [OPAQUE]: cursor.data.slice(start, cursor.pos) };
     }
     default: {
-      // A value type this app never itself writes (arrays, objects,
-      // floats, ...) - confirmed via a site-wide grep of every
-      // Session::put() call site that only int/bool/string/null are
-      // ever stored. An array/object value's own serialization is
-      // recursive and variable-length, so - without implementing a
-      // full PHP unserialize() (deliberately out of scope) - there is
-      // no safe way to determine where such a value ends in order to
-      // capture it opaquely; guessing wrong would silently corrupt the
-      // rest of the parse. Throw instead, so callers can fall back to
-      // treating the session as unreadable (see
-      // session-store.mjs::loadOrCreateAnonymousSession(), which starts
-      // a fresh anonymous session rather than crashing the request).
       if (type === undefined) {
         throw new Error('php-serialize: malformed input - unexpected end of data reading a value');
       }
 
-      throw new UnsupportedPhpValueTypeError(type, fragmentStart);
+      throw new UnsupportedPhpValueTypeError(type, start);
+    }
+  }
+}
+
+/**
+ * Reads a "s:LEN:"...";"-shaped string value, returning its decoded
+ * content. Length is a BYTE count (Buffer.byteLength), not a JS
+ * character count - the sharpest correctness edge in this whole file,
+ * since e.g. 'café' is 4 JS characters but 5 UTF-8 bytes.
+ */
+function readStringValue(cursor) {
+  cursor.pos += 2; // "s:"
+  const lengthStr = cursor.readUntil(':');
+  const length = Number.parseInt(lengthStr, 10);
+
+  cursor.expect('"');
+  const value = cursor.readBytes(length);
+  cursor.expect('"');
+  cursor.expect(';');
+
+  return value;
+}
+
+/**
+ * Advances the cursor past ONE value of any kind (scalar or
+ * compound), without necessarily extracting its meaning - used both
+ * to bound a top-level float/array/object value for opaque capture,
+ * and internally for each element of an array/object's own key-value
+ * pairs (which can themselves be arbitrarily nested).
+ *
+ * Confirmed against real PHP output (`php -r 'session_start();
+ * $_SESSION[...]=...; echo session_encode();'`) for every case here,
+ * including a private property's name-mangled string (still just
+ * ordinary length-prefixed bytes - no special-casing needed) and
+ * nested arrays.
+ */
+function skipValue(cursor) {
+  const type = cursor.peek();
+
+  switch (type) {
+    case 'i':
+    case 'b':
+    case 'd': {
+      cursor.pos += 2; // "i:" / "b:" / "d:"
+      cursor.readUntil(';');
+      return;
+    }
+    case 'N': {
+      cursor.pos += 1;
+      cursor.expect(';');
+      return;
+    }
+    case 's': {
+      readStringValue(cursor);
+      return;
+    }
+    case 'a': {
+      cursor.pos += 2; // "a:"
+      const count = Number.parseInt(cursor.readUntil(':'), 10);
+
+      cursor.expect('{');
+      for (let i = 0; i < count * 2; i++) {
+        skipValue(cursor); // each of a key and its value is itself a typed value
+      }
+      cursor.expect('}');
+      return;
+    }
+    case 'O': {
+      cursor.pos += 2; // "O:"
+      const nameLen = Number.parseInt(cursor.readUntil(':'), 10);
+
+      cursor.expect('"');
+      cursor.readBytes(nameLen);
+      cursor.expect('"');
+      cursor.expect(':');
+
+      const count = Number.parseInt(cursor.readUntil(':'), 10);
+
+      cursor.expect('{');
+      for (let i = 0; i < count * 2; i++) {
+        skipValue(cursor); // property name, then its value
+      }
+      cursor.expect('}');
+      return;
+    }
+    default: {
+      if (type === undefined) {
+        throw new Error('php-serialize: malformed input - unexpected end of data reading a value');
+      }
+
+      throw new UnsupportedPhpValueTypeError(type, cursor.pos);
     }
   }
 }

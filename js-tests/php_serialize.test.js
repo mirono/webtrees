@@ -86,8 +86,87 @@ describe('decodePhpSession error handling', () => {
     expect(() => decodePhpSession('wt_user|s:10:"short";')).toThrow(); // declared length overruns buffer
   });
 
-  test('throws UnsupportedPhpValueTypeError for a value type this codec does not model (e.g. array)', () => {
-    // A minimal PHP array serialization: a:0:{}
-    expect(() => decodePhpSession('some_key|a:0:{}')).toThrow(UnsupportedPhpValueTypeError);
+  test('throws UnsupportedPhpValueTypeError for a genuinely unrecognized type tag', () => {
+    // "X" is not a real PHP serialize() type tag (real ones: i/b/N/d/s/a/O) -
+    // this scanner can't bound an unknown type's length, so it must throw
+    // rather than guess.
+    expect(() => decodePhpSession('some_key|X:0:{}')).toThrow(UnsupportedPhpValueTypeError);
+  });
+});
+
+// Real PHP writes float/array/object values into $_SESSION for
+// features this migration hasn't ported yet - e.g. ClipboardService's
+// 'clipboard' key (an array) and FlashMessages' 'flash_messages' key
+// (an array of stdClass objects), both confirmed live during actual
+// testing of this codebase. A route that decodes an EXISTING session
+// must preserve these byte-for-byte even though it doesn't understand
+// them, or an ordinary action (switching language/theme) could
+// silently corrupt/lose a real user's session. These are NOT decoded
+// into JS values - just opaquely round-tripped.
+describe('opaque round-tripping of float/array/object values', () => {
+  test('a float value round-trips byte-identically', () => {
+    const encoded = 'pi|d:3.14;';
+    const decoded = decodePhpSession(encoded);
+
+    expect(encodePhpSession(decoded)).toBe(encoded);
+  });
+
+  test('a flat array round-trips byte-identically', () => {
+    const encoded = 'clipboard|a:2:{s:4:"fact";s:4:"NAME";s:6:"gedcom";s:4:"1234";}';
+    const decoded = decodePhpSession(encoded);
+
+    expect(encodePhpSession(decoded)).toBe(encoded);
+  });
+
+  test('a nested array round-trips byte-identically', () => {
+    const encoded = 'nested|a:1:{s:1:"a";a:1:{s:1:"b";a:1:{s:1:"c";i:1;}}}';
+    const decoded = decodePhpSession(encoded);
+
+    expect(encodePhpSession(decoded)).toBe(encoded);
+  });
+
+  test('an object (including a private property\'s name-mangled string) round-trips byte-identically', () => {
+    // Real PHP output for `class Foo { private $secret = "hidden"; public $visible = "shown"; }`
+    const encoded = 'obj|O:3:"Foo":2:{s:11:" Foo secret";s:6:"hidden";s:7:"visible";s:5:"shown";}';
+    const decoded = decodePhpSession(encoded);
+
+    expect(encodePhpSession(decoded)).toBe(encoded);
+  });
+
+  test('an array of objects round-trips byte-identically (matches FlashMessages\' real shape)', () => {
+    const encoded = 'flash_messages|a:1:{i:0;O:8:"stdClass":2:{s:4:"text";s:2:"Hi";s:6:"status";s:4:"info";}}';
+    const decoded = decodePhpSession(encoded);
+
+    expect(encodePhpSession(decoded)).toBe(encoded);
+  });
+
+  test('a full realistic session with mixed real and opaque values round-trips exactly, and a mutation to a real field leaves opaque fields untouched', () => {
+    // Confirmed against actual `php -r '... echo session_encode();'` output.
+    const encoded =
+      'initiated|b:1;CSRF_TOKEN|s:6:"abc123";wt_user|i:4;' +
+      'clipboard|a:2:{s:5:"fact1";a:2:{s:4:"fact";s:4:"NAME";s:6:"gedcom";s:19:"1 NAME John /Smith/";}s:5:"fact2";s:12:"plain string";}' +
+      'a_float|d:3.14;' +
+      'nested|a:1:{s:1:"a";a:1:{s:1:"b";a:1:{s:1:"c";i:1;}}}' +
+      'obj|O:3:"Foo":2:{s:11:" Foo secret";s:6:"hidden";s:7:"visible";s:5:"shown";}' +
+      'flash_messages|a:1:{i:0;O:8:"stdClass":2:{s:4:"text";s:2:"Hi";s:6:"status";s:4:"info";}}';
+
+    const decoded = decodePhpSession(encoded);
+
+    expect(decoded.initiated).toBe(true);
+    expect(decoded.CSRF_TOKEN).toBe('abc123');
+    expect(decoded.wt_user).toBe(4);
+    expect(encodePhpSession(decoded)).toBe(encoded);
+
+    decoded.language = 'en-US';
+    expect(encodePhpSession(decoded)).toBe(`${encoded}language|s:5:"en-US";`);
+  });
+
+  test('opaque values are not exposed as plain JS values (no accidental collision with a real string/number)', () => {
+    const decoded = decodePhpSession('clipboard|a:0:{}');
+
+    expect(typeof decoded.clipboard).toBe('object');
+    expect(decoded.clipboard).not.toBeNull();
+    expect(typeof decoded.clipboard).not.toBe('string');
+    expect(typeof decoded.clipboard).not.toBe('number');
   });
 });
