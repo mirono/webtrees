@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-20 (`/my-account-delete` ported to Node, phase 5 step 5, fixing a real PHP data-corruption bug). This is the entry point for "where are we" —
+**Last updated: 2026-09-20 (`/` home page ported to Node, phase 5 step 6). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -103,6 +103,7 @@ just adding latency.
 | 5.3 | `/login` served entirely by Node — the first route where Node *writes* a session (not just reads one PHP wrote), via a small PHP-session-format codec | **Done (2026-09-19)** — [phase5-login-route.md](phase5-login-route.md) |
 | 5.4 | `/logout` served entirely by Node — destroys the session, reusing step 3's infrastructure; also fixed a live "Sign out" bug | **Done (2026-09-19)** — see phase5-login-route.md's login/logout pairing |
 | 5.5 | `/my-account-delete` served entirely by Node — deliberately diverges from PHP's own non-transactional, data-corrupting delete logic | **Done (2026-09-20)** — see phase5-login-route.md |
+| 5.6 | `/` (home page) served entirely by Node — a redirect dispatcher, not a tree-listing page; replicates the privacy-sensitive accessible-tree query exactly | **Done (2026-09-20)** — [phase5-home-page.md](phase5-home-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -185,6 +186,24 @@ in that path) — broadened to `Path=/`. Verified end-to-end reproducing
 the exact scenario that crashes PHP (pending change + dashboard widget
 + message): Node deletes everything atomically with no error. Full JS
 suite: 4115 tests, green.
+
+**Step 6** ports `/` (home page). Initially framed as "the first
+anonymous, tree-listing page" — wrong, corrected once the source was
+actually read: `HomePage.php` is almost entirely a **redirect
+dispatcher**, never a listing page. It picks the site's default (or
+first accessible) tree and redirects to one of 4 destinations
+(`UserPage`/`TreePage`/`ManageTrees`/`CreateTreePage`, none of which
+are Node routes yet — redirects just point back at PHP), rendering
+real content in exactly one case: a logged-in user with no access to
+any tree. The accessible-tree query
+(`pages-server/trees.mjs::accessibleTrees()`) replicates
+`TreeService::all()`'s privacy filter exactly (security-sensitive —
+which trees a user is even allowed to know exist), confirmed live that
+a non-imported tree is correctly invisible to non-admins entirely.
+`pages-server/route-url.mjs::phpRouteUrl()` mirrors PHP's own
+`?route=` ugly-URL generation for redirect targets Node doesn't own
+yet. Full JS suite: 4131 tests, green. See
+[phase5-home-page.md](phase5-home-page.md).
 
 ## The 6 bridges: final state
 
