@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { accessibleTrees, isTreeManager } from '../pages-server/trees.mjs';
+import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel } from '../pages-server/trees.mjs';
 
 function mockPool(queryImpl) {
   return { query: vi.fn(queryImpl) };
@@ -48,6 +48,80 @@ describe('accessibleTrees', () => {
     const trees = await accessibleTrees(pool, { userId: 1, isAdmin: true });
 
     expect(trees).toEqual([{ gedcomId: 2, name: 'foo', imported: false, private: true }]);
+  });
+});
+
+describe('accessibleTreeByName', () => {
+  test('an administrator gets the tree by name with a single, unfiltered query', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('WHERE gedcom_id > 0 AND gedcom_name = $1');
+      expect(sql).not.toContain('JOIN');
+      expect(params).toEqual(['ophir']);
+      return { rows: [{ gedcom_id: 1, gedcom_name: 'ophir', title: 'Ophir', imported: 1, private: 0 }] };
+    });
+
+    const tree = await accessibleTreeByName(pool, 'ophir', { userId: 1, isAdmin: true });
+
+    expect(tree).toEqual({ gedcomId: 1, name: 'ophir', title: 'Ophir', imported: true, private: false });
+  });
+
+  test('a non-admin gets the privacy-filtered, joined query scoped to the name', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('LEFT JOIN wt_user_gedcom_setting');
+      expect(sql).toContain("setting_value = 'admin'");
+      expect(params).toEqual([5, 'ophir']);
+      return { rows: [] };
+    });
+
+    await accessibleTreeByName(pool, 'ophir', { userId: 5, isAdmin: false });
+  });
+
+  test('no matching row (nonexistent or inaccessible tree) returns null', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await accessibleTreeByName(pool, 'nope', { userId: 5, isAdmin: false })).toBeNull();
+  });
+});
+
+describe('viewerAccessLevel', () => {
+  test('an administrator is always level 0, no query needed', async () => {
+    const pool = mockPool(() => {
+      throw new Error('should not be called for an admin');
+    });
+
+    expect(await viewerAccessLevel(pool, { gedcomId: 1, userId: 1, isAdmin: true })).toBe(0);
+  });
+
+  test('an anonymous visitor is always level 2, no query needed', async () => {
+    const pool = mockPool(() => {
+      throw new Error('should not be called for an anonymous visitor');
+    });
+
+    expect(await viewerAccessLevel(pool, { gedcomId: 1, userId: null, isAdmin: false })).toBe(2);
+  });
+
+  test("a non-admin with canedit='admin' is level 0 (manager)", async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: 'admin' }] }));
+
+    expect(await viewerAccessLevel(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toBe(0);
+  });
+
+  test("a non-admin with a non-'none' canedit value is level 1 (member)", async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: 'edit' }] }));
+
+    expect(await viewerAccessLevel(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toBe(1);
+  });
+
+  test("a non-admin with canedit='none' is level 2 (visitor)", async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: 'none' }] }));
+
+    expect(await viewerAccessLevel(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toBe(2);
+  });
+
+  test('a non-admin with no matching row at all is level 2 (visitor)', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await viewerAccessLevel(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toBe(2);
   });
 });
 

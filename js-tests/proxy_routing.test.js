@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isNodeRoute, rewriteForPages } from '../proxy/routing.mjs';
+import { isNodeRoute, isTreePagePath, rewriteForPages } from '../proxy/routing.mjs';
 
 function urlFor(pathAndQuery) {
   return new URL(pathAndQuery, 'http://localhost');
@@ -89,7 +89,25 @@ describe('isNodeRoute', () => {
   // "/" must not accidentally swallow every other path just because
   // every path technically "starts with a slash".
   test('"/" as a Node route does not match unrelated paths', () => {
+    const url = urlFor('/public/css/vendor.min.css');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
+  });
+
+  test('the exact-match /tree/{tree} page', () => {
     const url = urlFor('/tree/ophir');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  // A sibling route under the same /tree/{tree} attach block (PHP
+  // registers TreePage at '' - an exact match, not a prefix) must NOT
+  // be wrongly forwarded to Node.
+  test('a sibling route under /tree/{tree} is not a Node route', () => {
+    const url = urlFor('/tree/ophir/individual/I1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -111,6 +129,26 @@ describe('isNodeRoute', () => {
   test('ugly-URL form ?route=/theme/{value}', () => {
     const url = urlFor('/index.php?route=%2Ftheme%2Fclouds');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+});
+
+describe('isTreePagePath', () => {
+  test('matches the exact tree-page path', () => {
+    expect(isTreePagePath('/tree/ophir')).toBe(true);
+  });
+
+  test('tolerates a trailing slash', () => {
+    expect(isTreePagePath('/tree/ophir/')).toBe(true);
+  });
+
+  test('does not match a sibling route under the same group', () => {
+    expect(isTreePagePath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isTreePagePath('/tree/ophir/my-page')).toBe(false);
+  });
+
+  test('does not match the bare prefix', () => {
+    expect(isTreePagePath('/tree')).toBe(false);
+    expect(isTreePagePath('/tree/')).toBe(false);
   });
 });
 

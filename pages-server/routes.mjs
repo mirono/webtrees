@@ -116,3 +116,22 @@ export function matchThemePath(pathname) {
 
   return value === '' ? null : value;
 }
+
+/**
+ * PHP's route is an EXACT match on `/tree/{tree}` - TreePage registers
+ * at '' inside `$router->attach('', '/tree/{tree}', ...)`
+ * (app/Http/Routes/WebRoutes.php) - NOT a prefix. Sibling routes under
+ * the same attach block (`/tree/{tree}/individual/{xref}`,
+ * `/tree/{tree}/my-page`, etc.) must NOT match here; they stay
+ * PHP-routed. This is why this route needs its own matcher shape
+ * rather than reusing the isXPath()/matchXPath() prefix conventions
+ * above.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null if this isn't a tree-page request
+ */
+export function matchTreePagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/?$/.exec(pathname);
+
+  return match ? decodeURIComponent(match[1]) : null;
+}

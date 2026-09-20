@@ -15,15 +15,19 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-7 of the php-to-js migration
+// Phase 5, steps 2-8 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
 // proxy/index.mjs, which sends /my-account*, /login*, /logout,
-// /my-account-delete, /, /language/*, and /theme/* here and
-// everything else to the PHP app - both processes share the same
-// Postgres database and the same login session (see auth.mjs and, for
-// /login/logout/language/theme specifically, session-store.mjs +
-// php-serialize.mjs).
+// /my-account-delete, /, /language/*, /theme/*, and the exact-match
+// /tree/{tree} page here and everything else to the PHP app - both
+// processes share the same Postgres database and the same login
+// session (see auth.mjs and, for /login/logout/language/theme
+// specifically, session-store.mjs + php-serialize.mjs). /tree/{tree}
+// (step 8, docs/php-to-js-migration/phase5-tree-page.md) is the first
+// tree-scoped route and renders only one of TreePage's up to 8
+// configurable blocks (WelcomeBlockModule) - every other block a tree
+// might have configured is simply omitted from the layout.
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -39,6 +43,7 @@ import {
   isHomePath,
   matchLanguagePath,
   matchThemePath,
+  matchTreePagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -49,7 +54,9 @@ import { renderLoginPage, isLocalPath } from './login-view.mjs';
 import { doLogin } from './login-action.mjs';
 import { doLogout } from './logout.mjs';
 import { renderNoTreeAccessPage } from './home-view.mjs';
-import { accessibleTrees, isTreeManager } from './trees.mjs';
+import { renderTreePage } from './tree-view.mjs';
+import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel } from './trees.mjs';
+import { significantIndividualXref, findVisibleWelcomeBlockId } from './welcome-block.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -577,6 +584,94 @@ async function handleSelectPreference(req, res, field, value) {
   res.end();
 }
 
+async function handleTreePage(req, res, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    // Matches app/Http/RequestHandlers/NotFound.php's own behavior for
+    // a GET on a route carrying an unresolved {tree} attribute -
+    // confirmed live against the real PHP app: a nonexistent (or
+    // inaccessible) tree name redirects home, it doesn't 404. PHP
+    // makes no distinction between "no such tree" and "tree exists but
+    // isn't accessible to this viewer" - accessibleTreeByName() above
+    // doesn't either, matching that exactly.
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let welcomeBlock = null;
+
+  try {
+    const level = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const blockId = await findVisibleWelcomeBlockId(pool, { gedcomId: tree.gedcomId, viewerAccessLevel: level });
+
+    if (blockId !== null) {
+      const xref = await significantIndividualXref(pool, tree, { userId });
+
+      if (xref !== null) {
+        const links = [{ url: phpRouteUrl(`/tree/${tree.name}/individual/${xref}`, siteUrlConfig), title: 'Default individual', iconClass: 'icon-indis' }];
+
+        if (user === null && (await canRegisterUsers())) {
+          links.push({
+            url: phpRouteUrl(`/register/${tree.name}`, siteUrlConfig),
+            title: 'Request a new user account',
+            iconClass: 'icon-user_add',
+          });
+        }
+
+        welcomeBlock = { blockId, links };
+      }
+    }
+  } catch (error) {
+    console.error('Failed to build the welcome block:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderTreePage({ tree, user, csrfToken, welcomeBlock });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -628,6 +723,13 @@ const server = createServer(async (req, res) => {
 
   if (themeValue !== null) {
     await handleSelectPreference(req, res, 'theme', themeValue);
+    return;
+  }
+
+  const treeName = matchTreePagePath(url.pathname);
+
+  if (treeName !== null) {
+    await handleTreePage(req, res, treeName);
     return;
   }
 

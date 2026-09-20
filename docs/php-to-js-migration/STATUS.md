@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-20 (`/language`/`/theme` ported to Node, phase 5 step 7, plus a real codec fix that unblocked them). This is the entry point for "where are we" —
+**Last updated: 2026-09-20 (`/tree/{tree}` + WelcomeBlockModule ported to Node, phase 5 step 8 — the first tree-scoped route). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4013 tests, all green.
+# Expect: 4194 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -105,6 +105,7 @@ just adding latency.
 | 5.5 | `/my-account-delete` served entirely by Node — deliberately diverges from PHP's own non-transactional, data-corrupting delete logic | **Done (2026-09-20)** — see phase5-login-route.md |
 | 5.6 | `/` (home page) served entirely by Node — a redirect dispatcher, not a tree-listing page; replicates the privacy-sensitive accessible-tree query exactly | **Done (2026-09-20)** — [phase5-home-page.md](phase5-home-page.md) |
 | 5.7 | `/language/{value}` + `/theme/{value}` served entirely by Node; fixed a real gap in the session codec (float/array/object values) that these routes exposed | **Done (2026-09-20)** — see phase5-home-page.md's addendum below |
+| 5.8 | `/tree/{tree}` (TreePage) served entirely by Node — the first tree-scoped route; ports one of TreePage's up to 8 configurable blocks (WelcomeBlockModule) | **Done (2026-09-20)** — [phase5-tree-page.md](phase5-tree-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -238,6 +239,26 @@ array (simulating actual prior tree-page use), called
 untouched while `language` updated correctly — then confirmed the real
 PHP app still recognized the session as authenticated afterward. Full
 JS suite: 4152 tests, green.
+
+**Step 8** ports `/tree/{tree}` (TreePage) — the first **tree-scoped**
+route, and the first to touch real GEDCOM/individual data. Key finding:
+`TreePage.php` is a block/widget system rendering up to 8 independently
+configured modules, not one page (confirmed live against the real
+"ophir" tree's `wt_block` rows: `gedcom_stats`, `gedcom_news`,
+`gedcom_favorites`, `review_changes`, `gedcom_block`, `random_media`,
+`todays_events`, `logged_in`). This step ports the page shell plus
+exactly one block, `WelcomeBlockModule` (`gedcom_block`) — every other
+configured block is simply omitted from the layout. Found and fixed a
+real gap in the first draft: `isWelcomeBlockEnabledAndVisible()` only
+checked module-level enable/visibility, never whether the tree actually
+has a `wt_block` row configuring `gedcom_block` at all — replaced with
+`findVisibleWelcomeBlockId()`, which checks the tree's own row first
+and returns the real `block_id` (previously a placeholder). Verified
+live against a real `php -S` instance sharing the same database that
+the "Default individual" link's slug-less URL genuinely 301-redirects
+to the correct individual page, not a guess about `IndividualPage`'s
+optional `{slug}` segment. Full JS suite: 4194 tests, green. See
+[phase5-tree-page.md](phase5-tree-page.md).
 
 ## The 6 bridges: final state
 

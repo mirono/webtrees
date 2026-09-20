@@ -38,23 +38,42 @@ function matchesNodeRoute(path, pathname) {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
+// /tree/{tree}: phase 5 step 8 - the first tree-scoped route (see
+// docs/php-to-js-migration/phase5-tree-page.md). PHP registers this at
+// '' inside `/tree/{tree}`'s own attach block - an EXACT match, unlike
+// every NODE_ROUTE_PATHS entry above (all of which are correctly
+// prefix-matched via matchesNodeRoute(), since their PHP routes really
+// are prefixes, e.g. /my-account{/tree}). Sibling routes under the
+// same /tree/{tree} group (/tree/{tree}/individual/{xref},
+// /tree/{tree}/my-page, ...) are NOT Node routes and must not match
+// this pattern - a naive prefix match here would wrongly forward all
+// of them too.
+export function isTreePagePath(pathname) {
+  return /^\/tree\/[^/]+\/?$/.test(pathname);
+}
+
 /**
- * True for a direct request to one of NODE_ROUTE_PATHS, or the "ugly
- * URL" (rewrite_urls off) form PHP's own Router.php understands:
- * /index.php?route=/my-account (see app/Http/Middleware/Router.php:54,69-73
- * - ?route= holds a path, not a route name).
+ * True for a direct request to one of NODE_ROUTE_PATHS or the
+ * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
+ * form PHP's own Router.php understands: /index.php?route=/my-account
+ * (see app/Http/Middleware/Router.php:54,69-73 - ?route= holds a path,
+ * not a route name).
  *
  * @param {string} pathname
  * @param {URLSearchParams} searchParams
  */
 export function isNodeRoute(pathname, searchParams) {
-  if (NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, pathname))) {
+  if (NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, pathname)) || isTreePagePath(pathname)) {
     return true;
   }
 
   const route = searchParams.get('route');
 
-  return route !== null && NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, route));
+  if (route === null) {
+    return false;
+  }
+
+  return NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, route)) || isTreePagePath(route);
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   isHomePath,
   matchLanguagePath,
   matchThemePath,
+  matchTreePagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -145,5 +146,38 @@ describe('matchThemePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(matchThemePath('/language/en-US')).toBeNull();
+  });
+});
+
+describe('matchTreePagePath', () => {
+  test('extracts the tree name', () => {
+    expect(matchTreePagePath('/tree/ophir')).toBe('ophir');
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchTreePagePath('/tree/ophir/')).toBe('ophir');
+  });
+
+  test('percent-decodes the tree name', () => {
+    expect(matchTreePagePath('/tree/my%20tree')).toBe('my tree');
+  });
+
+  // The critical negative case: this is an EXACT match on PHP's route
+  // (TreePage registers at '' inside the /tree/{tree} attach block) -
+  // sibling routes under the same group must stay PHP-routed, not get
+  // wrongly forwarded here.
+  test('a sibling route under the same /tree/{tree} group does not match', () => {
+    expect(matchTreePagePath('/tree/ophir/individual/I1')).toBeNull();
+    expect(matchTreePagePath('/tree/ophir/my-page')).toBeNull();
+  });
+
+  test('the bare prefix with no tree name does not match', () => {
+    expect(matchTreePagePath('/tree/')).toBeNull();
+    expect(matchTreePagePath('/tree')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchTreePagePath('/')).toBeNull();
+    expect(matchTreePagePath('/login')).toBeNull();
   });
 });
