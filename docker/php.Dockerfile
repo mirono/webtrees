@@ -39,6 +39,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # on any build missing this extension, even when picking Postgres.
     && rm -rf /var/lib/apt/lists/*
 
+# This image loads no php.ini at all otherwise (php:*-cli-bookworm ships
+# php.ini-development/-production as templates only, neither installed
+# as php.ini), so PHP falls back to its compiled-in defaults -
+# upload_max_filesize=2M, post_max_size=8M - far too small for a real
+# GEDCOM export (reported live: importing a real family tree GEDCOM hit
+# "The uploaded file exceeds the allowed size",
+# app/Http/RequestHandlers/ImportGedcomAction.php:75, UPLOAD_ERR_INI_SIZE).
+# post_max_size must be >= upload_max_filesize (PHP silently ignores the
+# file and empties $_POST otherwise) - both raised together.
+# memory_limit matches this repo's existing PHPUnit convention
+# (`vendor/bin/phpunit -d memory_limit=512M`) - GEDCOM parsing is
+# memory-heavy. max_execution_time/max_input_time raised for large
+# imports on slower storage.
+RUN { \
+        echo 'upload_max_filesize = 512M'; \
+        echo 'post_max_size = 512M'; \
+        echo 'memory_limit = 512M'; \
+        echo 'max_execution_time = 300'; \
+        echo 'max_input_time = 300'; \
+    } > /usr/local/etc/php/conf.d/webtrees-uploads.ini
+
 WORKDIR /var/www/html
 
 EXPOSE 8000

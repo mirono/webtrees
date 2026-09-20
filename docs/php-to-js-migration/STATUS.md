@@ -355,6 +355,25 @@ separate decision — see "Open decisions" below.
 
 ## Fixed bugs (found during manual testing)
 
+- **GEDCOM import rejected a real family tree file as too large**
+  (2026-09-20): the `app` Docker image loads no `php.ini` at all (the
+  base `php:8.3-cli-bookworm` image ships `php.ini-development`/
+  `-production` as templates only, neither installed), so PHP fell
+  back to its compiled-in defaults — `upload_max_filesize=2M`,
+  `post_max_size=8M` — reported live by the user trying to import a
+  real GEDCOM export (`ImportGedcomAction.php:75`,
+  `UPLOAD_ERR_INI_SIZE`). Fixed by adding a
+  `/usr/local/etc/php/conf.d/webtrees-uploads.ini` override in
+  `docker/php.Dockerfile`: `upload_max_filesize`/`post_max_size` raised
+  to 512M (kept equal — PHP silently drops the upload and empties
+  `$_POST` if `post_max_size` is smaller), `memory_limit` raised to
+  512M (matching this repo's existing PHPUnit convention,
+  `vendor/bin/phpunit -d memory_limit=512M` — GEDCOM parsing is
+  memory-heavy), `max_execution_time`/`max_input_time` raised to 300s
+  for large imports. **Requires `docker compose up --build`** to pick
+  up the new image layer — this is a Dockerfile change, not a
+  bind-mounted file.
+
 - **Setup wizard crashed selecting Postgres/SQLite/SQL Server**
   (2026-09-19): `SetupWizard::step4DatabaseConnection()` and
   `step5Administrator()`'s catch block both called
