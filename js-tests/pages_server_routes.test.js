@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isMyAccountPath, isLoginPath, isLogoutPath, isAccountDeletePath } from '../pages-server/routes.mjs';
+import { isMyAccountPath, isLoginPath, isLogoutPath, isAccountDeletePath, isHomePath } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
   test('the plain, no-tree path matches', () => {
@@ -92,5 +92,17 @@ describe('isAccountDeletePath', () => {
   test('an unrelated path does not match', () => {
     expect(isAccountDeletePath('/login')).toBe(false);
     expect(isAccountDeletePath('/')).toBe(false);
+  });
+});
+
+describe('isHomePath', () => {
+  test('the bare root matches', () => {
+    expect(isHomePath('/')).toBe(true);
+  });
+
+  test('no other path matches, including a single unrelated segment', () => {
+    expect(isHomePath('/login')).toBe(false);
+    expect(isHomePath('/tree')).toBe(false);
+    expect(isHomePath('')).toBe(false);
   });
 });

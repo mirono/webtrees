@@ -28,7 +28,9 @@
 // /my-account-delete: phase 5 step 5 - completes the /my-account
 // family; deliberately diverges from PHP's own (buggy, non-
 // transactional) delete logic - see pages-server/account-delete.mjs.
-export const NODE_ROUTE_PATHS = ['/my-account', '/login', '/logout', '/my-account-delete'];
+// /: phase 5 step 6 - the home page, almost entirely a redirect
+// dispatcher (see docs/php-to-js-migration/phase5-home-page.md).
+export const NODE_ROUTE_PATHS = ['/my-account', '/login', '/logout', '/my-account-delete', '/'];
 
 function matchesNodeRoute(path, pathname) {
   return pathname === path || pathname.startsWith(`${path}/`);

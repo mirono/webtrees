@@ -75,6 +75,23 @@ describe('isNodeRoute', () => {
     const url = urlFor('/index.php?route=%2Fmy-account-delete');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
+
+  test('the bare root /', () => {
+    const url = urlFor('/');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/ for the home page', () => {
+    const url = urlFor('/index.php?route=%2F');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  // "/" must not accidentally swallow every other path just because
+  // every path technically "starts with a slash".
+  test('"/" as a Node route does not match unrelated paths', () => {
+    const url = urlFor('/tree/ophir');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
+  });
 });
 
 describe('rewriteForPages', () => {
@@ -101,5 +118,9 @@ describe('rewriteForPages', () => {
 
   test('ugly-URL form for /login with a tree segment', () => {
     expect(rewriteForPages(urlFor('/index.php?route=%2Flogin%2Fmy-tree'))).toBe('/login/my-tree');
+  });
+
+  test('ugly-URL form for the home page rewrites to the bare root', () => {
+    expect(rewriteForPages(urlFor('/index.php?route=%2F'))).toBe('/');
   });
 });

@@ -68,3 +68,13 @@ export function isLogoutPath(pathname) {
 export function isAccountDeletePath(pathname) {
   return pathname === '/my-account-delete';
 }
+
+/**
+ * PHP's route is a plain `/` (app/Http/Routes/WebRoutes.php:
+ * `$router->get(HomePage::class, '/');`).
+ *
+ * @param {string} pathname
+ */
+export function isHomePath(pathname) {
+  return pathname === '/';
+}

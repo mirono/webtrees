@@ -15,12 +15,12 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-5 of the php-to-js migration
+// Phase 5, steps 2-6 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
-// proxy/index.mjs, which sends /my-account*, /login*, /logout, and
-// /my-account-delete here and everything else to the PHP app - both
-// processes share the same Postgres database and the same login
+// proxy/index.mjs, which sends /my-account*, /login*, /logout,
+// /my-account-delete, and / here and everything else to the PHP app -
+// both processes share the same Postgres database and the same login
 // session (see auth.mjs and, for /login/logout specifically,
 // session-store.mjs + php-serialize.mjs).
 //
@@ -29,8 +29,8 @@
 
 import { createServer } from 'node:http';
 import pg from 'pg';
-import { loadDbConfig } from './config.mjs';
-import { isMyAccountPath, isLoginPath, isLogoutPath, isAccountDeletePath } from './routes.mjs';
+import { loadDbConfig, loadSiteUrlConfig } from './config.mjs';
+import { isMyAccountPath, isLoginPath, isLogoutPath, isAccountDeletePath, isHomePath } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
 import { renderAccountPage } from './account-view.mjs';
@@ -39,6 +39,9 @@ import { deleteAccount } from './account-delete.mjs';
 import { renderLoginPage, isLocalPath } from './login-view.mjs';
 import { doLogin } from './login-action.mjs';
 import { doLogout } from './logout.mjs';
+import { renderNoTreeAccessPage } from './home-view.mjs';
+import { accessibleTrees, isTreeManager } from './trees.mjs';
+import { phpRouteUrl } from './route-url.mjs';
 import {
   loadOrCreateAnonymousSession,
   saveSession,
@@ -64,6 +67,7 @@ const PORT = Number(process.env.PORT) || 8092;
 // null once startup succeeds.
 let configError = null;
 let pool = null;
+let siteUrlConfig = null;
 
 try {
   // A long-lived server should pool connections, not open one per
@@ -71,6 +75,7 @@ try {
   // for a CLI run, but this process handles concurrent requests for as
   // long as it's up).
   pool = new Pool(loadDbConfig());
+  siteUrlConfig = loadSiteUrlConfig();
 } catch (error) {
   configError = error.message;
   console.error('pages-server cannot start normally:', configError);
@@ -429,6 +434,95 @@ async function handleAccountDelete(req, res) {
   res.end();
 }
 
+function redirectToPhp(res, path) {
+  res.writeHead(302, { Location: phpRouteUrl(path, siteUrlConfig) });
+  res.end();
+}
+
+async function handleHomePage(req, res) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    const defaultResult = await pool.query("SELECT setting_value FROM wt_site_setting WHERE setting_name = 'DEFAULT_GEDCOM'");
+    const defaultGedcomName = defaultResult.rows[0]?.setting_value ?? '';
+
+    const trees = await accessibleTrees(pool, { userId, isAdmin });
+
+    tree = trees.find((t) => t.name === defaultGedcomName) ?? trees[0] ?? null;
+  } catch (error) {
+    console.error('Failed to look up trees:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree !== null) {
+    if (tree.imported) {
+      if (user !== null) {
+        redirectToPhp(res, `/tree/${tree.name}/my-page`);
+      } else {
+        redirectToPhp(res, `/tree/${tree.name}`);
+      }
+      return;
+    }
+
+    const manager = await isTreeManager(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+
+    if (manager) {
+      redirectToPhp(res, `/trees/manage/${tree.name}`);
+      return;
+    }
+  }
+
+  // No tree available.
+  if (isAdmin) {
+    redirectToPhp(res, '/trees/create');
+    return;
+  }
+
+  if (user !== null) {
+    // Logged in, but no access to any tree.
+    const csrfToken = generateCsrfToken();
+
+    res.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'set-cookie': csrfSetCookieHeader(csrfToken),
+    });
+    res.end(renderNoTreeAccessPage({ user, csrfToken }));
+    return;
+  }
+
+  // Not logged in - /login is already a Node route, so redirect there
+  // directly rather than building a PHP ugly-URL for it. PHP's own
+  // target here is route(LoginPage::class, ['url' => '']) - an empty
+  // "url" fails LoginPage's own isLocalUrl() validation and falls back
+  // to its default (home), the same effective behavior as omitting the
+  // param entirely, which is what Node's own /login GET handler does
+  // too (isLocalPath('') is false - see login-view.mjs).
+  res.writeHead(302, { Location: '/login' });
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -461,6 +555,11 @@ const server = createServer(async (req, res) => {
 
   if (isMyAccountPath(url.pathname)) {
     await handleMyAccount(req, res);
+    return;
+  }
+
+  if (isHomePath(url.pathname)) {
+    await handleHomePage(req, res);
     return;
   }
 

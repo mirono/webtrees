@@ -33,10 +33,7 @@ const CONFIG_YAML_PATH = path.join(REPO_ROOT, 'data', 'config.yaml');
 
 const LINE_PATTERN = /^([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)"\s*$/;
 
-/**
- * @returns {{host: string, port: number, user: string, password: string, database: string}}
- */
-export function loadDbConfig() {
+function readRawConfig() {
   const raw = readFileSync(CONFIG_YAML_PATH, 'utf8');
   const config = {};
 
@@ -52,6 +49,15 @@ export function loadDbConfig() {
     config[key] = rawValue.replaceAll(/\\(.)/g, '$1');
   }
 
+  return config;
+}
+
+/**
+ * @returns {{host: string, port: number, user: string, password: string, database: string}}
+ */
+export function loadDbConfig() {
+  const config = readRawConfig();
+
   if (config.dbtype !== 'pgsql') {
     throw new Error(
       `pages-server only supports a Postgres-backed install (data/config.yaml has dbtype="${config.dbtype}"). ` +
@@ -65,5 +71,21 @@ export function loadDbConfig() {
     user: config.dbuser,
     password: config.dbpass,
     database: config.dbname,
+  };
+}
+
+/**
+ * The subset of config.yaml the home-page redirect logic needs to
+ * build PHP-compatible URLs, mirroring app/Factories/RouteFactory.php's
+ * own base_url/rewrite_urls handling.
+ *
+ * @returns {{baseUrl: string, rewriteUrls: boolean}}
+ */
+export function loadSiteUrlConfig() {
+  const config = readRawConfig();
+
+  return {
+    baseUrl: config.base_url ?? '',
+    rewriteUrls: config.rewrite_urls === '1',
   };
 }
