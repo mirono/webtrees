@@ -30,7 +30,9 @@
 // transactional) delete logic - see pages-server/account-delete.mjs.
 // /: phase 5 step 6 - the home page, almost entirely a redirect
 // dispatcher (see docs/php-to-js-migration/phase5-home-page.md).
-export const NODE_ROUTE_PATHS = ['/my-account', '/login', '/logout', '/my-account-delete', '/'];
+// /language, /theme: phase 5 step 7 - CSRF-exempt (same exclusion list
+// as /logout), no-login-required session+DB preference writes.
+export const NODE_ROUTE_PATHS = ['/my-account', '/login', '/logout', '/my-account-delete', '/', '/language', '/theme'];
 
 function matchesNodeRoute(path, pathname) {
   return pathname === path || pathname.startsWith(`${path}/`);

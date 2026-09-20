@@ -15,14 +15,15 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-6 of the php-to-js migration
+// Phase 5, steps 2-7 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
 // proxy/index.mjs, which sends /my-account*, /login*, /logout,
-// /my-account-delete, and / here and everything else to the PHP app -
-// both processes share the same Postgres database and the same login
-// session (see auth.mjs and, for /login/logout specifically,
-// session-store.mjs + php-serialize.mjs).
+// /my-account-delete, /, /language/*, and /theme/* here and
+// everything else to the PHP app - both processes share the same
+// Postgres database and the same login session (see auth.mjs and, for
+// /login/logout/language/theme specifically, session-store.mjs +
+// php-serialize.mjs).
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -30,7 +31,15 @@
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { loadDbConfig, loadSiteUrlConfig } from './config.mjs';
-import { isMyAccountPath, isLoginPath, isLogoutPath, isAccountDeletePath, isHomePath } from './routes.mjs';
+import {
+  isMyAccountPath,
+  isLoginPath,
+  isLogoutPath,
+  isAccountDeletePath,
+  isHomePath,
+  matchLanguagePath,
+  matchThemePath,
+} from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
 import { renderAccountPage } from './account-view.mjs';
@@ -42,6 +51,7 @@ import { doLogout } from './logout.mjs';
 import { renderNoTreeAccessPage } from './home-view.mjs';
 import { accessibleTrees, isTreeManager } from './trees.mjs';
 import { phpRouteUrl } from './route-url.mjs';
+import { selectPreference } from './preferences.mjs';
 import {
   loadOrCreateAnonymousSession,
   saveSession,
@@ -523,6 +533,50 @@ async function handleHomePage(req, res) {
   res.end();
 }
 
+async function handleSelectPreference(req, res, field, value) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // No CSRF check, matching PHP: app/Http/Middleware/CheckCsrf.php
+  // excludes both SelectLanguage::class and SelectTheme::class.
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const { sessionId, session, isNew } = await loadOrCreateAnonymousSession(req.headers.cookie, clientIp(req), pool);
+
+  try {
+    await selectPreference(pool, { field, value, session, user });
+  } catch (error) {
+    console.error(`Failed to save ${field} preference:`, error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  await saveSession(sessionId, session, pool);
+
+  const headers = {};
+
+  if (isNew) {
+    headers['set-cookie'] = sessionSetCookieHeader(isSecure(req), sessionId);
+  }
+
+  res.writeHead(200, headers);
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -560,6 +614,20 @@ const server = createServer(async (req, res) => {
 
   if (isHomePath(url.pathname)) {
     await handleHomePage(req, res);
+    return;
+  }
+
+  const languageValue = matchLanguagePath(url.pathname);
+
+  if (languageValue !== null) {
+    await handleSelectPreference(req, res, 'language', languageValue);
+    return;
+  }
+
+  const themeValue = matchThemePath(url.pathname);
+
+  if (themeValue !== null) {
+    await handleSelectPreference(req, res, 'theme', themeValue);
     return;
   }
 

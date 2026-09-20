@@ -78,3 +78,41 @@ export function isAccountDeletePath(pathname) {
 export function isHomePath(pathname) {
   return pathname === '/';
 }
+
+/**
+ * PHP's route is `/language/{language}` (app/Http/Routes/WebRoutes.php)
+ * - a MANDATORY trailing value segment (unlike the optional {tree}
+ * segments above). Returns the raw value (URL.pathname already
+ * percent-decodes it) or null if the path doesn't match at all.
+ *
+ * @param {string} pathname
+ * @returns {string|null}
+ */
+export function matchLanguagePath(pathname) {
+  if (!pathname.startsWith('/language/')) {
+    return null;
+  }
+
+  const value = pathname.slice('/language/'.length);
+
+  // PHP's {language} token is mandatory - a trailing slash with
+  // nothing after it doesn't match the real route at all.
+  return value === '' ? null : value;
+}
+
+/**
+ * Same shape as matchLanguagePath() above, for PHP's `/theme/{theme}`
+ * route.
+ *
+ * @param {string} pathname
+ * @returns {string|null}
+ */
+export function matchThemePath(pathname) {
+  if (!pathname.startsWith('/theme/')) {
+    return null;
+  }
+
+  const value = pathname.slice('/theme/'.length);
+
+  return value === '' ? null : value;
+}

@@ -92,6 +92,26 @@ describe('isNodeRoute', () => {
     const url = urlFor('/tree/ophir');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
+
+  test('plain /language/{value}', () => {
+    const url = urlFor('/language/en-US');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/language/{value}', () => {
+    const url = urlFor('/index.php?route=%2Flanguage%2Fen-US');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('plain /theme/{value}', () => {
+    const url = urlFor('/theme/clouds');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/theme/{value}', () => {
+    const url = urlFor('/index.php?route=%2Ftheme%2Fclouds');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
 });
 
 describe('rewriteForPages', () => {
