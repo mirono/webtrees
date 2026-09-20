@@ -65,6 +65,22 @@ export function renderAccountPage({ user, contactMethods, languages, timezones, 
     ? `<div class="alert alert-${escapeHtml(message.status)}" role="alert">${escapeHtml(message.text)}</div>`
     : '';
 
+  // Matches AccountEdit.php's own show_delete_option computation
+  // exactly (app/Http/RequestHandlers/AccountEdit.php:69):
+  // getPreference(PREF_IS_ADMINISTRATOR) !== '1' - 'canadmin' is that
+  // preference's real wt_user_setting.setting_name (confirmed against
+  // app/Contracts/UserInterface.php, not the PHP constant name).
+  const showDeleteOption = user.settings.canadmin !== '1';
+
+  const deleteAccountHtml = showDeleteOption
+    ? `<div class="row mb-3">
+                    <div class="col-sm-3 wt-page-options-label"></div>
+                    <div class="col-sm-9 wt-page-options-value">
+                        <a href="#" class="btn btn-danger" data-wt-confirm="Are you sure you want to delete “${escapeHtml(user.userName)}”?" data-wt-post-url="/my-account-delete">Delete your account</a>
+                    </div>
+                </div>`
+    : '';
+
   // dir="ltr" is required, not decorative: both vendor.min.css (Bootstrap
   // 5.3's RTL-aware CSS) and webtrees.min.css scope large numbers of
   // rules - including .row's own gutter margins/padding and
@@ -189,6 +205,8 @@ export function renderAccountPage({ user, contactMethods, languages, timezones, 
 
                 <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
             </form>
+
+            ${deleteAccountHtml}
         </div>
     </main>
 

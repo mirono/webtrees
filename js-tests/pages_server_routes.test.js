@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isMyAccountPath, isLoginPath, isLogoutPath } from '../pages-server/routes.mjs';
+import { isMyAccountPath, isLoginPath, isLogoutPath, isAccountDeletePath } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
   test('the plain, no-tree path matches', () => {
@@ -68,5 +68,29 @@ describe('isLogoutPath', () => {
   test('an unrelated path does not match', () => {
     expect(isLogoutPath('/login')).toBe(false);
     expect(isLogoutPath('/')).toBe(false);
+  });
+});
+
+describe('isAccountDeletePath', () => {
+  test('the plain path matches', () => {
+    expect(isAccountDeletePath('/my-account-delete')).toBe(true);
+  });
+
+  test('a trailing segment does not match (no {tree} segment on this route)', () => {
+    expect(isAccountDeletePath('/my-account-delete/ophir')).toBe(false);
+  });
+
+  // The sharpest edge case: this path IS the same-prefix-plus-dash
+  // shape isMyAccountPath() already has to reject for the *reverse*
+  // case (isMyAccountPath('/my-account-delete') === false) - confirm
+  // isAccountDeletePath() doesn't accidentally match /my-account
+  // itself either.
+  test('does not match plain /my-account', () => {
+    expect(isAccountDeletePath('/my-account')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isAccountDeletePath('/login')).toBe(false);
+    expect(isAccountDeletePath('/')).toBe(false);
   });
 });

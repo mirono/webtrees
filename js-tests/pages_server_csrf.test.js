@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { generateCsrfToken, isValidCsrf } from '../pages-server/csrf.mjs';
+import { generateCsrfToken, isValidCsrf, csrfSetCookieHeader } from '../pages-server/csrf.mjs';
 
 describe('generateCsrfToken', () => {
   test('produces a non-empty hex string, different each call', () => {
@@ -31,5 +31,15 @@ describe('isValidCsrf', () => {
 
   test('empty cookie value is invalid', () => {
     expect(isValidCsrf({ wt_node_csrf: '' }, '')).toBe(false);
+  });
+});
+
+describe('csrfSetCookieHeader', () => {
+  // Regression: Path=/my-account was set here previously, which
+  // RFC 6265 5.1.4's cookie-path matching would NOT send for a POST to
+  // /my-account-delete (no "/" immediately after "/my-account" in that
+  // path) - silently breaking CSRF validation on that route.
+  test('scopes the cookie to the whole site, not just /my-account', () => {
+    expect(csrfSetCookieHeader('abc123')).toBe('wt_node_csrf=abc123; Path=/; HttpOnly; SameSite=Lax');
   });
 });

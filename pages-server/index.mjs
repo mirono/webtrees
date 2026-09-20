@@ -15,13 +15,14 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-4 of the php-to-js migration
+// Phase 5, steps 2-5 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
-// proxy/index.mjs, which sends /my-account*, /login*, and /logout here
-// and everything else to the PHP app - both processes share the same
-// Postgres database and the same login session (see auth.mjs and, for
-// /login/logout specifically, session-store.mjs + php-serialize.mjs).
+// proxy/index.mjs, which sends /my-account*, /login*, /logout, and
+// /my-account-delete here and everything else to the PHP app - both
+// processes share the same Postgres database and the same login
+// session (see auth.mjs and, for /login/logout specifically,
+// session-store.mjs + php-serialize.mjs).
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -29,11 +30,12 @@
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { loadDbConfig } from './config.mjs';
-import { isMyAccountPath, isLoginPath, isLogoutPath } from './routes.mjs';
+import { isMyAccountPath, isLoginPath, isLogoutPath, isAccountDeletePath } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
 import { renderAccountPage } from './account-view.mjs';
 import { updateAccount } from './account-update.mjs';
+import { deleteAccount } from './account-delete.mjs';
 import { renderLoginPage, isLocalPath } from './login-view.mjs';
 import { doLogin } from './login-action.mjs';
 import { doLogout } from './logout.mjs';
@@ -358,6 +360,75 @@ async function handleLogout(req, res) {
   res.end();
 }
 
+async function handleAccountDelete(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (user === null) {
+    // Matches AccountDelete.php's own unconditional redirect - even
+    // when not logged in, it just redirects (to a page that will
+    // itself redirect to /login), no error.
+    res.writeHead(302, { Location: '/my-account' });
+    res.end();
+    return;
+  }
+
+  // resources/js/webtrees/http.js's httpPost() sends an empty body and
+  // only the X-CSRF-TOKEN header for this kind of no-payload action
+  // (same as "Sign out") - check the header, not a form field.
+  const cookies = parseCookies(req.headers.cookie);
+
+  if (!isValidCsrf(cookies, req.headers['x-csrf-token'])) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('This form has expired. Please reload the page and try again.');
+    return;
+  }
+
+  // Matches AccountEdit.php/AccountDelete.php's own admin guard
+  // exactly - an administrator can only be deleted by another
+  // administrator, never through this self-service route. The UI
+  // never even renders the delete link for an admin
+  // (account-view.mjs's showDeleteOption), so this is a silent no-op
+  // here too, matching PHP - only reachable by bypassing the UI.
+  if (user.settings.canadmin === '1') {
+    res.writeHead(302, { Location: '/my-account' });
+    res.end();
+    return;
+  }
+
+  try {
+    await deleteAccount(pool, user.userId);
+  } catch (error) {
+    console.error('Failed to delete account:', error);
+    res.writeHead(500, { 'content-type': 'text/plain' });
+    res.end('Something went wrong deleting your account. Nothing was changed - please try again.');
+    return;
+  }
+
+  // The account and every one of its sessions (including this one)
+  // are gone - clear the cookie rather than leaving the browser
+  // holding a reference to a now-nonexistent session.
+  res.writeHead(302, {
+    Location: '/my-account',
+    'set-cookie': sessionClearCookieHeader(isSecure(req)),
+  });
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -375,6 +446,11 @@ const server = createServer(async (req, res) => {
 
   if (isLogoutPath(url.pathname)) {
     await handleLogout(req, res);
+    return;
+  }
+
+  if (isAccountDeletePath(url.pathname)) {
+    await handleAccountDelete(req, res);
     return;
   }
 

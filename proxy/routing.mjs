@@ -25,7 +25,10 @@
 // /logout: phase 5 step 4 - the natural complement to /login, reusing
 // the same session infrastructure to destroy a session instead of
 // creating one.
-export const NODE_ROUTE_PATHS = ['/my-account', '/login', '/logout'];
+// /my-account-delete: phase 5 step 5 - completes the /my-account
+// family; deliberately diverges from PHP's own (buggy, non-
+// transactional) delete logic - see pages-server/account-delete.mjs.
+export const NODE_ROUTE_PATHS = ['/my-account', '/login', '/logout', '/my-account-delete'];
 
 function matchesNodeRoute(path, pathname) {
   return pathname === path || pathname.startsWith(`${path}/`);

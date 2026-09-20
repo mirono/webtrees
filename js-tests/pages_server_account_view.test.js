@@ -41,4 +41,33 @@ describe('renderAccountPage', () => {
     expect(html).toContain('value="Miron Ophir"');
     expect(html).toContain('value="miron@ophir.org.il"');
   });
+
+  test('includes the CSRF meta tag httpPost() requires (resources/js/webtrees/http.js)', () => {
+    const html = renderAccountPage(baseParams());
+
+    expect(html).toContain('<meta name="csrf" content="test-token">');
+  });
+
+  // Matches AccountEdit.php's show_delete_option computation exactly:
+  // getPreference(PREF_IS_ADMINISTRATOR) !== '1' ('canadmin' is that
+  // setting's real name).
+  describe('the "Delete your account" link', () => {
+    test('is rendered for a non-administrator', () => {
+      const html = renderAccountPage(baseParams({ user: { ...baseParams().user, settings: { canadmin: '0' } } }));
+
+      expect(html).toContain('data-wt-post-url="/my-account-delete"');
+    });
+
+    test('is rendered when canadmin is entirely absent (default: not an admin)', () => {
+      const html = renderAccountPage(baseParams());
+
+      expect(html).toContain('data-wt-post-url="/my-account-delete"');
+    });
+
+    test('is NOT rendered for an administrator', () => {
+      const html = renderAccountPage(baseParams({ user: { ...baseParams().user, settings: { canadmin: '1' } } }));
+
+      expect(html).not.toContain('data-wt-post-url="/my-account-delete"');
+    });
+  });
 });

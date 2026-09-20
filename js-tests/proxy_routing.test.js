@@ -27,7 +27,7 @@ describe('isNodeRoute', () => {
   });
 
   test('a path that merely starts with the same prefix is not a match', () => {
-    const url = urlFor('/my-account-delete');
+    const url = urlFor('/my-account-settings');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -63,6 +63,16 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/logout', () => {
     const url = urlFor('/index.php?route=%2Flogout');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('plain /my-account-delete', () => {
+    const url = urlFor('/my-account-delete');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/my-account-delete', () => {
+    const url = urlFor('/index.php?route=%2Fmy-account-delete');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 });

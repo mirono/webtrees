@@ -35,7 +35,16 @@ export function generateCsrfToken() {
 }
 
 export function csrfSetCookieHeader(token) {
-  return `${CSRF_COOKIE_NAME}=${token}; Path=/my-account; HttpOnly; SameSite=Lax`;
+  // Path=/ , not Path=/my-account: cookie-path matching (RFC 6265
+  // 5.1.4) only sends a Path=/my-account cookie for a request path
+  // that is EXACTLY /my-account, or has /my-account/ as a prefix - a
+  // POST to /my-account-delete would NOT include it (no "/" right
+  // after "/my-account"), silently breaking CSRF validation there.
+  // Confirmed by reading the RFC's matching algorithm before this bug
+  // could ship, not found live. The token itself is regenerated fresh
+  // on every GET anyway, so there's no meaningful downside to the
+  // broader scope.
+  return `${CSRF_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax`;
 }
 
 /**
