@@ -213,3 +213,76 @@ confirmed the session row existed, `POST /logout` with
 deleted + the correct `wt_log` entry written; separately confirmed the
 anonymous-logout no-op and that both views render the CSRF meta tag.
 Full JS suite: 4102 tests, green.
+
+## Step 5: `/my-account-delete`
+
+Completes the `/my-account` family (GET, update, delete). Unlike every
+prior step, this one **deliberately diverges** from PHP rather than
+faithfully porting it — `app/Services/UserService::delete()` (called
+by `AccountDelete.php`) has a real, confirmed-live bug.
+
+**The bug, found by reading the code and then reproduced live before
+writing any Node code**: `delete()` touches ~8 tables (`wt_session`,
+`wt_log`, `wt_change`, `wt_block_setting`, `wt_block`,
+`wt_user_gedcom_setting`, `wt_user_setting`, `wt_message`, `wt_user`)
+with **no transaction** — each `DB::table(...)->delete()`/`->update()`
+call commits independently. Its "take over the user's pending
+changes" step (`UPDATE wt_change SET user_id = Auth::id() WHERE
+user_id = $user->id()`) is a **no-op** for the only real caller:
+`AccountDelete.php` only ever deletes `Validator::attributes($request)->user()`
+— the currently-logged-in user — so `Auth::id() === $user->id()` at
+that point. Since `wt_change.user_id` has a `NOT NULL` foreign key to
+`wt_user` with no cascade, any user with a non-rejected `wt_change`
+row (or even just an auto-created default `wt_block` dashboard widget
+— common for most users, not an edge case) hits a foreign-key
+violation on the final `DELETE FROM wt_user`. Reproduced exactly:
+created a disposable test user with a pending change, a block, a
+block setting, and a message, logged in through the real app, hit the
+real `/my-account-delete` — `500 Internal Server Error`, and the
+account was left **half-deleted**: session/settings/blocks/messages
+already gone, the `wt_user` row still stuck there, unable to log in or
+retry.
+
+This changed the shape of the task, so it was surfaced to the user
+before writing any code (`AskUserQuestion`) rather than deciding
+unilaterally whether to replicate a data-corrupting bug into a new
+code path. Chosen fix: wrap every step in one Postgres transaction
+(`pages-server/account-delete.mjs`, using a dedicated `pool.connect()`
+client with `BEGIN`/`COMMIT`/`ROLLBACK`, not `pool.query()`, since a
+real transaction needs one held connection) — a failure now leaves the
+account **completely untouched**, never half-deleted. The pending
+changes are deleted outright rather than replicating the
+self-referential no-op reassignment; there's no "reassign to a
+different real admin" without inventing a new decision this project
+hasn't made, and deleting your own account already means abandoning
+your own pending edits.
+
+**A second, smaller bug found while wiring this up, caught by reading
+the spec rather than the hard way**: `csrf.mjs`'s double-submit cookie
+was scoped `Path=/my-account`. Per RFC 6265 §5.1.4's cookie-path
+matching, a `Path=/my-account` cookie is only sent for a request path
+that's exactly `/my-account` or has `/my-account/` as a prefix — a
+POST to `/my-account-delete` doesn't qualify (no `/` immediately after
+`/my-account`), so the browser would never have sent that cookie,
+breaking CSRF validation on this exact route. Broadened to `Path=/`
+— the token is regenerated fresh on every `/my-account` GET anyway, so
+there's no meaningful downside to the wider scope.
+
+`account-view.mjs` now renders "Delete your account"
+(`data-wt-confirm` + `data-wt-post-url`, the same mechanism as "Sign
+out") matching `AccountEdit.php`'s `show_delete_option` exactly
+(`canadmin !== '1'` — an administrator can only be deleted by another
+administrator). The guard is re-checked server-side in
+`handleAccountDelete()`, not just left to the UI conditional. Since
+this route's `httpPost()` call sends an empty body (matching "Sign
+out"'s pattern), CSRF is validated against the `X-CSRF-TOKEN` header,
+not a form field.
+
+Verified end-to-end against the real Postgres database: reproduced the
+exact crash scenario (pending change + block + block setting +
+message) and confirmed Node deletes everything atomically with no
+error; separately confirmed the admin guard (no delete button
+rendered, and a direct bypass attempt is a silent no-op, matching
+PHP), a CSRF mismatch (`403`, nothing touched), and that `wt_log` rows
+are correctly preserved with `user_id` set `NULL` (not deleted, same
+as PHP). Full JS suite: 4115 tests, green.

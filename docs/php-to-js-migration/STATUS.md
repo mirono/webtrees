@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-19 (`/logout` ported to Node, phase 5 step 4). This is the entry point for "where are we" —
+**Last updated: 2026-09-20 (`/my-account-delete` ported to Node, phase 5 step 5, fixing a real PHP data-corruption bug). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -102,6 +102,7 @@ just adding latency.
 | 5.2 | First real HTTP route (`/my-account`) served entirely by Node, behind a new reverse proxy, sharing PHP's login session | **Done (2026-09-19)** — [phase5-first-node-route.md](phase5-first-node-route.md) |
 | 5.3 | `/login` served entirely by Node — the first route where Node *writes* a session (not just reads one PHP wrote), via a small PHP-session-format codec | **Done (2026-09-19)** — [phase5-login-route.md](phase5-login-route.md) |
 | 5.4 | `/logout` served entirely by Node — destroys the session, reusing step 3's infrastructure; also fixed a live "Sign out" bug | **Done (2026-09-19)** — see phase5-login-route.md's login/logout pairing |
+| 5.5 | `/my-account-delete` served entirely by Node — deliberately diverges from PHP's own non-transactional, data-corrupting delete logic | **Done (2026-09-20)** — see phase5-login-route.md |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -165,6 +166,25 @@ request) if that tag is missing. Neither `account-view.mjs` nor
 landed. Both views now include the tag. Verified end-to-end against
 the real Postgres database, including confirming the anonymous-logout
 no-op behavior and that both views now render the CSRF meta tag.
+
+**Step 5** ports `/my-account-delete`, completing the `/my-account`
+family (GET, update, delete). This one deliberately does **not**
+faithfully port PHP's `UserService::delete()` — confirmed live with a
+disposable test user that it has a real, currently-shipped bug: it
+deletes across ~8 tables with no transaction, and its "reassign
+pending changes" step is a no-op for the only real caller (self-
+deletion), so any user with a pending edit or even just a default
+dashboard widget gets a `500` that leaves their account
+**half-deleted**. Surfaced this to the user before writing code
+(`AskUserQuestion`) — chose to fix it: `account-delete.mjs` wraps
+every step in one Postgres transaction. Also fixed a second bug found
+while wiring this up: `csrf.mjs`'s cookie was scoped
+`Path=/my-account`, which RFC 6265 cookie-path matching would not send
+for `/my-account-delete` (no `/` immediately following `/my-account`
+in that path) — broadened to `Path=/`. Verified end-to-end reproducing
+the exact scenario that crashes PHP (pending change + dashboard widget
++ message): Node deletes everything atomically with no error. Full JS
+suite: 4115 tests, green.
 
 ## The 6 bridges: final state
 
