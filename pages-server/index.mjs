@@ -15,19 +15,26 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-8 of the php-to-js migration
+// Phase 5, steps 2-9 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
 // proxy/index.mjs, which sends /my-account*, /login*, /logout,
-// /my-account-delete, /, /language/*, /theme/*, and the exact-match
-// /tree/{tree} page here and everything else to the PHP app - both
-// processes share the same Postgres database and the same login
-// session (see auth.mjs and, for /login/logout/language/theme
-// specifically, session-store.mjs + php-serialize.mjs). /tree/{tree}
-// (step 8, docs/php-to-js-migration/phase5-tree-page.md) is the first
+// /my-account-delete, /, /language/*, /theme/*, the exact-match
+// /tree/{tree} page, and /tree/{tree}/individual/{xref} here and
+// everything else to the PHP app - both processes share the same
+// Postgres database and the same login session (see auth.mjs and, for
+// /login/logout/language/theme specifically, session-store.mjs +
+// php-serialize.mjs). /tree/{tree} (step 8,
+// docs/php-to-js-migration/phase5-tree-page.md) is the first
 // tree-scoped route and renders only one of TreePage's up to 8
 // configurable blocks (WelcomeBlockModule) - every other block a tree
 // might have configured is simply omitted from the layout.
+// /tree/{tree}/individual/{xref} (step 9,
+// docs/php-to-js-migration/phase5-individual-page.md) is the first
+// route serving real GEDCOM record data and the first with a
+// genuinely nontrivial privacy/access-control chain - identity header
+// + vital-event facts (BIRT/CHR/BAPM/DEAT/BURI/CREM) only, no tabs, no
+// MARR, no slug canonicalization.
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -44,6 +51,7 @@ import {
   matchLanguagePath,
   matchThemePath,
   matchTreePagePath,
+  matchIndividualPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -57,6 +65,23 @@ import { renderNoTreeAccessPage } from './home-view.mjs';
 import { renderTreePage } from './tree-view.mjs';
 import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel } from './trees.mjs';
 import { significantIndividualXref, findVisibleWelcomeBlockId } from './welcome-block.mjs';
+import { renderIndividualPage } from './individual-view.mjs';
+import {
+  loadIndividual,
+  loadTreePrivacyPrefs,
+  loadDefaultResn,
+  viewerRelationshipPrefs,
+  canShowRecord,
+  sex,
+  extractPrimaryName,
+  parseFacts,
+  getBirthDate,
+  getDeathDate,
+  isDead,
+  lifespan,
+  ageString,
+  factCanShow,
+} from './individual.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -672,6 +697,166 @@ async function handleTreePage(req, res, treeName) {
   res.end(html);
 }
 
+// The individual's own vital-event facts this v1 slice renders - see
+// docs/php-to-js-migration/phase5-individual-page.md's scope decision
+// (MARR and every other GEDCOM tag are out of scope).
+const VITAL_FACT_TAGS = ['BIRT', 'CHR', 'BAPM', 'DEAT', 'BURI', 'CREM'];
+
+async function handleIndividualPage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    // Same "tree doesn't exist or isn't accessible" 302-to-home
+    // behavior as handleTreePage() - PHP makes no distinction here either.
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let individual;
+  let facts;
+  let treePrivacyPrefs;
+  let accessLevel;
+  let relPrefs;
+  let defaultResnInfo;
+  let dead;
+  let shown;
+
+  try {
+    individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      // Distinct from the tree-not-found case above: this mirrors
+      // Auth::checkIndividualAccess()'s HttpNotFoundException (404),
+      // not a redirect - a nonexistent xref within a real, accessible
+      // tree is a genuinely different situation from a bad tree name.
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(individual.gedcom);
+    treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+
+    const viewer = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    shown = canShowRecord(treeForPrivacy, individual.gedcom, facts, viewer);
+  } catch (error) {
+    console.error('Failed to resolve individual privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    // Mirrors Auth::checkIndividualAccess()'s HttpAccessDeniedException (403).
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const primaryName = extractPrimaryName(individual.gedcom);
+  // Fallback for the rare individual with zero NAME facts - PHP has its
+  // own "Private"/no-name display fallback via fullName(); this v1 slice
+  // just falls back to the xref itself. GEDCOM xrefs are always plain
+  // alphanumeric identifiers (never contain HTML metacharacters), so
+  // embedding it directly here is safe without a separate escape step.
+  const fullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+
+  const birthDate = getBirthDate(facts);
+  const deathDate = getDeathDate(facts);
+  const individualSex = sex(individual.gedcom);
+
+  const visibleFacts = [];
+
+  for (const fact of facts) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+
+    if (!VITAL_FACT_TAGS.includes(tag)) {
+      continue;
+    }
+
+    // Fact-specific default RESN overrides the tree-wide one when both
+    // exist - matches Fact::canShow()'s own check order
+    // (individual_fact_privacy before fact_privacy, app/Fact.php:229-233).
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const placeMatch = /\n2 PLAC (.+)/.exec(fact);
+
+    visibleFacts.push({ tag, date: dateMatch ? dateMatch[1] : '', place: placeMatch ? placeMatch[1] : '' });
+  }
+
+  const individualViewModel = {
+    xref: individual.xref,
+    fullNameHtml,
+    lifespan: lifespan({ birthDate, deathDate, isDead: dead }),
+    age: ageString({ birthDate, deathDate, isDead: dead, sex: individualSex }),
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderIndividualPage({ tree, user, csrfToken, individual: individualViewModel });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -723,6 +908,13 @@ const server = createServer(async (req, res) => {
 
   if (themeValue !== null) {
     await handleSelectPreference(req, res, 'theme', themeValue);
+    return;
+  }
+
+  const individualMatch = matchIndividualPagePath(url.pathname);
+
+  if (individualMatch !== null) {
+    await handleIndividualPage(req, res, individualMatch.tree, individualMatch.xref);
     return;
   }
 

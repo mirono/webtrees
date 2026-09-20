@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-20 (`/tree/{tree}` + WelcomeBlockModule ported to Node, phase 5 step 8 — the first tree-scoped route). This is the entry point for "where are we" —
+**Last updated: 2026-09-20 (`/tree/{tree}/individual/{xref}` ported to Node, phase 5 step 9 — the first route serving real GEDCOM record data, with a corrected privacy-chain bug caught before shipping). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4194 tests, all green.
+# Expect: 4282 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -106,6 +106,7 @@ just adding latency.
 | 5.6 | `/` (home page) served entirely by Node — a redirect dispatcher, not a tree-listing page; replicates the privacy-sensitive accessible-tree query exactly | **Done (2026-09-20)** — [phase5-home-page.md](phase5-home-page.md) |
 | 5.7 | `/language/{value}` + `/theme/{value}` served entirely by Node; fixed a real gap in the session codec (float/array/object values) that these routes exposed | **Done (2026-09-20)** — see phase5-home-page.md's addendum below |
 | 5.8 | `/tree/{tree}` (TreePage) served entirely by Node — the first tree-scoped route; ports one of TreePage's up to 8 configurable blocks (WelcomeBlockModule) | **Done (2026-09-20)** — [phase5-tree-page.md](phase5-tree-page.md) |
+| 5.9 | `/tree/{tree}/individual/{xref}` (IndividualPage) served entirely by Node — the first route with real GEDCOM record data and a genuinely nontrivial privacy chain; caught and fixed a real privacy-chain design flaw before shipping | **Done (2026-09-20)** — [phase5-individual-page.md](phase5-individual-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -259,6 +260,30 @@ the "Default individual" link's slug-less URL genuinely 301-redirects
 to the correct individual page, not a guess about `IndividualPage`'s
 optional `{slug}` segment. Full JS suite: 4194 tests, green. See
 [phase5-tree-page.md](phase5-tree-page.md).
+
+**Step 9** ports `/tree/{tree}/individual/{xref}` (IndividualPage) —
+the first route serving real GEDCOM record data and the first with a
+genuinely nontrivial privacy chain: identity header (name/sex/lifespan/
+age) plus vital-event facts (BIRT/CHR/BAPM/DEAT/BURI/CREM) only, full
+`canShowRecord()`/`canShowByType()` privacy logic ported, no tabs, no
+MARR, no slug canonicalization. Extra scrutiny was applied given the
+stakes (3 parallel research passes, a Plan-agent design pass, manual
+verification against source) and it paid off: caught and fixed a real
+flaw in the privacy-chain design before shipping — the original
+proposal to skip PHP's relationship-distance BFS (`isRelated()`)
+entirely was NOT the safe cut it looked like, since
+`RELATIONSHIP_PATH_LENGTH` turns out to be a per-viewer setting that
+*replaces* (not just supplements) the member-only default whenever a
+viewer has it set — the original cut would have shown an unrelated
+member-level viewer a record PHP would deny. Fixed with a corrected
+gate that denies outright in that specific case, a proven-safe upper
+bound. Also caught, mid-implementation, that the `KEEP_ALIVE_YEARS_BIRTH`/
+`_DEATH` override had been dropped entirely rather than narrowed —
+fixed by porting it properly. Verified live, including the exact
+scenario the relationship-gate fix targets (confirmed it now correctly
+403s where the original design would have wrongly 200'd). Full JS
+suite: 4282 tests, green. See
+[phase5-individual-page.md](phase5-individual-page.md).
 
 ## The 6 bridges: final state
 

@@ -1,0 +1,150 @@
+/**
+ * webtrees: online genealogy
+ * Copyright (C) 2026 webtrees development team
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+// Hand-rolled HTML for /tree/{tree}/individual/{xref} - a deliberately
+// scoped-down replica of resources/views/individual-page*.phtml, same
+// convention as tree-view.mjs (dir="ltr", escapeHtml(), CSRF meta tag
+// only when logged in). See docs/php-to-js-migration/phase5-individual-page.md
+// for the full scope: identity header (name/sex/lifespan/age) + a flat
+// list of vital-event facts only - no tabs, no sidebars, no charts.
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+const FACT_LABELS = {
+  BIRT: 'Birth',
+  CHR: 'Christening',
+  BAPM: 'Baptism',
+  DEAT: 'Death',
+  BURI: 'Burial',
+  CREM: 'Cremation',
+};
+
+/**
+ * Matches resources/views/fact.phtml's row shape, reduced to the
+ * label/date/place a v1 vital-facts list needs - no Elements-driven
+ * value formatting, no sub-fact citations (SOUR/NOTE/OBJE), no edit
+ * controls.
+ */
+function renderFact({ tag, date, place }) {
+  const label = FACT_LABELS[tag] ?? tag;
+  const dateHtml = date ? `<td class="descriptionbox">${escapeHtml(date)}</td>` : '<td class="descriptionbox"></td>';
+  const placeHtml = place ? `<td class="descriptionbox">${escapeHtml(place)}</td>` : '<td class="descriptionbox"></td>';
+
+  return `
+        <tr>
+            <td class="descriptionbox rela">${escapeHtml(label)}</td>
+            ${dateHtml}
+            ${placeHtml}
+        </tr>`;
+}
+
+/**
+ * @param {object} params
+ * @param {{name: string}} params.tree
+ * @param {{realName: string}|null} params.user
+ * @param {string|null} params.csrfToken required (non-null) iff params.user !== null
+ * @param {{
+ *   xref: string,
+ *   fullNameHtml: string,
+ *   lifespan: string,
+ *   age: string,
+ *   facts: {tag: string, date: string, place: string}[],
+ * }} params.individual `fullNameHtml` is PRE-ESCAPED SAFE HTML (see
+ *   pages-server/individual.mjs's addName()) - inserted RAW, never
+ *   passed through escapeHtml() again.
+ */
+export function renderIndividualPage({ tree, user, csrfToken, individual }) {
+  const csrfMetaTag =
+    user !== null
+      ? `
+    <meta name="csrf" content="${escapeHtml(csrfToken)}">
+    <!-- resources/js/webtrees/http.js's httpPost() unconditionally reads
+         this tag and throws (synchronously, before ever sending a
+         request) if it's missing - required here because "Sign out"
+         uses it, same as tree-view.mjs. -->`
+      : '';
+
+  const userMenuHtml =
+    user !== null
+      ? `
+                    <li class="nav-item">
+                        <span class="nav-link">${escapeHtml(user.realName)}</span>
+                    </li>
+                    <li class="nav-item menu-logout">
+                        <a class="nav-link" href="#" data-wt-post-url="/logout" data-wt-reload-url="/">Sign out</a>
+                    </li>`
+      : `
+                    <li class="nav-item">
+                        <a class="nav-link" href="/login">Sign in</a>
+                    </li>`;
+
+  const factsHtml =
+    individual.facts.length > 0
+      ? `
+    <table class="table wt-facts-table">
+        <tbody>${individual.facts.map(renderFact).join('')}
+        </tbody>
+    </table>`
+      : '';
+
+  // dir="ltr" is required, not decorative - see account-view.mjs's own
+  // doc comment for the [dir]-selector CSS finding this fix addresses.
+  return `<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+    <meta charset="UTF-8">${csrfMetaTag}
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(individual.xref)}</title>
+    <link rel="stylesheet" href="/public/css/vendor.min.css">
+    <link rel="stylesheet" href="/public/css/webtrees.min.css">
+</head>
+<body class="wt-global wt-theme-webtrees wt-route-individual-page">
+    <header class="wt-header-wrapper d-print-none">
+        <div class="container-lg wt-header-container">
+            <div class="row wt-header-content">
+                <div class="col wt-site-logo"></div>
+                <h1 class="col wt-site-title">${escapeHtml(tree.name)}</h1>
+                <div class="col wt-secondary-navigation">
+                    <ul class="nav wt-user-menu">${userMenuHtml}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="content" class="wt-main-wrapper">
+        <div class="container-lg wt-main-container">
+            <div class="row">
+                <div class="col-md-12">
+                    <h2 class="wt-page-title">${individual.fullNameHtml} <span class="wt-lifespan">${escapeHtml(individual.lifespan)}</span> ${escapeHtml(individual.age)}</h2>${factsHtml}
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="container-lg wt-footers d-print-none"></footer>
+
+    <script src="/public/js/vendor.min.js"></script>
+    <script src="/public/js/webtrees.min.js"></script>
+</body>
+</html>
+`;
+}

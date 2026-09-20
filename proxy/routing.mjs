@@ -52,6 +52,20 @@ export function isTreePagePath(pathname) {
   return /^\/tree\/[^/]+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/individual/{xref}{/slug}: phase 5 step 9 - the first
+// route serving real GEDCOM record data (see
+// docs/php-to-js-migration/phase5-individual-page.md). Same
+// exact-shape reasoning as isTreePagePath() above: a naive prefix
+// match on '/tree/{tree}/individual/' would be fine here (unlike
+// isTreePagePath(), this route doesn't have exact-match siblings
+// registered AT its own path), but OTHER record types under the same
+// '/tree/{tree}' group (/family/{xref}, /media/{xref}, ...) must NOT
+// match this pattern - hence its own dedicated regex rather than
+// folding into NODE_ROUTE_PATHS's prefix-match convention.
+export function isIndividualPagePath(pathname) {
+  return /^\/tree\/[^/]+\/individual\/[^/]+(?:\/.*)?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -63,7 +77,11 @@ export function isTreePagePath(pathname) {
  * @param {URLSearchParams} searchParams
  */
 export function isNodeRoute(pathname, searchParams) {
-  if (NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, pathname)) || isTreePagePath(pathname)) {
+  if (
+    NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, pathname)) ||
+    isTreePagePath(pathname) ||
+    isIndividualPagePath(pathname)
+  ) {
     return true;
   }
 
@@ -73,7 +91,7 @@ export function isNodeRoute(pathname, searchParams) {
     return false;
   }
 
-  return NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, route)) || isTreePagePath(route);
+  return NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, route)) || isTreePagePath(route) || isIndividualPagePath(route);
 }
 
 /**

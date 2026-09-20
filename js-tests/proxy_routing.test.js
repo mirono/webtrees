@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isNodeRoute, isTreePagePath, rewriteForPages } from '../proxy/routing.mjs';
+import { isNodeRoute, isTreePagePath, isIndividualPagePath, rewriteForPages } from '../proxy/routing.mjs';
 
 function urlFor(pathAndQuery) {
   return new URL(pathAndQuery, 'http://localhost');
@@ -105,9 +105,32 @@ describe('isNodeRoute', () => {
 
   // A sibling route under the same /tree/{tree} attach block (PHP
   // registers TreePage at '' - an exact match, not a prefix) must NOT
-  // be wrongly forwarded to Node.
-  test('a sibling route under /tree/{tree} is not a Node route', () => {
-    const url = urlFor('/tree/ophir/individual/I1');
+  // be wrongly forwarded to Node - EXCEPT /tree/{tree}/individual/{xref}
+  // itself, which became its own Node route in a later step (below).
+  test('a sibling route under /tree/{tree} that is not individual/{xref} is not a Node route', () => {
+    const url = urlFor('/tree/ophir/family/F1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
+  });
+
+  test('/tree/{tree}/individual/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/individual/X1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/individual/{xref}/{slug} is a Node route', () => {
+    const url = urlFor('/tree/ophir/individual/X1/John-DOE');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/individual/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Findividual%2FX1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  // A different record type under the same /tree/{tree}/individual/
+  // prefix shape must not accidentally match.
+  test('a sibling record type (not individual) is not a Node route', () => {
+    const url = urlFor('/tree/ophir/media/M1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -149,6 +172,26 @@ describe('isTreePagePath', () => {
   test('does not match the bare prefix', () => {
     expect(isTreePagePath('/tree')).toBe(false);
     expect(isTreePagePath('/tree/')).toBe(false);
+  });
+});
+
+describe('isIndividualPagePath', () => {
+  test('matches the bare path', () => {
+    expect(isIndividualPagePath('/tree/ophir/individual/X1')).toBe(true);
+  });
+
+  test('a trailing slug is tolerated', () => {
+    expect(isIndividualPagePath('/tree/ophir/individual/X1/John-DOE')).toBe(true);
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(isIndividualPagePath('/tree/ophir/family/F1')).toBe(false);
+    expect(isIndividualPagePath('/tree/ophir/media/M1')).toBe(false);
+  });
+
+  test('does not match the bare prefix', () => {
+    expect(isIndividualPagePath('/tree/ophir/individual')).toBe(false);
+    expect(isIndividualPagePath('/tree/ophir/individual/')).toBe(false);
   });
 });
 

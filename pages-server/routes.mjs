@@ -135,3 +135,30 @@ export function matchTreePagePath(pathname) {
 
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * PHP's route is `/tree/{tree}/individual/{xref}{/slug}` - registered
+ * inside the SAME `/tree/{tree}` attach block as TreePage
+ * (app/Http/Routes/WebRoutes.php:658-661), GET only, with the slug
+ * token technically permitting embedded slashes (`->tokens(['slug' =>
+ * '.*'])`) - but SlugFactory::make() never produces one (every
+ * non-alphanumeric run becomes a single `-`), so matching a single
+ * optional trailing segment is a safe, real-world-equivalent
+ * simplification. Confirmed via grep that no other route lives
+ * literally under `/individual/{xref}/...` (edit/delete/add-* actions
+ * use distinct literal prefixes like `/add-child-to-individual/{xref}`),
+ * and sibling record types (`/family/{xref}`, `/media/{xref}`, ...) use
+ * a different literal segment entirely, so this pattern cannot
+ * accidentally swallow either. This step deliberately does not
+ * implement slug canonicalization/redirect (see
+ * docs/php-to-js-migration/phase5-individual-page.md) - the slug, if
+ * present, is accepted and ignored.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchIndividualPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/individual\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
