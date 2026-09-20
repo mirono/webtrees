@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-20 (`/` home page ported to Node, phase 5 step 6). This is the entry point for "where are we" —
+**Last updated: 2026-09-20 (`/language`/`/theme` ported to Node, phase 5 step 7, plus a real codec fix that unblocked them). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -104,6 +104,7 @@ just adding latency.
 | 5.4 | `/logout` served entirely by Node — destroys the session, reusing step 3's infrastructure; also fixed a live "Sign out" bug | **Done (2026-09-19)** — see phase5-login-route.md's login/logout pairing |
 | 5.5 | `/my-account-delete` served entirely by Node — deliberately diverges from PHP's own non-transactional, data-corrupting delete logic | **Done (2026-09-20)** — see phase5-login-route.md |
 | 5.6 | `/` (home page) served entirely by Node — a redirect dispatcher, not a tree-listing page; replicates the privacy-sensitive accessible-tree query exactly | **Done (2026-09-20)** — [phase5-home-page.md](phase5-home-page.md) |
+| 5.7 | `/language/{value}` + `/theme/{value}` served entirely by Node; fixed a real gap in the session codec (float/array/object values) that these routes exposed | **Done (2026-09-20)** — see phase5-home-page.md's addendum below |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -204,6 +205,39 @@ a non-imported tree is correctly invisible to non-admins entirely.
 `?route=` ugly-URL generation for redirect targets Node doesn't own
 yet. Full JS suite: 4131 tests, green. See
 [phase5-home-page.md](phase5-home-page.md).
+
+**Step 7** ports `/language/{value}` and `/theme/{value}`
+(`SelectLanguage.php`/`SelectTheme.php` — literally the same 3 lines
+with a different field name), usable while anonymous, no CSRF check
+(matches PHP's own exclusion), not validated against a real
+language/theme list (matches PHP's own looseness — no crash risk,
+unlike the `AccountDelete` bug). Anonymous visitors get a
+`_GUEST_`-prefixed session key instead of a DB write, matching
+`GuestUser::setPreference()` exactly.
+
+This step exposed — and fixed — a **real gap in `/login`'s session
+codec**: unlike `/login` (only ever touches a fresh pre-login
+session), these routes read-and-rewrite the session for *any* user,
+including ones already deep into a real session containing value
+types the codec didn't model (`clipboard`, `flash_messages` — both
+genuinely written by PHP features this migration hasn't ported).
+Previously, decoding such a session threw and silently fell back to a
+fresh anonymous session — an ordinary action (switching language while
+having something in your clipboard) could log a real user out with no
+warning. Fixed by extending `php-serialize.mjs` to opaquely preserve
+float/array/object values (exact original bytes, re-encoded verbatim,
+never interpreted) instead of throwing — PHP's array/object grammar
+turned out to be a well-bounded recursive structure once actually
+checked against real `session_encode()` output, not the "unsafe to
+bound" risk the original design assumed.
+
+Verified live: manually seeded a session with a real clipboard-shaped
+array (simulating actual prior tree-page use), called
+`/language/en-GB` through it, and confirmed via direct SQL that
+`wt_user` (identity) and the clipboard array both survived completely
+untouched while `language` updated correctly — then confirmed the real
+PHP app still recognized the session as authenticated afterward. Full
+JS suite: 4152 tests, green.
 
 ## The 6 bridges: final state
 
