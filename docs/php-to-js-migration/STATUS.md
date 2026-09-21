@@ -382,6 +382,30 @@ separate decision — see "Open decisions" below.
 
 ## Fixed bugs (found during manual testing)
 
+- **Two record-page bugs found via a user-provided side-by-side
+  screenshot comparison against the real PHP page** (2026-09-21):
+  1. Both `IndividualPage` and `FamilyPage`'s header showed the tree's
+     short slug (e.g. "ophir") instead of its real display title (e.g.
+     "The Ophir Family Tree") — both views read `tree.name` where
+     `tree-view.mjs` (an earlier, correct step) already used
+     `tree.title`. A plain copy-paste divergence, not a logic bug.
+  2. FamilyPage's husband/wife/children cards showed only a bare name,
+     no birth info at all, unlike the real page's "Birth: May 20, 1963
+     … — Bat Yam, Israel" line. Root cause, found by `grep`ping the
+     real compiled `public/css/webtrees.min.css`: it has
+     `.wt-family-members .wt-chart-box-lifespan { display: none; }` —
+     the `wt-chart-box-lifespan` div a prior fix added was real,
+     correctly-named markup, but genuinely invisible in this exact
+     page context by the real stylesheet's own design. What the real
+     page shows instead is `chart-box.phtml`'s `wt-chart-box-facts`
+     line (a birth-event summary), which is NOT hidden here — ported
+     that instead (plain date+place text, no relative-age numbers).
+     Also added the real per-sex background class
+     (`wt-chart-box-<sex>`, confirmed from the screenshot's blue/pink
+     card backgrounds) and the "N children"/"No children" badge
+     `family-page-children.phtml` always shows. **Needs `docker
+     compose restart pages`** to take effect live.
+
 - **FamilyPage's facts table only ever showed marriage, never other
   family facts** (2026-09-21): reported live as "I see only marriage
   and not other facts (Residence probably)" — the user's real family

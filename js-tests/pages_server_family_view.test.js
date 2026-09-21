@@ -16,20 +16,21 @@
 import { describe, expect, test } from 'vitest';
 import { renderFamilyPage } from '../pages-server/family-view.mjs';
 
-function member(name, xref) {
+function member(name, xref, sex = 'M') {
   return {
     fullNameHtml: `<span class="NAME" dir="auto" translate="no">${name}</span>`,
-    lifespan: '1870–1920',
+    sex,
+    birthSummary: 'Birth: 12 AUG 1870, London',
     url: `/tree/ophir/individual/${xref}`,
   };
 }
 
 function baseParams(overrides = {}) {
   return {
-    tree: { name: 'ophir' },
+    tree: { title: 'The Ophir Family Tree' },
     user: null,
     csrfToken: null,
-    family: { husband: member('John DOE', 'I1'), wife: member('Jane DOE', 'I2'), children: [], facts: [] },
+    family: { husband: member('John DOE', 'I1', 'M'), wife: member('Jane DOE', 'I2', 'F'), children: [], facts: [] },
     ...overrides,
   };
 }
@@ -39,6 +40,29 @@ describe('renderFamilyPage', () => {
     const html = renderFamilyPage(baseParams());
 
     expect(html).toMatch(/<html[^>]*\bdir="ltr"/);
+  });
+
+  // Regression test: the header used tree.name (the short slug) instead
+  // of tree.title (the real display title) - caught via a live
+  // screenshot comparison against the real PHP page.
+  test('the header shows the tree title, not its slug', () => {
+    const html = renderFamilyPage(baseParams());
+
+    expect(html).toContain('<h1 class="col wt-site-title">The Ophir Family Tree</h1>');
+  });
+
+  // Regression test: family-page-children.phtml's own "N children"/
+  // "No children" badge was missing entirely.
+  test('shows the child-count badge, including "No children" for zero', () => {
+    expect(renderFamilyPage(baseParams())).toContain('No children');
+
+    const withKids = renderFamilyPage(baseParams({ family: { ...baseParams().family, children: [member('Kid One', 'I3')] } }));
+    expect(withKids).toContain('1 child');
+
+    const withTwoKids = renderFamilyPage(
+      baseParams({ family: { ...baseParams().family, children: [member('Kid One', 'I3'), member('Kid Two', 'I4')] } }),
+    );
+    expect(withTwoKids).toContain('2 children');
   });
 
   test('renders husband and wife names, each linking to their individual page', () => {
@@ -57,12 +81,23 @@ describe('renderFamilyPage', () => {
   // "the family page shows only facts" (the cards were there, just
   // visually blended into nothing next to the properly-styled facts
   // table). Assert the REAL chart-box.phtml class names instead.
+  //
+  // A second regression, caught via a live screenshot comparison: the
+  // real stylesheet has `.wt-family-members .wt-chart-box-lifespan {
+  // display: none; }`, so an earlier fix's `wt-chart-box-lifespan` div
+  // was real markup but always invisible in this exact context - the
+  // real page shows a birth-event summary (`wt-chart-box-facts`)
+  // instead, and a per-sex background class.
   test('member cards use the real chart-box.phtml class names, not invented ones', () => {
     const html = renderFamilyPage(baseParams());
 
     expect(html).toContain('wt-chart-box');
     expect(html).toContain('wt-chart-box-name');
-    expect(html).toContain('wt-chart-box-lifespan');
+    expect(html).toContain('class="wt-chart-box wt-chart-box-m"');
+    expect(html).toContain('class="wt-chart-box wt-chart-box-f"');
+    expect(html).toContain('wt-chart-box-facts');
+    expect(html).toContain('Birth: 12 AUG 1870, London');
+    expect(html).not.toContain('wt-chart-box-lifespan');
     expect(html).not.toContain('wt-family-member"');
     expect(html).not.toContain('wt-family-member-role');
   });

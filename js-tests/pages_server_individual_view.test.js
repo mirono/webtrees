@@ -18,7 +18,7 @@ import { renderIndividualPage } from '../pages-server/individual-view.mjs';
 
 function baseParams(overrides = {}) {
   return {
-    tree: { name: 'ophir' },
+    tree: { title: 'The Ophir Family Tree' },
     user: null,
     csrfToken: null,
     individual: {
@@ -37,6 +37,16 @@ describe('renderIndividualPage', () => {
     const html = renderIndividualPage(baseParams());
 
     expect(html).toMatch(/<html[^>]*\bdir="ltr"/);
+  });
+
+  // Regression test: the header used tree.name (the short slug, e.g.
+  // "ophir") instead of tree.title (the real display title, e.g. "The
+  // Ophir Family Tree") - caught via a live screenshot comparison
+  // against the real PHP page.
+  test('the header shows the tree title, not its slug', () => {
+    const html = renderIndividualPage(baseParams());
+
+    expect(html).toContain('<h1 class="col wt-site-title">The Ophir Family Tree</h1>');
   });
 
   test('the pre-escaped fullNameHtml is inserted raw, not re-escaped', () => {

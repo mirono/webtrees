@@ -56,21 +56,30 @@ const FACT_LABELS = {
 };
 
 /**
- * Matches resources/views/chart-box.phtml's actual outer structure
- * (`wt-chart-box`/`wt-chart-box-name`/`wt-chart-box-lifespan`) - an
- * earlier draft of this file invented its own `wt-family-member`/
+ * Matches resources/views/chart-box.phtml's actual outer structure -
+ * an earlier draft of this file invented its own `wt-family-member`/
  * `wt-family-member-role` class names, which don't exist anywhere in
  * this app's real webtrees.min.css, leaving every member "card"
- * completely unstyled (no border, no background, no card shape at
- * all) - easy to miss entirely next to the facts table, which DOES
- * pick up real Bootstrap `table` styling. Reduced to name + lifespan
- * only - no thumbnail image, no zoom/links dropdown menus, no
- * per-sex background color class (`wt-chart-box-<sex>`, needs the
- * member's sex, not currently threaded through this far) - those are
- * real chart-box features, out of scope for this v1's plain
- * husband/wife/children list.
+ * completely unstyled. Fixed to use the real classes, but a SECOND,
+ * more subtle gap surfaced via a live screenshot comparison the user
+ * provided: `wt-chart-box-lifespan` is real, but the real stylesheet
+ * has `.wt-family-members .wt-chart-box-lifespan { display: none; }`
+ * (confirmed via `grep` on public/css/webtrees.min.css) - PHP's own
+ * family-page cards NEVER show the lifespan line at all in this
+ * specific context, so rendering it here was always going to be
+ * invisible, not a missing feature. What the real page shows instead,
+ * confirmed from the same screenshot ("Birth: May 20, 1963 ... — Bat
+ * Yam, Israel"), is chart-box.phtml's `wt-chart-box-facts` line - the
+ * individual's own birth-event summary - which is NOT
+ * `display:none`-d in this context. Ported that instead (birth
+ * date+place only, no age-relative-to-parents numbers - those need
+ * the parents' own ages, a further scope cut). Also added the real
+ * per-sex background class (`wt-chart-box-<sex>`, lowercase - the
+ * screenshot's blue/pink card backgrounds) and dropped the always-
+ * hidden lifespan div entirely rather than leaving genuinely dead
+ * markup in place.
  *
- * @param {{fullNameHtml: string, lifespan: string, url: string}|null} member
+ * @param {{fullNameHtml: string, sex: string, birthSummary: string, url: string}|null} member
  */
 function renderMemberCard(member) {
   if (member === null) {
@@ -78,10 +87,16 @@ function renderMemberCard(member) {
         <div class="wt-chart-box">${UNKNOWN_NAME_HTML}</div>`;
   }
 
+  const factsHtml = member.birthSummary
+    ? `
+            <div class="wt-chart-box-facts">
+                <div class="wt-chart-box-fact small">${escapeHtml(member.birthSummary)}</div>
+            </div>`
+    : '';
+
   return `
-        <div class="wt-chart-box">
-            <div class="wt-chart-box-name"><a href="${escapeHtml(member.url)}">${member.fullNameHtml}</a></div>
-            <div class="wt-chart-box-lifespan">${escapeHtml(member.lifespan)}</div>
+        <div class="wt-chart-box wt-chart-box-${escapeHtml(member.sex.toLowerCase())}">
+            <div class="wt-chart-box-name"><a href="${escapeHtml(member.url)}">${member.fullNameHtml}</a></div>${factsHtml}
         </div>`;
 }
 
@@ -127,13 +142,13 @@ function renderFact({ tag, date, time, place, address, author }) {
 
 /**
  * @param {object} params
- * @param {{name: string}} params.tree
+ * @param {{title: string}} params.tree
  * @param {{realName: string}|null} params.user
  * @param {string|null} params.csrfToken
  * @param {{
- *   husband: {fullNameHtml: string, lifespan: string, url: string}|null,
- *   wife: {fullNameHtml: string, lifespan: string, url: string}|null,
- *   children: {fullNameHtml: string, lifespan: string, url: string}[],
+ *   husband: {fullNameHtml: string, sex: string, birthSummary: string, url: string}|null,
+ *   wife: {fullNameHtml: string, sex: string, birthSummary: string, url: string}|null,
+ *   children: {fullNameHtml: string, sex: string, birthSummary: string, url: string}[],
  *   facts: {tag: string, date: string, time: string, place: string, address: string, author: string}[],
  * }} params.family `husband`/`wife` are null both when the reference
  *   is absent AND when it's present but not currently shown to this
@@ -170,15 +185,20 @@ export function renderFamilyPage({ tree, user, csrfToken, family }) {
     family.wife !== null ? family.wife.fullNameHtml : UNKNOWN_NAME_HTML
   }`;
 
-  const childrenHtml = family.children.map((child) => renderMemberCard(child)).join('');
+  // Matches family-page-children.phtml's own "N children"/"No
+  // children" badge, always shown regardless of count.
+  const childCountLabel =
+    family.children.length === 0 ? 'No children' : family.children.length === 1 ? '1 child' : `${family.children.length} children`;
+  const childrenHtml =
+    `
+                        <div class="badge bg-secondary m-2">${escapeHtml(childCountLabel)}</div>` +
+    family.children.map((child) => renderMemberCard(child)).join('');
 
   // Matches family-page.phtml's own "Facts and events" heading
   // (app/Http/RequestHandlers/FamilyPage.php's real template always
   // shows this heading, even for zero facts, with a "No facts exist"
   // message in that case; this v1 only shows the section when there's
-  // something to show, a minor simplification since this route's own
-  // fact list is already scoped to marriage/divorce tags only, not
-  // every fact PHP's version would list).
+  // something to show).
   const factsHtml =
     family.facts.length > 0
       ? `
@@ -205,7 +225,7 @@ export function renderFamilyPage({ tree, user, csrfToken, family }) {
         <div class="container-lg wt-header-container">
             <div class="row wt-header-content">
                 <div class="col wt-site-logo"></div>
-                <h1 class="col wt-site-title">${escapeHtml(tree.name)}</h1>
+                <h1 class="col wt-site-title">${escapeHtml(tree.title)}</h1>
                 <div class="col wt-secondary-navigation">
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>

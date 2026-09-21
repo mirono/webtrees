@@ -72,7 +72,7 @@ function renderFact({ tag, date, place }) {
 
 /**
  * @param {object} params
- * @param {{name: string}} params.tree
+ * @param {{title: string}} params.tree
  * @param {{realName: string}|null} params.user
  * @param {string|null} params.csrfToken required (non-null) iff params.user !== null
  * @param {{
@@ -135,7 +135,7 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
         <div class="container-lg wt-header-container">
             <div class="row wt-header-content">
                 <div class="col wt-site-logo"></div>
-                <h1 class="col wt-site-title">${escapeHtml(tree.name)}</h1>
+                <h1 class="col wt-site-title">${escapeHtml(tree.title)}</h1>
                 <div class="col wt-secondary-navigation">
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>

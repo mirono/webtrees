@@ -904,6 +904,22 @@ async function resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs
   return { individual, facts, dead, canShow };
 }
 
+/**
+ * Matches chart-box.phtml's "wt-chart-box-facts" line (a single
+ * BIRT-or-equivalent-event summary, `app/Http/RequestHandlers's real
+ * chart-box view: "Show BIRT or equivalent event"`) - simplified to
+ * plain date+place text, no icon, no CHART_BOX_TAGS-driven optional
+ * events, no relative-age-at-event numbers (those need the PARENTS'
+ * own ages too, a further scope cut).
+ */
+function birthSummary(birthDate) {
+  if (!birthDate) {
+    return '';
+  }
+
+  return birthDate.place ? `Birth: ${birthDate.rawDate}, ${birthDate.place}` : `Birth: ${birthDate.rawDate}`;
+}
+
 function familyMemberViewModel(tree, member) {
   if (member === null) {
     return null;
@@ -913,11 +929,11 @@ function familyMemberViewModel(tree, member) {
   const fullNameHtml =
     primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${member.individual.xref}</span>`;
   const birthDate = getBirthDate(member.facts);
-  const deathDate = getDeathDate(member.facts);
 
   return {
     fullNameHtml,
-    lifespan: lifespan({ birthDate, deathDate, isDead: member.dead }),
+    sex: sex(member.individual.gedcom),
+    birthSummary: birthSummary(birthDate),
     url: `/tree/${tree.name}/individual/${member.individual.xref}`,
   };
 }
