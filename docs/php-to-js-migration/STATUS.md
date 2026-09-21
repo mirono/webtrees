@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4320 tests, all green.
+# Expect: 4344 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -381,6 +381,29 @@ separate decision — see "Open decisions" below.
   migration regressions — see next section) are still open.
 
 ## Fixed bugs (found during manual testing)
+
+- **Dates on both record pages were shown as raw GEDCOM strings, not
+  formatted** (2026-09-21): reported live as "all the dates in the
+  migrated page are not formatted" — Node showed `17 AUG 1995` where
+  real PHP shows `August 17, 1995`. This was a known, documented
+  accepted divergence (`Date::display()` was explicitly out of scope
+  in the original `lib/date`/`lib/gedcom-date` porting phase) — ported
+  it once the user asked for it directly. New `individual.mjs::displayDate()`
+  reuses `lib/date/abstract-calendar-date.js`'s already-ported `format()`
+  method (real month names, real format-code handling — it turned out
+  the earlier porting phase's "not ported" note was about `display()`
+  itself, not the `format()` machinery underneath it) plus the full
+  qualifier-phrase switch (about/before/after/estimated/calculated/
+  between...and/from...to), using the en-US date-format string
+  (`%F %j, %Y`) confirmed against `resources/lang/en-US/messages.php`'s
+  real translation entry. `CHAN`'s date+time now render as two separate
+  `<span class="date">` elements joined by " – ", matching
+  `fact-date.phtml`'s real markup (an earlier fix had concatenated them
+  into one span). Verified live against the user's real family/
+  individual records, matching their originally-reported PHP dates
+  exactly (`August 17, 1995`, `May 20, 1963`, `November 9, 2018 –
+  19:38:08`, etc.). **Needs `docker compose restart pages`** to take
+  effect live.
 
 - **FamilyPage's "Address"/"Author of last change" labels weren't
   bold** (2026-09-21): a follow-up finding from the same screenshot

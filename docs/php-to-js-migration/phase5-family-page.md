@@ -164,6 +164,41 @@ session, after the PHP upload-size fix). Using the established
    row) deleted afterward; `data/config.yaml` restored; both local
    test server processes killed.
 
+## Follow-up fixes (2026-09-21, after real-world use)
+
+Once the user actually imported and browsed their real family tree,
+several real gaps surfaced that synthetic test data hadn't exercised —
+each fixed as its own small, live-verified commit rather than bundled
+into this step's original scope:
+
+- **Facts table widened** from a fixed `MARR`/`DIV`/`ANUL`/`_SEPR` list
+  to real PHP's actual filter (everything except `HUSB`/`WIFE`/`CHIL`)
+  — reported as "I see only marriage and not other facts". Caught a
+  second bug while fixing this: the family record's own leading
+  `"0 @Fn@ FAM"` line slipped through the new denylist-shaped filter as
+  a fake fact row.
+- **Invented CSS classes fixed** on both member cards and fact rows —
+  found via a user-provided side-by-side screenshot comparison, not
+  guessable from text output alone. Also surfaced that
+  `.wt-family-members .wt-chart-box-lifespan { display: none; }` in
+  the real stylesheet meant a real, correctly-named div was still
+  invisible — the real page shows a birth-event summary
+  (`wt-chart-box-facts`) instead in this exact context.
+- **Tree-title bug**: the header showed the tree's short slug instead
+  of its real display title (`tree.name` where `tree.title` was
+  needed) — a copy-paste divergence from the earlier, correct
+  `tree-view.mjs`.
+- **`labelValue()` bold styling**: "Address"/"Author of last change"
+  weren't bold — the real page wraps these in
+  `<span class="label">...</span>` (CSS: `.label{font-weight:700}`).
+- **`Date::display()` ported** — see
+  [phase5-individual-page.md](phase5-individual-page.md)'s own updated
+  entry for the full writeup; this page's dates (marriage, residence,
+  last-change) and the member cards' birth summaries all use it now,
+  including `CHAN`'s date+time rendered as two separate
+  `<span class="date">` elements joined by " – ", matching
+  `fact-date.phtml`'s real markup.
+
 ## Docker note
 
 Same as every prior `pages-server` step: **needs `docker compose

@@ -107,17 +107,24 @@ function renderMemberCard(member) {
  * identically here.
  *
  * @param {{tag: string, date: string, time: string, place: string, address: string, author: string}} params
- *   `date`/`time`/`place`/`address`/`author` are raw GEDCOM values, not
- *   locale-formatted (see individual.mjs's own "no Date::display()"
- *   accepted divergence) - `time` only ever accompanies CHAN's own
- *   DATE (a level-3 TIME subline), `author` only ever comes from
- *   CHAN's own `_WT_USER` subtag (app/Elements: 'FAM:CHAN:_WT_USER' =>
- *   'Author of last change') - both harmless no-ops for any other tag.
+ *   `date` is already locale-formatted text (individual.mjs's
+ *   displayDate(), called by the caller in index.mjs) - this view
+ *   layer only escapes and lays out already-computed strings, same
+ *   convention as every other field here. `time` (raw, GEDCOM's TIME
+ *   isn't itself a formattable value) only ever accompanies CHAN's own
+ *   DATE (a level-3 TIME subline) - rendered in its OWN
+ *   `<span class="date">`, joined with " – ", matching
+ *   fact-date.phtml's real markup exactly (`$html .= ' – <span
+ *   class="date">' . $match[1] . '</span>';`) rather than
+ *   concatenating date+time into one span. `author` only ever comes
+ *   from CHAN's own `_WT_USER` subtag (app/Elements:
+ *   'FAM:CHAN:_WT_USER' => 'Author of last change') - a harmless no-op
+ *   for any other tag.
  */
 function renderFact({ tag, date, time, place, address, author }) {
   const label = FACT_LABELS[tag] ?? tag;
-  const dateTimeText = time ? `${date} ${time}` : date;
-  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(dateTimeText)}</span></span>` : '';
+  const timeHtml = time ? ` – <span class="date">${escapeHtml(time)}</span>` : '';
+  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span>${timeHtml}</span>` : '';
   const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';
   // Matches AbstractElement::labelValue()'s real markup exactly
   // (app/Elements/AbstractElement.php:201-208): `<span class="label">

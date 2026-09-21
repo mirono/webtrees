@@ -23,6 +23,7 @@ import {
   isDead,
   lifespan,
   ageString,
+  displayDate,
   canShowRecord,
   canShowViaResnChain,
   canShowByType,
@@ -33,6 +34,7 @@ import {
   loadDefaultResn,
   viewerRelationshipPrefs,
 } from '../pages-server/individual.mjs';
+import { GedcomDate } from '../lib/gedcom-date.js';
 
 function mockPool(queryImpl) {
   return { query: vi.fn(queryImpl) };
@@ -232,6 +234,52 @@ describe('ageString', () => {
   test('dead with no death date -> empty string', () => {
     const birthDate = { date: shimDate(true) };
     expect(ageString({ birthDate, deathDate: null, isDead: true, sex: 'M' })).toBe('');
+  });
+});
+
+describe('displayDate', () => {
+  // Verified against the real en-US locale catalog
+  // (resources/lang/en-US/messages.php translates the base '%j %F %Y'
+  // date-format string to '%F %j, %Y') - "August 17, 1995", not the
+  // British "17 August 1995".
+  test('a plain exact date formats as "Month D, YYYY"', () => {
+    expect(displayDate(new GedcomDate('17 AUG 1995'))).toBe('August 17, 1995');
+  });
+
+  test('a month+year-only date omits the day', () => {
+    // Matches a faithfully-ported PHP quirk: stripping "%j," from the
+    // '%F %j, %Y' format template for a day-less date leaves a double
+    // space (the space before %j, plus the space after the stripped
+    // comma) - not cleaned up here or in the real PHP port.
+    expect(displayDate(new GedcomDate('MAY 1963'))).toBe('May  1963');
+  });
+
+  test('a year-only date shows just the year', () => {
+    expect(displayDate(new GedcomDate('1963'))).toBe('1963');
+  });
+
+  test.each([
+    ['ABT 1900', 'about 1900'],
+    ['CAL 1900', 'calculated 1900'],
+    ['EST 1900', 'estimated 1900'],
+    ['BEF 1 JAN 1920', 'before January 1, 1920'],
+    ['AFT 1 JAN 1920', 'after January 1, 1920'],
+    ['FROM 1900', 'from 1900'],
+    ['TO 1910', 'to 1910'],
+  ])('qualifier %s -> %s', (gedcomDateString, expected) => {
+    expect(displayDate(new GedcomDate(gedcomDateString))).toBe(expected);
+  });
+
+  test('a BET...AND range phrases both dates', () => {
+    expect(displayDate(new GedcomDate('BET 1900 AND 1910'))).toBe('between 1900 and 1910');
+  });
+
+  test('a FROM...TO range phrases both dates', () => {
+    expect(displayDate(new GedcomDate('FROM 1900 TO 1910'))).toBe('from 1900 to 1910');
+  });
+
+  test('explanatory text in parentheses is appended for a plain date', () => {
+    expect(displayDate(new GedcomDate('1900 (approximate)'))).toBe('1900(approximate)');
   });
 });
 

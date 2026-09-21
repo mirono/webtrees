@@ -45,12 +45,23 @@ direction**:
   Building a pure-JS ICU-transliteration equivalent for
   `SlugFactory::make()` risks silent divergence for non-Latin names, a
   class of approximation this migration avoids elsewhere.
-- No `Date::display()` — fact rows show the raw GEDCOM date string
-  (e.g. `01 JAN 1850`) rather than a locale-rendered one; lifespan uses
-  year-only via `GedcomDate`'s existing `yearValue()`. `Date::display()`
-  (multi-calendar rendering, qualifier phrasing) was explicitly out of
-  scope in the original `lib/date`/`lib/gedcom-date` porting phase and
-  deserves its own future task.
+- ~~No `Date::display()`~~ — **ported 2026-09-21** (`individual.mjs`'s
+  `displayDate()`), after the user reported unformatted dates against
+  their real imported tree. Scoped to the actual need: no calendar-
+  conversion links (dead code for the default `CALENDAR_FORMAT: 'none'`
+  tree preference), no calendar-page link wrapping (no calendar page
+  exists yet), but the full qualifier-phrase switch
+  (ABT/CAL/EST/BEF/AFT/FROM/TO/BET..AND/FROM..TO/INT) and real month
+  names are ported, reusing `lib/date/abstract-calendar-date.js`'s
+  already-ported `format()` method (confirmed it was already a
+  complete, tested port of PHP's `%j`/`%F`/`%Y`-style format codes —
+  the "not ported" note in task-17 turned out to mean `display()`
+  itself, not the underlying `format()` machinery it calls). Date
+  format string (`'%F %j, %Y'`) hardcoded to the en-US locale
+  translation, confirmed against `resources/lang/en-US/messages.php`'s
+  real catalog entry, matching this migration's established English-
+  only convention. Lifespan still uses year-only via `GedcomDate`'s
+  `yearValue()` (a separate, simpler rendering, not tied to this gap).
 - `isDead()`'s family-graph fallback (checking parents'/spouses'/
   children's own dated events when this individual has none) is not
   ported — proven safe: `isDead()` returning `false` when PHP would say

@@ -86,7 +86,9 @@ import {
   lifespan,
   ageString,
   factCanShow,
+  displayDate,
 } from './individual.mjs';
+import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
 import { loadFamily, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
 import { phpRouteUrl } from './route-url.mjs';
@@ -840,7 +842,11 @@ async function handleIndividualPage(req, res, treeName, xref) {
     const dateMatch = /\n2 DATE (.+)/.exec(fact);
     const placeMatch = /\n2 PLAC (.+)/.exec(fact);
 
-    visibleFacts.push({ tag, date: dateMatch ? dateMatch[1] : '', place: placeMatch ? placeMatch[1] : '' });
+    visibleFacts.push({
+      tag,
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      place: placeMatch ? placeMatch[1] : '',
+    });
   }
 
   const individualViewModel = {
@@ -917,7 +923,9 @@ function birthSummary(birthDate) {
     return '';
   }
 
-  return birthDate.place ? `Birth: ${birthDate.rawDate}, ${birthDate.place}` : `Birth: ${birthDate.rawDate}`;
+  const displayedDate = displayDate(birthDate.date);
+
+  return birthDate.place ? `Birth: ${displayedDate}, ${birthDate.place}` : `Birth: ${displayedDate}`;
 }
 
 function familyMemberViewModel(tree, member) {
@@ -1050,7 +1058,7 @@ async function handleFamilyPage(req, res, treeName, xref) {
 
     visibleFacts.push({
       tag,
-      date: dateMatch ? dateMatch[1] : '',
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
       time: timeMatch ? timeMatch[1] : '',
       place: placeMatch ? placeMatch[1] : '',
       address: addressMatch ? addressMatch[1] : '',

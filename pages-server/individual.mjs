@@ -351,13 +351,78 @@ export function isDead(facts, treePrefs) {
   return false;
 }
 
+// The base (English) date-format string is '%j %F %Y' (day month year,
+// e.g. "17 August 1995" - confirmed via app/I18N.php's dateFormat()).
+// The en-US locale catalog translates this to '%F %j, %Y' (month day,
+// year - "August 17, 1995"), confirmed against
+// resources/lang/en-US/messages.php's real translation entry -
+// verbatim what this migration's real reference tree renders and what
+// every hand-rolled view here has always assumed for English-only
+// display, so hardcoded here rather than left as a raw GEDCOM string.
+const DATE_FORMAT = '%F %j, %Y';
+
+/**
+ * Mirrors Date::display() (app/Date.php:102-243), scoped to this
+ * migration's actual needs: no calendar-conversion links
+ * (`$convert_calendars`/`$CALENDAR_FORMAT` - dead code for the
+ * default tree preference, `CALENDAR_FORMAT: 'none'`, confirmed
+ * against app/Tree.php's DEFAULT_PREFERENCES), no calendar-page link
+ * wrapping (this migration doesn't have a calendar page). The
+ * qualifier-phrase switch (ABT/CAL/EST/BEF/AFT/FROM/TO/BET..AND/
+ * FROM..TO/INT) is ported in full, English-only text matching this
+ * migration's established no-I18N convention. Does NOT wrap the
+ * result in `<span class="date">` (PHP's own `display()` does) -
+ * callers apply that themselves, since some (family-view.mjs's CHAN
+ * handling) need date and time in separate `<span class="date">`
+ * elements.
+ *
+ * @param {GedcomDate} gedcomDate
+ * @returns {string}
+ */
+export function displayDate(gedcomDate) {
+  const q1 = gedcomDate.qual1;
+  const q2 = gedcomDate.qual2;
+  const d1 = gedcomDate.date1.format(DATE_FORMAT, q1);
+
+  switch (q1 + q2) {
+    case '':
+      return gedcomDate.text !== '' ? `${d1}(${gedcomDate.text})` : d1;
+    case 'ABT':
+      return `about ${d1}`;
+    case 'CAL':
+      return `calculated ${d1}`;
+    case 'EST':
+      return `estimated ${d1}`;
+    case 'INT':
+      return `interpreted ${d1} (${gedcomDate.text})`;
+    case 'BEF':
+      return `before ${d1}`;
+    case 'AFT':
+      return `after ${d1}`;
+    case 'FROM':
+      return `from ${d1}`;
+    case 'TO':
+      return `to ${d1}`;
+    case 'BETAND': {
+      const d2 = gedcomDate.date2.format(DATE_FORMAT, q2);
+      return `between ${d1} and ${d2}`;
+    }
+    case 'FROMTO': {
+      const d2 = gedcomDate.date2.format(DATE_FORMAT, q2);
+      return `from ${d1} to ${d2}`;
+    }
+    default:
+      return 'Invalid date';
+  }
+}
+
 /**
  * Mirrors Individual::lifespan() (app/Individual.php:412-441), minus
- * the tooltip markup (place/full-date display, which needs
- * Date::display() - explicitly not ported, see accepted divergences
- * in docs/php-to-js-migration/phase5-individual-page.md). Uses
- * year-only via GedcomDate's own yearValue(), matching PHP's own
- * "use minimum/maximum dates, to agree with the age calculations" note.
+ * the tooltip markup (place/full-date display in a `title` attribute)
+ * - a cosmetic-only omission, not tied to displayDate() not existing
+ * anymore. Uses year-only via GedcomDate's own yearValue(), matching
+ * PHP's own "use minimum/maximum dates, to agree with the age
+ * calculations" note.
  *
  * @param {{birthDate: {date: GedcomDate}|null, deathDate: {date: GedcomDate}|null, isDead: boolean}} params
  * @returns {string}

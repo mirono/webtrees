@@ -194,18 +194,22 @@ describe('renderFamilyPage', () => {
       expect(html).toContain('<span class="label">Address</span>: <span class="value align-top">Savion 7a Ramat-Gan, Israel</span>');
     });
 
-    test('renders CHAN with combined date+time and an author line', () => {
+    test('renders CHAN with date and time in separate spans, and an author line', () => {
       const html = renderFamilyPage(
         baseParams({
           family: {
             ...baseParams().family,
-            facts: [{ tag: 'CHAN', date: '09 NOV 2018', time: '19:38:08', place: '', author: 'miron' }],
+            facts: [{ tag: 'CHAN', date: 'November 9, 2018', time: '19:38:08', place: '', author: 'miron' }],
           },
         }),
       );
 
       expect(html).toContain('Last change');
-      expect(html).toContain('09 NOV 2018 19:38:08');
+      // Matches fact-date.phtml's real markup: date and time are TWO
+      // separate <span class="date"> elements joined by " – ", not one
+      // combined string - an earlier draft concatenated them into a
+      // single span.
+      expect(html).toContain('<span class="date">November 9, 2018</span> – <span class="date">19:38:08</span>');
       expect(html).toContain('<span class="label">Author of last change</span>: <span class="value align-top">miron</span>');
     });
 
