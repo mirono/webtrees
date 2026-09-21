@@ -80,6 +80,22 @@ describe('renderIndividualPage', () => {
       expect(html).toContain('Paris');
     });
 
+    // Regression test: an earlier draft used invented CSS classes
+    // (descriptionbox/rela) that don't exist in this app's real
+    // webtrees.min.css at all, leaving the whole table unstyled -
+    // assert the REAL class names fact.phtml actually uses.
+    test('uses the real fact.phtml class names, not invented ones', () => {
+      const html = renderIndividualPage(
+        baseParams({ individual: { ...baseParams().individual, facts: [{ tag: 'BIRT', date: '12 AUG 1870', place: 'London' }] } }),
+      );
+
+      expect(html).toContain('wt-fact-label');
+      expect(html).toContain('wt-fact-icon wt-fact-icon-BIRT');
+      expect(html).toContain('wt-fact-date-age');
+      expect(html).toContain('wt-fact-place');
+      expect(html).not.toContain('descriptionbox');
+    });
+
     test('an unrecognized tag falls back to the raw tag name', () => {
       const html = renderIndividualPage(
         baseParams({ individual: { ...baseParams().individual, facts: [{ tag: 'CREM', date: '', place: '' }] } }),

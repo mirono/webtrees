@@ -40,34 +40,58 @@ const FACT_LABELS = {
 };
 
 /**
+ * Matches resources/views/chart-box.phtml's actual outer structure
+ * (`wt-chart-box`/`wt-chart-box-name`/`wt-chart-box-lifespan`) - an
+ * earlier draft of this file invented its own `wt-family-member`/
+ * `wt-family-member-role` class names, which don't exist anywhere in
+ * this app's real webtrees.min.css, leaving every member "card"
+ * completely unstyled (no border, no background, no card shape at
+ * all) - easy to miss entirely next to the facts table, which DOES
+ * pick up real Bootstrap `table` styling. Reduced to name + lifespan
+ * only - no thumbnail image, no zoom/links dropdown menus, no
+ * per-sex background color class (`wt-chart-box-<sex>`, needs the
+ * member's sex, not currently threaded through this far) - those are
+ * real chart-box features, out of scope for this v1's plain
+ * husband/wife/children list.
+ *
  * @param {{fullNameHtml: string, lifespan: string, url: string}|null} member
- * @param {string} roleLabel e.g. "Husband", "Wife", "Child"
  */
-function renderMemberCard(member, roleLabel) {
+function renderMemberCard(member) {
   if (member === null) {
     return `
-        <div class="wt-family-member">
-            <div class="wt-family-member-role text-muted">${escapeHtml(roleLabel)}</div>
-            ${UNKNOWN_NAME_HTML}
-        </div>`;
+        <div class="wt-chart-box">${UNKNOWN_NAME_HTML}</div>`;
   }
 
   return `
-        <div class="wt-family-member">
-            <div class="wt-family-member-role text-muted">${escapeHtml(roleLabel)}</div>
-            <a href="${escapeHtml(member.url)}">${member.fullNameHtml}</a>
-            <span class="wt-lifespan">${escapeHtml(member.lifespan)}</span>
+        <div class="wt-chart-box">
+            <div class="wt-chart-box-name"><a href="${escapeHtml(member.url)}">${member.fullNameHtml}</a></div>
+            <div class="wt-chart-box-lifespan">${escapeHtml(member.lifespan)}</div>
         </div>`;
 }
 
+/**
+ * Matches resources/views/fact.phtml's ACTUAL row shape - see
+ * individual-view.mjs's own renderFact() doc comment for the same
+ * "an earlier draft invented non-existent CSS classes" finding, fixed
+ * identically here.
+ */
 function renderFact({ tag, date, place }) {
   const label = FACT_LABELS[tag] ?? tag;
+  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span></span>` : '';
+  const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';
 
   return `
         <tr>
-            <td class="descriptionbox rela">${escapeHtml(label)}</td>
-            <td class="descriptionbox">${escapeHtml(date)}</td>
-            <td class="descriptionbox">${escapeHtml(place)}</td>
+            <th scope="row">
+                <div class="wt-fact-label">${escapeHtml(label)}</div>
+                <span class="wt-fact-icon wt-fact-icon-${escapeHtml(tag)}" title="${escapeHtml(label)}"></span>
+            </th>
+            <td>
+                <div class="wt-fact-main-attributes">
+                    ${dateHtml}
+                    ${placeHtml}
+                </div>
+            </td>
         </tr>`;
 }
 
@@ -116,11 +140,19 @@ export function renderFamilyPage({ tree, user, csrfToken, family }) {
     family.wife !== null ? family.wife.fullNameHtml : UNKNOWN_NAME_HTML
   }`;
 
-  const childrenHtml = family.children.map((child) => renderMemberCard(child, 'Child')).join('');
+  const childrenHtml = family.children.map((child) => renderMemberCard(child)).join('');
 
+  // Matches family-page.phtml's own "Facts and events" heading
+  // (app/Http/RequestHandlers/FamilyPage.php's real template always
+  // shows this heading, even for zero facts, with a "No facts exist"
+  // message in that case; this v1 only shows the section when there's
+  // something to show, a minor simplification since this route's own
+  // fact list is already scoped to marriage/divorce tags only, not
+  // every fact PHP's version would list).
   const factsHtml =
     family.facts.length > 0
       ? `
+                    <h3 class="mt-4">Facts and events</h3>
     <table class="table wt-facts-table">
         <tbody>${family.facts.map(renderFact).join('')}
         </tbody>
@@ -159,8 +191,8 @@ export function renderFamilyPage({ tree, user, csrfToken, family }) {
                     <h2 class="wt-page-title">${titleHtml}</h2>
 
                     <div class="wt-family-members d-flex">
-                        ${renderMemberCard(family.husband, 'Husband')}
-                        ${renderMemberCard(family.wife, 'Wife')}
+                        ${renderMemberCard(family.husband)}
+                        ${renderMemberCard(family.wife)}
                         ${childrenHtml}
                     </div>${factsHtml}
                 </div>

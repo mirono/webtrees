@@ -50,6 +50,23 @@ describe('renderFamilyPage', () => {
     expect(html).toContain('href="/tree/ophir/individual/I2"');
   });
 
+  // Regression test: an earlier draft used invented CSS classes
+  // (wt-family-member/wt-family-member-role) that don't exist in this
+  // app's real webtrees.min.css at all, leaving every member "card"
+  // completely unstyled (no border, no card shape) - reported live as
+  // "the family page shows only facts" (the cards were there, just
+  // visually blended into nothing next to the properly-styled facts
+  // table). Assert the REAL chart-box.phtml class names instead.
+  test('member cards use the real chart-box.phtml class names, not invented ones', () => {
+    const html = renderFamilyPage(baseParams());
+
+    expect(html).toContain('wt-chart-box');
+    expect(html).toContain('wt-chart-box-name');
+    expect(html).toContain('wt-chart-box-lifespan');
+    expect(html).not.toContain('wt-family-member"');
+    expect(html).not.toContain('wt-family-member-role');
+  });
+
   test('a null husband or wife renders the unknown-name placeholder, not a broken link', () => {
     const html = renderFamilyPage(baseParams({ family: { husband: null, wife: member('Jane DOE', 'I2'), children: [], facts: [] } }));
 
@@ -83,6 +100,28 @@ describe('renderFamilyPage', () => {
       expect(html).toContain('Marriage');
       expect(html).toContain('17 AUG 1995');
       expect(html).toContain('London');
+    });
+
+    // Regression test: family-page.phtml's real "Facts and events"
+    // heading was missing entirely from an earlier draft.
+    test('shows the "Facts and events" heading when facts are present', () => {
+      const html = renderFamilyPage(
+        baseParams({ family: { ...baseParams().family, facts: [{ tag: 'MARR', date: '17 AUG 1995', place: 'London' }] } }),
+      );
+
+      expect(html).toContain('Facts and events');
+    });
+
+    test('uses the real fact.phtml class names, not invented ones', () => {
+      const html = renderFamilyPage(
+        baseParams({ family: { ...baseParams().family, facts: [{ tag: 'MARR', date: '17 AUG 1995', place: 'London' }] } }),
+      );
+
+      expect(html).toContain('wt-fact-label');
+      expect(html).toContain('wt-fact-icon wt-fact-icon-MARR');
+      expect(html).toContain('wt-fact-date-age');
+      expect(html).toContain('wt-fact-place');
+      expect(html).not.toContain('descriptionbox');
     });
 
     test('escapes date/place content', () => {

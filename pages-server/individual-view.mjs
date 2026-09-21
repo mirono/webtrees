@@ -38,21 +38,35 @@ const FACT_LABELS = {
 };
 
 /**
- * Matches resources/views/fact.phtml's row shape, reduced to the
- * label/date/place a v1 vital-facts list needs - no Elements-driven
- * value formatting, no sub-fact citations (SOUR/NOTE/OBJE), no edit
- * controls.
+ * Matches resources/views/fact.phtml's ACTUAL row shape (a 2-column
+ * `<th scope="row">` label / `<td>` value table, not the 3-column
+ * descriptionbox/rela layout an earlier draft of this file guessed at
+ * - that guess used CSS classes from webtrees' pre-Bootstrap-5 theme,
+ * which don't exist at all in this app's real webtrees.min.css,
+ * leaving the whole table unstyled). Reduced to the label/date/place a
+ * v1 vital-facts list needs - no Elements-driven value formatting, no
+ * sub-fact citations (SOUR/NOTE/OBJE), no edit controls - but using
+ * the REAL class names (`wt-fact-label`, `wt-fact-icon-<TAG>`,
+ * `wt-fact-date-age`, `date`, `wt-fact-place`) so the existing
+ * stylesheet actually applies.
  */
 function renderFact({ tag, date, place }) {
   const label = FACT_LABELS[tag] ?? tag;
-  const dateHtml = date ? `<td class="descriptionbox">${escapeHtml(date)}</td>` : '<td class="descriptionbox"></td>';
-  const placeHtml = place ? `<td class="descriptionbox">${escapeHtml(place)}</td>` : '<td class="descriptionbox"></td>';
+  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span></span>` : '';
+  const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';
 
   return `
         <tr>
-            <td class="descriptionbox rela">${escapeHtml(label)}</td>
-            ${dateHtml}
-            ${placeHtml}
+            <th scope="row">
+                <div class="wt-fact-label">${escapeHtml(label)}</div>
+                <span class="wt-fact-icon wt-fact-icon-${escapeHtml(tag)}" title="${escapeHtml(label)}"></span>
+            </th>
+            <td>
+                <div class="wt-fact-main-attributes">
+                    ${dateHtml}
+                    ${placeHtml}
+                </div>
+            </td>
         </tr>`;
 }
 

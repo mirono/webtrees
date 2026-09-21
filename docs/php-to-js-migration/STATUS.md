@@ -382,6 +382,35 @@ separate decision — see "Open decisions" below.
 
 ## Fixed bugs (found during manual testing)
 
+- **FamilyPage's husband/wife/children cards were invisible; both
+  record pages' fact tables were completely unstyled** (2026-09-21):
+  reported live as "the family page shows only facts" plus a missing
+  "Facts and events" heading and plain-table formatting. Root cause,
+  found by reading the real PHP templates directly rather than
+  guessing: `pages-server/family-view.mjs`'s member cards used
+  invented CSS classes (`wt-family-member`/`wt-family-member-role`)
+  that don't exist anywhere in this app's real `webtrees.min.css`,
+  leaving them completely unstyled (no border, no card shape) next to
+  the facts table, which picked up real Bootstrap `table` styling and
+  so looked like the only real content on the page. Both
+  `individual-view.mjs`'s and `family-view.mjs`'s fact-row rendering
+  had the same class of bug: invented `descriptionbox`/`rela` classes
+  from an older, pre-Bootstrap-5 webtrees theme, plus a 3-column
+  label/date/place layout that doesn't match the real 2-column
+  `<th scope="row">` label / `<td>` value shape `fact.phtml` actually
+  uses. Fixed by reading `resources/views/chart-box.phtml` and
+  `resources/views/fact.phtml` directly and switching to their real
+  class names (`wt-chart-box`/`wt-chart-box-name`/`wt-chart-box-lifespan`
+  for member cards; `wt-fact-label`/`wt-fact-icon-<TAG>`/
+  `wt-fact-date-age`/`wt-fact-place` for fact rows), and added the
+  missing "Facts and events" `<h3>` heading `family-page.phtml` itself
+  always shows. Regression tests added asserting the real class names
+  are present and the invented ones are gone, in both
+  `pages_server_individual_view.test.js` and `pages_server_family_view.test.js`.
+  Verified live against the real imported tree that both pages now
+  render styled member cards and a properly formatted facts table.
+  **Needs `docker compose restart pages`** to take effect live.
+
 - **GEDCOM import rejected a real family tree file as too large**
   (2026-09-20): the `app` Docker image loads no `php.ini` at all (the
   base `php:8.3-cli-bookworm` image ships `php.ini-development`/
