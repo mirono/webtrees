@@ -382,6 +382,16 @@ separate decision — see "Open decisions" below.
 
 ## Fixed bugs (found during manual testing)
 
+- **FamilyPage's "Address"/"Author of last change" labels weren't
+  bold** (2026-09-21): a follow-up finding from the same screenshot
+  comparison — the real page bolds these via
+  `AbstractElement::labelValue()`'s real markup
+  (`<span class="label">Label</span>: <span class="value">Value</span>`,
+  `webtrees.min.css`: `.label{font-weight:700}`); a prior fix rendered
+  them as plain, unbolded `"Address: ..."` text instead. Fixed to
+  match the real markup exactly. **Needs `docker compose restart
+  pages`** to take effect live.
+
 - **Two record-page bugs found via a user-provided side-by-side
   screenshot comparison against the real PHP page** (2026-09-21):
   1. Both `IndividualPage` and `FamilyPage`'s header showed the tree's

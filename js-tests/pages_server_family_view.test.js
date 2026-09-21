@@ -186,7 +186,12 @@ describe('renderFamilyPage', () => {
       expect(html).toContain('Family residence');
       expect(html).toContain('27 APR 1996');
       expect(html).toContain('Ramat Gan, Israel');
-      expect(html).toContain('Address: Savion 7a Ramat-Gan, Israel');
+      // Regression test: the "Address"/"Author of last change" labels
+      // must be bolded via the real ".label" CSS class
+      // (webtrees.min.css: `.label{font-weight:700}`), matching
+      // AbstractElement::labelValue()'s real markup - an earlier
+      // draft rendered these as plain, unbolded text.
+      expect(html).toContain('<span class="label">Address</span>: <span class="value align-top">Savion 7a Ramat-Gan, Israel</span>');
     });
 
     test('renders CHAN with combined date+time and an author line', () => {
@@ -201,7 +206,7 @@ describe('renderFamilyPage', () => {
 
       expect(html).toContain('Last change');
       expect(html).toContain('09 NOV 2018 19:38:08');
-      expect(html).toContain('Author of last change: miron');
+      expect(html).toContain('<span class="label">Author of last change</span>: <span class="value align-top">miron</span>');
     });
 
     test('a fact with neither date nor place nor address nor author renders just the label', () => {

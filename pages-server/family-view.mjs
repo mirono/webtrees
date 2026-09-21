@@ -105,8 +105,7 @@ function renderMemberCard(member) {
  * individual-view.mjs's own renderFact() doc comment for the same
  * "an earlier draft invented non-existent CSS classes" finding, fixed
  * identically here.
- */
-/**
+ *
  * @param {{tag: string, date: string, time: string, place: string, address: string, author: string}} params
  *   `date`/`time`/`place`/`address`/`author` are raw GEDCOM values, not
  *   locale-formatted (see individual.mjs's own "no Date::display()"
@@ -120,8 +119,19 @@ function renderFact({ tag, date, time, place, address, author }) {
   const dateTimeText = time ? `${date} ${time}` : date;
   const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(dateTimeText)}</span></span>` : '';
   const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';
-  const addressHtml = address ? `<div class="wt-fact-place">Address: ${escapeHtml(address)}</div>` : '';
-  const authorHtml = tag === 'CHAN' && author ? `<div class="wt-fact-place">Author of last change: ${escapeHtml(author)}</div>` : '';
+  // Matches AbstractElement::labelValue()'s real markup exactly
+  // (app/Elements/AbstractElement.php:201-208): `<span class="label">
+  // Label</span>: <span class="value">Value</span>` - the ".label"
+  // class is what bolds "Address:"/"Author of last change:" in the
+  // real page (`.label{font-weight:700}` in webtrees.min.css); an
+  // earlier draft wrote these as plain, unbolded text.
+  const addressHtml = address
+    ? `<div class="wt-fact-place"><span class="label">Address</span>: <span class="value align-top">${escapeHtml(address)}</span></div>`
+    : '';
+  const authorHtml =
+    tag === 'CHAN' && author
+      ? `<div class="wt-fact-place"><span class="label">Author of last change</span>: <span class="value align-top">${escapeHtml(author)}</span></div>`
+      : '';
 
   return `
         <tr>
