@@ -15,17 +15,17 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-9 of the php-to-js migration
+// Phase 5, steps 2-10 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
 // proxy/index.mjs, which sends /my-account*, /login*, /logout,
 // /my-account-delete, /, /language/*, /theme/*, the exact-match
-// /tree/{tree} page, and /tree/{tree}/individual/{xref} here and
-// everything else to the PHP app - both processes share the same
-// Postgres database and the same login session (see auth.mjs and, for
-// /login/logout/language/theme specifically, session-store.mjs +
-// php-serialize.mjs). /tree/{tree} (step 8,
-// docs/php-to-js-migration/phase5-tree-page.md) is the first
+// /tree/{tree} page, /tree/{tree}/individual/{xref}, and
+// /tree/{tree}/family/{xref} here and everything else to the PHP app -
+// both processes share the same Postgres database and the same login
+// session (see auth.mjs and, for /login/logout/language/theme
+// specifically, session-store.mjs + php-serialize.mjs). /tree/{tree}
+// (step 8, docs/php-to-js-migration/phase5-tree-page.md) is the first
 // tree-scoped route and renders only one of TreePage's up to 8
 // configurable blocks (WelcomeBlockModule) - every other block a tree
 // might have configured is simply omitted from the layout.
@@ -34,7 +34,11 @@
 // route serving real GEDCOM record data and the first with a
 // genuinely nontrivial privacy/access-control chain - identity header
 // + vital-event facts (BIRT/CHR/BAPM/DEAT/BURI/CREM) only, no tabs, no
-// MARR, no slug canonicalization.
+// MARR, no slug canonicalization. /tree/{tree}/family/{xref} (step 10,
+// docs/php-to-js-migration/phase5-family-page.md) closes the MARR gap:
+// husband/wife/children identity cards (each linking to their own
+// individual page) + marriage/divorce vital facts, reusing almost all
+// of individual.mjs's privacy chain and identity rendering.
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -52,6 +56,7 @@ import {
   matchThemePath,
   matchTreePagePath,
   matchIndividualPagePath,
+  matchFamilyPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -82,6 +87,8 @@ import {
   ageString,
   factCanShow,
 } from './individual.mjs';
+import { renderFamilyPage } from './family-view.mjs';
+import { loadFamily, childrenXrefs, vitalFamilyFacts, familyCanShowRecord } from './family.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -857,6 +864,190 @@ async function handleIndividualPage(req, res, treeName, xref) {
   res.end(html);
 }
 
+/**
+ * Resolves one family member (husband/wife/child) to everything a
+ * card needs to render, or null if the xref doesn't resolve to a real
+ * individual - matching how PHP's own husband()/wife()/children()
+ * silently drop a broken/missing reference rather than erroring, and
+ * how Family::canShowByType()'s member-privacy scan only ever checks
+ * xrefs that resolve to a real Individual (app/Family.php:121-128).
+ */
+async function resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, xref) {
+  if (xref === null) {
+    return null;
+  }
+
+  const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+  if (individual === null) {
+    return null;
+  }
+
+  const facts = parseFacts(individual.gedcom);
+  const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+  const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+  const viewer = {
+    accessLevel,
+    isSelfRecord: relPrefs.gedcomid === individual.xref,
+    showDeadPeople: treePrivacyPrefs.showDeadPeople,
+    dead,
+    relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+  };
+  const treeForPrivacy = {
+    hideLivePeople: treePrivacyPrefs.hideLivePeople,
+    defaultResn: defaultResnInfo.individualResn,
+    keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+    keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+  };
+  const canShow = canShowRecord(treeForPrivacy, individual.gedcom, facts, viewer);
+
+  return { individual, facts, dead, canShow };
+}
+
+function familyMemberViewModel(tree, member) {
+  if (member === null) {
+    return null;
+  }
+
+  const primaryName = extractPrimaryName(member.individual.gedcom);
+  const fullNameHtml =
+    primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${member.individual.xref}</span>`;
+  const birthDate = getBirthDate(member.facts);
+  const deathDate = getDeathDate(member.facts);
+
+  return {
+    fullNameHtml,
+    lifespan: lifespan({ birthDate, deathDate, isDead: member.dead }),
+    url: `/tree/${tree.name}/individual/${member.individual.xref}`,
+  };
+}
+
+async function handleFamilyPage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let family;
+  let facts;
+  let husband;
+  let wife;
+  let children;
+  let shown;
+  let accessLevel;
+  let defaultResnInfo;
+
+  try {
+    family = await loadFamily(pool, tree.gedcomId, xref);
+
+    if (family === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(family.gedcom);
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+
+    husband = await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, family.husb);
+    wife = await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, family.wife);
+    children = [];
+
+    for (const childXref of childrenXrefs(facts)) {
+      children.push(await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, childXref));
+    }
+
+    const memberCanShowResults = [husband, wife, ...children].filter((member) => member !== null).map((member) => member.canShow);
+
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, family.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+    const familyViewer = { accessLevel, isSelfRecord: false };
+
+    shown = familyCanShowRecord(treeForPrivacy, family.gedcom, familyViewer, memberCanShowResults);
+  } catch (error) {
+    console.error('Failed to resolve family privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const visibleFacts = [];
+
+  for (const fact of vitalFamilyFacts(facts)) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const placeMatch = /\n2 PLAC (.+)/.exec(fact);
+
+    visibleFacts.push({ tag, date: dateMatch ? dateMatch[1] : '', place: placeMatch ? placeMatch[1] : '' });
+  }
+
+  const familyViewModel = {
+    husband: familyMemberViewModel(tree, husband),
+    wife: familyMemberViewModel(tree, wife),
+    children: children.map((child) => familyMemberViewModel(tree, child)).filter((child) => child !== null),
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderFamilyPage({ tree, user, csrfToken, family: familyViewModel });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -915,6 +1106,13 @@ const server = createServer(async (req, res) => {
 
   if (individualMatch !== null) {
     await handleIndividualPage(req, res, individualMatch.tree, individualMatch.xref);
+    return;
+  }
+
+  const familyMatch = matchFamilyPagePath(url.pathname);
+
+  if (familyMatch !== null) {
+    await handleFamilyPage(req, res, familyMatch.tree, familyMatch.xref);
     return;
   }
 

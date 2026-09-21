@@ -425,19 +425,25 @@ export function ageString({ birthDate, deathDate, isDead: dead, sex: individualS
 }
 
 /**
- * Mirrors GedcomRecord::canShowRecord() (app/GedcomRecord.php:950-992),
- * in the exact same order. `viewer` carries everything needed to avoid
- * re-querying: { accessLevel, isSelfRecord, relationshipGateBlocked }.
- * `relationshipGateBlocked` implements the corrected relationship-privacy
- * substitution - see canShowByType() below for why.
+ * Mirrors GedcomRecord::canShowRecord() (app/GedcomRecord.php:950-992)
+ * MINUS its final `canShowByType()` delegation - in real PHP this is
+ * literally the SAME shared method for every record type (`Individual`
+ * and `Family` both extend `GedcomRecord` and only override
+ * `canShowByType()`), so this port splits out that shared RESN/
+ * self-record/admin-bypass chain as its own function rather than
+ * duplicating it per record type - `canShowRecord()` below (individual)
+ * and `pages-server/family.mjs`'s `familyCanShowRecord()` both call
+ * this, each supplying their own type-specific `canShowByType`
+ * delegate for the final fallback.
  *
- * @param {{hideLivePeople: boolean, defaultResn: string|null, keepAliveYearsBirth: number, keepAliveYearsDeath: number}} tree
- * @param {string} gedcom the individual's raw record text
- * @param {string[]} facts
- * @param {{accessLevel: 0|1|2, isSelfRecord: boolean, showDeadPeople: number, dead: boolean, relationshipGateBlocked: boolean}} viewer
+ * @param {{hideLivePeople: boolean, defaultResn: string|null}} tree
+ * @param {string} gedcom the record's raw text (individual OR family)
+ * @param {{accessLevel: 0|1|2, isSelfRecord: boolean}} viewer
+ * @param {() => boolean} canShowByTypeFn called only when nothing else
+ *   in the chain already decided the answer
  * @returns {boolean}
  */
-export function canShowRecord(tree, gedcom, facts, viewer) {
+export function canShowViaResnChain(tree, gedcom, viewer, canShowByTypeFn) {
   if (!tree.hideLivePeople) {
     return true;
   }
@@ -470,7 +476,53 @@ export function canShowRecord(tree, gedcom, facts, viewer) {
     return true;
   }
 
-  return canShowByType(tree, facts, viewer);
+  return canShowByTypeFn();
+}
+
+/**
+ * `canShowViaResnChain()` specialized for an individual - see that
+ * function's doc comment for why the RESN chain itself is factored
+ * out. `viewer` carries everything canShowByType() needs to avoid
+ * re-querying: { accessLevel, isSelfRecord, showDeadPeople, dead,
+ * relationshipGateBlocked }. `relationshipGateBlocked` implements the
+ * corrected relationship-privacy substitution - see canShowByType()
+ * below for why.
+ *
+ * @param {{hideLivePeople: boolean, defaultResn: string|null, keepAliveYearsBirth: number, keepAliveYearsDeath: number}} tree
+ * @param {string} gedcom the individual's raw record text
+ * @param {string[]} facts
+ * @param {{accessLevel: 0|1|2, isSelfRecord: boolean, showDeadPeople: number, dead: boolean, relationshipGateBlocked: boolean}} viewer
+ * @returns {boolean}
+ */
+export function canShowRecord(tree, gedcom, facts, viewer) {
+  return canShowViaResnChain(tree, gedcom, viewer, () => canShowByType(tree, facts, viewer));
+}
+
+/**
+ * Mirrors Individual::canShowName() (app/Individual.php:91-96): a
+ * living individual's NAME can be shown even when their full record
+ * can't, whenever the tree's SHOW_LIVING_NAMES preference permits it
+ * at this viewer's access level. Not reachable from IndividualPage's
+ * OWN page (that route's access gate is canShowRecord() itself - if
+ * it fails, the whole page 403s, so this fallback path never
+ * matters there) - but very much reachable from `pages-server/family.mjs`,
+ * which mirrors `Family::husband()`/`wife()`/`children()`'s use of
+ * this exact method to decide whether to show a family member's name
+ * on the FAMILY's own page even when that member's full record is
+ * private.
+ *
+ * @param {{hideLivePeople: boolean, defaultResn: string|null, keepAliveYearsBirth: number, keepAliveYearsDeath: number, showLivingNames: number}} tree
+ * @param {string} gedcom
+ * @param {string[]} facts
+ * @param {{accessLevel: 0|1|2, isSelfRecord: boolean, showDeadPeople: number, dead: boolean, relationshipGateBlocked: boolean}} viewer
+ * @returns {boolean}
+ */
+export function canShowName(tree, gedcom, facts, viewer) {
+  if (tree.showLivingNames >= viewer.accessLevel) {
+    return true;
+  }
+
+  return canShowRecord(tree, gedcom, facts, viewer);
 }
 
 /**
@@ -599,7 +651,7 @@ export function factCanShow(factGedcom, accessLevel, defaultResn) {
  */
 export async function loadTreePrivacyPrefs(pool, gedcomId) {
   const result = await pool.query(
-    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('HIDE_LIVE_PEOPLE', 'SHOW_DEAD_PEOPLE', 'MAX_ALIVE_AGE', 'KEEP_ALIVE_YEARS_BIRTH', 'KEEP_ALIVE_YEARS_DEATH')",
+    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('HIDE_LIVE_PEOPLE', 'SHOW_DEAD_PEOPLE', 'MAX_ALIVE_AGE', 'KEEP_ALIVE_YEARS_BIRTH', 'KEEP_ALIVE_YEARS_DEATH', 'SHOW_LIVING_NAMES')",
     [gedcomId],
   );
   const byName = Object.fromEntries(result.rows.map((row) => [row.setting_name, row.setting_value]));
@@ -615,6 +667,7 @@ export async function loadTreePrivacyPrefs(pool, gedcomId) {
     maxAliveAge: Number(byName.MAX_ALIVE_AGE ?? '120'),
     keepAliveYearsBirth: Number(byName.KEEP_ALIVE_YEARS_BIRTH ?? '0'),
     keepAliveYearsDeath: Number(byName.KEEP_ALIVE_YEARS_DEATH ?? '0'),
+    showLivingNames: Number(byName.SHOW_LIVING_NAMES ?? '1'),
   };
 }
 

@@ -24,7 +24,9 @@ import {
   lifespan,
   ageString,
   canShowRecord,
+  canShowViaResnChain,
   canShowByType,
+  canShowName,
   factCanShow,
   loadIndividual,
   loadTreePrivacyPrefs,
@@ -320,6 +322,43 @@ describe('canShowByType', () => {
   });
 });
 
+describe('canShowViaResnChain', () => {
+  test('is the shared core canShowRecord() delegates to', () => {
+    const tree = { hideLivePeople: true, defaultResn: null };
+    const viewer = { accessLevel: 0, isSelfRecord: false };
+
+    expect(canShowViaResnChain(tree, '', viewer, () => false)).toBe(true); // admin bypass
+    expect(canShowViaResnChain({ ...tree, hideLivePeople: false }, '', { ...viewer, accessLevel: 2 }, () => false)).toBe(true);
+    expect(canShowViaResnChain(tree, '', { ...viewer, accessLevel: 2 }, () => true)).toBe(true); // delegate called
+    expect(canShowViaResnChain(tree, '', { ...viewer, accessLevel: 2 }, () => false)).toBe(false);
+  });
+});
+
+describe('canShowName', () => {
+  const baseTree = { hideLivePeople: true, defaultResn: null, keepAliveYearsBirth: 0, keepAliveYearsDeath: 0, showLivingNames: 1 };
+  const baseViewer = { accessLevel: 2, isSelfRecord: false, showDeadPeople: 2, dead: false, relationshipGateBlocked: false };
+
+  test('SHOW_LIVING_NAMES permits the name even when the full record would be denied', () => {
+    // A living, unrelated individual at visitor level: canShowRecord()
+    // alone would deny (member-only default), but SHOW_LIVING_NAMES=1
+    // >= accessLevel 2 is false here too - use a lower access level to
+    // actually exercise the "name shown, record denied" branch.
+    const tree = { ...baseTree, showLivingNames: 2 };
+    expect(canShowName(tree, '', [], baseViewer)).toBe(true);
+    expect(canShowRecord(tree, '', [], baseViewer)).toBe(false);
+  });
+
+  test('falls through to canShowRecord() when SHOW_LIVING_NAMES does not cover this access level', () => {
+    // showLivingNames=1 does not cover a visitor (accessLevel 2); with
+    // nothing else granting access, canShowRecord() also denies.
+    expect(canShowName(baseTree, '', [], baseViewer)).toBe(false);
+  });
+
+  test('a record that canShowRecord() already permits is shown via that path', () => {
+    expect(canShowName(baseTree, '', [], { ...baseViewer, isSelfRecord: true })).toBe(true);
+  });
+});
+
 describe('factCanShow', () => {
   test('no RESN of any kind -> shown', () => {
     expect(factCanShow('1 BIRT\n2 DATE 1 JAN 1900', 2, null)).toBe(true);
@@ -364,6 +403,7 @@ describe('loadTreePrivacyPrefs', () => {
       maxAliveAge: 120,
       keepAliveYearsBirth: 0,
       keepAliveYearsDeath: 0,
+      showLivingNames: 1,
     });
   });
 

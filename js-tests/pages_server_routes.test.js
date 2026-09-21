@@ -9,6 +9,7 @@ import {
   matchThemePath,
   matchTreePagePath,
   matchIndividualPagePath,
+  matchFamilyPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -213,5 +214,30 @@ describe('matchIndividualPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchIndividualPagePath('/tree/ophir')).toBeNull();
     expect(matchIndividualPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchFamilyPagePath', () => {
+  test('extracts the tree and xref from the bare path', () => {
+    expect(matchFamilyPagePath('/tree/ophir/family/F1')).toEqual({ tree: 'ophir', xref: 'F1' });
+  });
+
+  test('a trailing slug is accepted and ignored', () => {
+    expect(matchFamilyPagePath('/tree/ophir/family/F1/John-DOE-and-Jane-DOE')).toEqual({ tree: 'ophir', xref: 'F1' });
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(matchFamilyPagePath('/tree/ophir/individual/I1')).toBeNull();
+    expect(matchFamilyPagePath('/tree/ophir/media/M1')).toBeNull();
+  });
+
+  test('the bare prefix with no xref does not match', () => {
+    expect(matchFamilyPagePath('/tree/ophir/family/')).toBeNull();
+    expect(matchFamilyPagePath('/tree/ophir/family')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchFamilyPagePath('/tree/ophir')).toBeNull();
+    expect(matchFamilyPagePath('/')).toBeNull();
   });
 });

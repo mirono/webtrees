@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-20 (`/tree/{tree}/individual/{xref}` ported to Node, phase 5 step 9 — the first route serving real GEDCOM record data, with a corrected privacy-chain bug caught before shipping). This is the entry point for "where are we" —
+**Last updated: 2026-09-21 (`/tree/{tree}/family/{xref}` ported to Node, phase 5 step 10 — closes the MARR gap, verified live against a real user-imported GEDCOM tree for the first time). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4282 tests, all green.
+# Expect: 4320 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -107,6 +107,7 @@ just adding latency.
 | 5.7 | `/language/{value}` + `/theme/{value}` served entirely by Node; fixed a real gap in the session codec (float/array/object values) that these routes exposed | **Done (2026-09-20)** — see phase5-home-page.md's addendum below |
 | 5.8 | `/tree/{tree}` (TreePage) served entirely by Node — the first tree-scoped route; ports one of TreePage's up to 8 configurable blocks (WelcomeBlockModule) | **Done (2026-09-20)** — [phase5-tree-page.md](phase5-tree-page.md) |
 | 5.9 | `/tree/{tree}/individual/{xref}` (IndividualPage) served entirely by Node — the first route with real GEDCOM record data and a genuinely nontrivial privacy chain; caught and fixed a real privacy-chain design flaw before shipping | **Done (2026-09-20)** — [phase5-individual-page.md](phase5-individual-page.md) |
+| 5.10 | `/tree/{tree}/family/{xref}` (FamilyPage) served entirely by Node — closes the MARR gap; reuses IndividualPage's privacy chain almost entirely; first step verified against a real user-imported GEDCOM tree | **Done (2026-09-21)** — [phase5-family-page.md](phase5-family-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -284,6 +285,32 @@ scenario the relationship-gate fix targets (confirmed it now correctly
 403s where the original design would have wrongly 200'd). Full JS
 suite: 4282 tests, green. See
 [phase5-individual-page.md](phase5-individual-page.md).
+
+**Step 10** ports `/tree/{tree}/family/{xref}` (FamilyPage), closing
+the MARR gap explicitly cut from step 9: husband/wife/children
+identity cards (each linking to their own now-real
+`/tree/{tree}/individual/{xref}` page) plus a marriage/divorce
+vital-facts table. Key finding: in real PHP, `Family` and `Individual`
+both extend `GedcomRecord` and share its `canShowRecord()` privacy
+method verbatim — only `canShowByType()` differs, and `Family`'s
+version turns out to be much simpler (just checks every referenced
+member passes `Individual::canShow()`, already built and verified for
+step 9). Mirrored that shared structure by refactoring
+`canShowRecord()` into an exported shared core
+(`canShowViaResnChain()`) plus a thin per-type wrapper, rather than
+duplicating the RESN chain. Also ported a second privacy primitive,
+`canShowName()` (a living individual's name can show even when their
+full record can't) — previously identified as dead code for
+IndividualPage's own page, but genuinely needed here for member-card
+display. `SHOW_PRIVATE_RELATIONSHIPS` deliberately not ported (a safe,
+display-only cut). **First step verified against a real user-imported
+GEDCOM tree**, not synthetic test data — confirmed a family with
+living members correctly 403s for anonymous visitors while a
+historical family renders correctly with real names/dates/places, and
+that a disposable test admin account reveals the previously-hidden
+family, proving the privacy gate rather than a coincidental denial.
+Full JS suite: 4320 tests, green. See
+[phase5-family-page.md](phase5-family-page.md).
 
 ## The 6 bridges: final state
 

@@ -162,3 +162,18 @@ export function matchIndividualPagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Same shape as matchIndividualPagePath() above, for PHP's
+ * `/tree/{tree}/family/{xref}{/slug}` route
+ * (app/Http/Routes/WebRoutes.php:659) - same "slug accepted and
+ * ignored" scope decision.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchFamilyPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/family\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
