@@ -32,11 +32,27 @@ function escapeHtml(value) {
 
 const UNKNOWN_NAME_HTML = '<span class="NAME" dir="auto" translate="no">…</span>';
 
+// Verified against app/Gedcom.php's real element definitions (the
+// I18N::translate() argument each 'FAM:TAG' entry passes), not
+// guessed - covers the common FAMILY-level event tags. A tag not
+// listed here falls back to the raw tag name, matching
+// individual-view.mjs's own convention.
 const FACT_LABELS = {
   MARR: 'Marriage',
   DIV: 'Divorce',
+  DIVF: 'Divorce filed',
   ANUL: 'Annulment',
   _SEPR: 'Separation',
+  ENGA: 'Engagement',
+  MARB: 'Marriage banns',
+  MARC: 'Marriage contract',
+  MARL: 'Marriage license',
+  MARS: 'Marriage settlement',
+  CENS: 'Family census',
+  RESI: 'Family residence',
+  EVEN: 'Event',
+  NCHI: 'Number of children',
+  CHAN: 'Last change',
 };
 
 /**
@@ -75,10 +91,22 @@ function renderMemberCard(member) {
  * "an earlier draft invented non-existent CSS classes" finding, fixed
  * identically here.
  */
-function renderFact({ tag, date, place }) {
+/**
+ * @param {{tag: string, date: string, time: string, place: string, address: string, author: string}} params
+ *   `date`/`time`/`place`/`address`/`author` are raw GEDCOM values, not
+ *   locale-formatted (see individual.mjs's own "no Date::display()"
+ *   accepted divergence) - `time` only ever accompanies CHAN's own
+ *   DATE (a level-3 TIME subline), `author` only ever comes from
+ *   CHAN's own `_WT_USER` subtag (app/Elements: 'FAM:CHAN:_WT_USER' =>
+ *   'Author of last change') - both harmless no-ops for any other tag.
+ */
+function renderFact({ tag, date, time, place, address, author }) {
   const label = FACT_LABELS[tag] ?? tag;
-  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span></span>` : '';
+  const dateTimeText = time ? `${date} ${time}` : date;
+  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(dateTimeText)}</span></span>` : '';
   const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';
+  const addressHtml = address ? `<div class="wt-fact-place">Address: ${escapeHtml(address)}</div>` : '';
+  const authorHtml = tag === 'CHAN' && author ? `<div class="wt-fact-place">Author of last change: ${escapeHtml(author)}</div>` : '';
 
   return `
         <tr>
@@ -90,6 +118,8 @@ function renderFact({ tag, date, place }) {
                 <div class="wt-fact-main-attributes">
                     ${dateHtml}
                     ${placeHtml}
+                    ${addressHtml}
+                    ${authorHtml}
                 </div>
             </td>
         </tr>`;
@@ -104,7 +134,7 @@ function renderFact({ tag, date, place }) {
  *   husband: {fullNameHtml: string, lifespan: string, url: string}|null,
  *   wife: {fullNameHtml: string, lifespan: string, url: string}|null,
  *   children: {fullNameHtml: string, lifespan: string, url: string}[],
- *   facts: {tag: string, date: string, place: string}[],
+ *   facts: {tag: string, date: string, time: string, place: string, address: string, author: string}[],
  * }} params.family `husband`/`wife` are null both when the reference
  *   is absent AND when it's present but not currently shown to this
  *   viewer (matches Family::husband()/wife()'s own canShowName()-gated

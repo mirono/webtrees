@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import { loadFamily, childrenXrefs, vitalFamilyFacts, familyCanShowRecord } from '../pages-server/family.mjs';
+import { loadFamily, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from '../pages-server/family.mjs';
 import { parseFacts } from '../pages-server/individual.mjs';
 
 function mockPool(queryImpl) {
@@ -59,18 +59,36 @@ describe('childrenXrefs', () => {
   });
 });
 
-describe('vitalFamilyFacts', () => {
-  test('keeps MARR/DIV/ANUL/_SEPR, drops everything else including membership links', () => {
-    const facts = parseFacts('1 HUSB @I1@\n1 WIFE @I2@\n1 CHIL @I3@\n1 MARR\n2 DATE 17 AUG 1995\n1 DIV\n2 DATE 1 JAN 2000\n1 CHAN\n2 DATE 1 JAN 2020');
+describe('displayableFamilyFacts', () => {
+  test('drops HUSB/WIFE/CHIL membership links, keeps every other fact (matches FamilyPage.php\'s own filter exactly - no further narrowing)', () => {
+    const facts = parseFacts(
+      '1 HUSB @I1@\n1 WIFE @I2@\n1 CHIL @I3@\n1 MARR\n2 DATE 17 AUG 1995\n1 DIV\n2 DATE 1 JAN 2000\n1 RESI\n2 DATE 27 APR 1996\n1 CHAN\n2 DATE 1 JAN 2020',
+    );
 
-    const vital = vitalFamilyFacts(facts);
-    expect(vital).toHaveLength(2);
-    expect(vital[0]).toContain('1 MARR');
-    expect(vital[1]).toContain('1 DIV');
+    const displayable = displayableFamilyFacts(facts);
+    expect(displayable).toHaveLength(4);
+    expect(displayable[0]).toContain('1 MARR');
+    expect(displayable[1]).toContain('1 DIV');
+    expect(displayable[2]).toContain('1 RESI');
+    expect(displayable[3]).toContain('1 CHAN');
   });
 
-  test('a family with no vital facts returns an empty array', () => {
-    expect(vitalFamilyFacts(parseFacts('1 HUSB @I1@\n1 WIFE @I2@'))).toEqual([]);
+  test('a family with only membership links returns an empty array', () => {
+    expect(displayableFamilyFacts(parseFacts('1 HUSB @I1@\n1 WIFE @I2@'))).toEqual([]);
+  });
+
+  // Regression test: the record's own leading "0 @Fn@ FAM" line is
+  // never stripped by parseFacts() (by design - every OTHER caller in
+  // this codebase uses an allowlist check that naturally excludes it),
+  // but this function's denylist shape let it slip through as a fake
+  // empty-tag fact row - caught live, rendered as a literal
+  // "undefined" label/icon above the real facts.
+  test("the record's own leading '0 @Fn@ FAM' line is excluded, not treated as a fact", () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 HUSB @I1@\n1 MARR\n2 DATE 17 AUG 1995');
+
+    const displayable = displayableFamilyFacts(facts);
+    expect(displayable).toHaveLength(1);
+    expect(displayable[0]).toContain('1 MARR');
   });
 });
 

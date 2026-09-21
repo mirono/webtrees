@@ -134,6 +134,46 @@ describe('renderFamilyPage', () => {
       expect(html).not.toContain('<script>alert(1)</script>');
       expect(html).toContain('&lt;script&gt;');
     });
+
+    // Regression test: an earlier draft narrowed this table to just
+    // MARR/DIV/ANUL/_SEPR, reported live as "I see only marriage and
+    // not other facts (Residence probably)".
+    test('renders non-marriage facts too, e.g. RESI with an address line', () => {
+      const html = renderFamilyPage(
+        baseParams({
+          family: {
+            ...baseParams().family,
+            facts: [{ tag: 'RESI', date: '27 APR 1996', place: 'Ramat Gan, Israel', address: 'Savion 7a Ramat-Gan, Israel' }],
+          },
+        }),
+      );
+
+      expect(html).toContain('Family residence');
+      expect(html).toContain('27 APR 1996');
+      expect(html).toContain('Ramat Gan, Israel');
+      expect(html).toContain('Address: Savion 7a Ramat-Gan, Israel');
+    });
+
+    test('renders CHAN with combined date+time and an author line', () => {
+      const html = renderFamilyPage(
+        baseParams({
+          family: {
+            ...baseParams().family,
+            facts: [{ tag: 'CHAN', date: '09 NOV 2018', time: '19:38:08', place: '', author: 'miron' }],
+          },
+        }),
+      );
+
+      expect(html).toContain('Last change');
+      expect(html).toContain('09 NOV 2018 19:38:08');
+      expect(html).toContain('Author of last change: miron');
+    });
+
+    test('a fact with neither date nor place nor address nor author renders just the label', () => {
+      const html = renderFamilyPage(baseParams({ family: { ...baseParams().family, facts: [{ tag: 'NCHI', date: '', place: '' }] } }));
+
+      expect(html).toContain('Number of children');
+    });
   });
 
   describe('the header, logged-in vs. anonymous', () => {

@@ -88,7 +88,7 @@ import {
   factCanShow,
 } from './individual.mjs';
 import { renderFamilyPage } from './family-view.mjs';
-import { loadFamily, childrenXrefs, vitalFamilyFacts, familyCanShowRecord } from './family.mjs';
+import { loadFamily, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -1014,7 +1014,7 @@ async function handleFamilyPage(req, res, treeName, xref) {
 
   const visibleFacts = [];
 
-  for (const fact of vitalFamilyFacts(facts)) {
+  for (const fact of displayableFamilyFacts(facts)) {
     const tag = /^1 (\S+)/.exec(fact)?.[1];
     const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
 
@@ -1024,8 +1024,22 @@ async function handleFamilyPage(req, res, treeName, xref) {
 
     const dateMatch = /\n2 DATE (.+)/.exec(fact);
     const placeMatch = /\n2 PLAC (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const addressMatch = /\n2 ADDR (.+)/.exec(fact);
+    // CHAN's own author sub-tag (app/GedcomRecord.php's updateChange()
+    // writes it as "2 _WT_USER <username>") - only ever meaningful on
+    // a CHAN fact, harmless to extract unconditionally elsewhere since
+    // no other family-level tag carries it.
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
 
-    visibleFacts.push({ tag, date: dateMatch ? dateMatch[1] : '', place: placeMatch ? placeMatch[1] : '' });
+    visibleFacts.push({
+      tag,
+      date: dateMatch ? dateMatch[1] : '',
+      time: timeMatch ? timeMatch[1] : '',
+      place: placeMatch ? placeMatch[1] : '',
+      address: addressMatch ? addressMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+    });
   }
 
   const familyViewModel = {

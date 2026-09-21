@@ -382,6 +382,32 @@ separate decision — see "Open decisions" below.
 
 ## Fixed bugs (found during manual testing)
 
+- **FamilyPage's facts table only ever showed marriage, never other
+  family facts** (2026-09-21): reported live as "I see only marriage
+  and not other facts (Residence probably)" — the user's real family
+  record has `RESI` (with an `ADDR` sub-line) and `CHAN` (last-change
+  metadata) facts too. Root cause: an earlier step had scoped the
+  table to a fixed `MARR`/`DIV`/`ANUL`/`_SEPR` tag list, narrower than
+  real PHP's actual filter (`FamilyPage.php:69-70`), which shows
+  *every* fact except the `HUSB`/`WIFE`/`CHIL` membership links — no
+  further narrowing. Widened `pages-server/family.mjs`'s
+  `displayableFamilyFacts()` to match. While fixing this, found and
+  fixed a second, real bug the widening exposed live: the record's own
+  leading `"0 @Fn@ FAM"` line (never stripped by `parseFacts()`, by
+  design — every *other* caller in this codebase uses an allowlist
+  check that naturally excludes it) slipped through this function's
+  new *denylist* shape as a fake empty-tag fact row, rendering a
+  literal `"undefined"` label above the real facts — caught during
+  live verification, fixed by explicitly excluding an empty tag.
+  `RESI`'s `ADDR` sub-line and `CHAN`'s date+time+`_WT_USER` author
+  line are now rendered too, using verified real labels from
+  `app/Gedcom.php` (`FAM:RESI` → "Family residence", `FAM:CHAN` →
+  "Last change", `FAM:CHAN:_WT_USER` → "Author of last change").
+  Verified live against the user's own real family record, matching
+  their reported PHP output line-for-line (modulo the already-accepted
+  raw-GEDCOM-date-format divergence). **Needs `docker compose restart
+  pages`** to take effect live.
+
 - **FamilyPage's husband/wife/children cards were invisible; both
   record pages' fact tables were completely unstyled** (2026-09-21):
   reported live as "the family page shows only facts" plus a missing

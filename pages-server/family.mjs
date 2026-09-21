@@ -28,14 +28,15 @@
 
 import { canShowViaResnChain } from './individual.mjs';
 
-// Tags this v1's vital-facts table renders - not the same list PHP's
-// own Family::getAllMarriageDates()/getAllDivorceDates() iterate
-// (Gedcom::MARRIAGE_EVENTS includes '_NMR', DIVORCE_EVENTS the full
-// set used here) - this is a display-table filter (mirroring
-// FamilyPage's own "Facts and events" table, which shows every fact
-// found, not a single "first match wins" pick), not a port of either
-// of those specific accessor methods.
-const VITAL_FAMILY_TAGS = ['MARR', 'DIV', 'ANUL', '_SEPR'];
+// Membership-link tags excluded from the "Facts and events" table -
+// these render as the parents/children cards instead, matching
+// FamilyPage.php:69-70's own filter EXACTLY:
+// `$family->facts([], true)->filter(fn ($fact) => !in_array($fact->tag(), ['FAM:HUSB', 'FAM:WIFE', 'FAM:CHIL']))`.
+// An earlier draft narrowed this further to just MARR/DIV/ANUL/_SEPR -
+// reported live as "I see only marriage and not other facts" (the
+// user's real family record has RESI and CHAN facts too) - PHP's own
+// filter has no such narrowing, so this port doesn't either.
+const EXCLUDED_MEMBERSHIP_TAGS = ['HUSB', 'WIFE', 'CHIL'];
 
 function factTag(factGedcom) {
   const match = /^1 (\S+)/.exec(factGedcom);
@@ -91,20 +92,35 @@ export function childrenXrefs(facts) {
 
 /**
  * Mirrors resources/views/family-page.phtml's "Facts and events" table
- * filter (app/Http/RequestHandlers/FamilyPage.php:69-70): every fact
- * EXCEPT the HUSB/WIFE/CHIL membership links themselves (those render
- * as the parents/children cards, not fact rows) - scoped further to
- * just marriage/divorce-family events for this v1's vital-facts table,
- * same "prove the pattern with a narrow slice" cut as IndividualPage's
- * own vital-facts list.
+ * filter (app/Http/RequestHandlers/FamilyPage.php:69-70) exactly: every
+ * fact EXCEPT the HUSB/WIFE/CHIL membership links themselves (those
+ * render as the parents/children cards, not fact rows). Unlike
+ * IndividualPage's own vital-facts list (deliberately narrowed to a
+ * fixed BIRT/CHR/BAPM/DEAT/BURI/CREM tag set - individual facts route
+ * through several different tabs in real PHP, e.g. RelativesTabModule
+ * claims FAMC/FAMS, so "everything" isn't a safe substitute there),
+ * FamilyPage has no such tab-routing complexity to replicate - PHP's
+ * own filter really is this simple, so this port isn't narrowed either.
  *
  * @param {string[]} facts
- * @returns {string[]} the fact blocks themselves (tag/date/place
+ * @returns {string[]} the fact blocks themselves (tag/date/place/etc.
  *   extraction + privacy filtering is the caller's job, matching
  *   individual.mjs's own visibleFacts composition convention)
  */
-export function vitalFamilyFacts(facts) {
-  return facts.filter((fact) => VITAL_FAMILY_TAGS.includes(factTag(fact)));
+export function displayableFamilyFacts(facts) {
+  // parseFacts()'s own doc comment (pages-server/individual.mjs) notes
+  // the record's leading "0 @Fn@ FAM" line is never stripped, relying
+  // on every caller matching an EXACT "1 TAG" prefix to filter it out
+  // harmlessly - true for every ALLOWLIST-style check elsewhere in
+  // this codebase, but NOT for this function's DENYLIST shape:
+  // factTag("0 @Fn@ FAM") is '' (no match), and '' is not in
+  // EXCLUDED_MEMBERSHIP_TAGS, so it slipped through as a fake
+  // undefined-tag fact row - caught live (rendered as a literal
+  // "undefined" label). Filtered explicitly here instead.
+  return facts.filter((fact) => {
+    const tag = factTag(fact);
+    return tag !== '' && !EXCLUDED_MEMBERSHIP_TAGS.includes(tag);
+  });
 }
 
 /**
