@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-22 (IndividualPage gained a "Families" section, phase 5 step 11 — closes the navigation loop back to FamilyPage). This is the entry point for "where are we" —
+**Last updated: 2026-09-22 (IndividualPage's facts list widened from vital-events-only to ~30 real event/attribute tags, phase 5 step 12 — the same class of gap already found and fixed for FamilyPage). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4350 tests, all green.
+# Expect: 4352 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -109,6 +109,7 @@ just adding latency.
 | 5.9 | `/tree/{tree}/individual/{xref}` (IndividualPage) served entirely by Node — the first route with real GEDCOM record data and a genuinely nontrivial privacy chain; caught and fixed a real privacy-chain design flaw before shipping | **Done (2026-09-20)** — [phase5-individual-page.md](phase5-individual-page.md) |
 | 5.10 | `/tree/{tree}/family/{xref}` (FamilyPage) served entirely by Node — closes the MARR gap; reuses IndividualPage's privacy chain almost entirely; first step verified against a real user-imported GEDCOM tree | **Done (2026-09-21)** — [phase5-family-page.md](phase5-family-page.md) |
 | 5.11 | IndividualPage gains a "Families" section — closes the navigation loop back to FamilyPage, reusing its exact privacy chain via a new `wt_link`-based lookup | **Done (2026-09-22)** — [phase5-individual-page-families.md](phase5-individual-page-families.md) |
+| 5.12 | IndividualPage's facts list widened from 6 vital-event tags to ~30 real event/attribute tags, plus CHAN/ADDR rendering | **Done (2026-09-22)** — see phase5-individual-page.md's follow-up section |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -342,6 +343,26 @@ resolution and privacy chain exactly (not a separate, weaker check),
 so a family only shows in the list if the viewer could also visit it
 directly. Full JS suite: 4350 tests, green. See
 [phase5-individual-page-families.md](phase5-individual-page-families.md).
+
+**Step 12** widens IndividualPage's facts list from the original 6-tag
+vital-events allowlist to ~30 real event/attribute tags — the same
+class of gap already found and fixed for FamilyPage: real individuals
+in the user's imported tree carry `RESI`/`CENS`/`IMMI`/`EVEN`/`OCCU`/
+`NATU` and similar facts that were silently invisible. Deliberately
+stays an allowlist rather than switching to FamilyPage's "everything
+except a few structural tags" filter — real PHP routes several
+individual-level tags to *other* tabs this migration hasn't built
+(`OBJE`→media, `NOTE`→notes, `SOUR`→sources, `FAMC`/`FAMS`→relatives,
+now partially covered by step 11), none of which fit this route's
+simple date+place-shaped renderer. Also added `CHAN`/`ADDR` rendering,
+reusing FamilyPage's already-verified markup patterns exactly. Every
+label verified against `app/Gedcom.php`'s real element definitions.
+Verified live against a real public individual: his page now shows
+Birth/Death/Burial/Naturalization/Occupation/Residence (with a date
+qualifier and address)/Last change, previously only Birth/Death/
+Burial showed. Full JS suite: 4352 tests, green. See
+[phase5-individual-page.md](phase5-individual-page.md)'s follow-up
+section.
 
 ## The 6 bridges: final state
 

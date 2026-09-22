@@ -183,6 +183,37 @@ describe('renderIndividualPage', () => {
       expect(html).not.toContain('<script>alert(1)</script>');
       expect(html).toContain('&lt;script&gt;');
     });
+
+    // Regression test: an earlier draft narrowed this list to just
+    // BIRT/CHR/BAPM/DEAT/BURI/CREM, invisible for the many other real
+    // event/attribute tags (RESI, CENS, IMMI, EVEN, ...) the user's
+    // real imported tree turned out to have.
+    test('renders non-vital event/attribute facts too, e.g. Residence', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: { ...baseParams().individual, facts: [{ tag: 'RESI', date: '27 APR 1996', place: 'Ramat Gan, Israel' }] },
+        }),
+      );
+
+      expect(html).toContain('Residence');
+      expect(html).toContain('27 APR 1996');
+      expect(html).toContain('Ramat Gan, Israel');
+    });
+
+    test('renders CHAN with date and time in separate spans, and an author line', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            facts: [{ tag: 'CHAN', date: 'November 9, 2018', time: '19:38:08', place: '', author: 'miron' }],
+          },
+        }),
+      );
+
+      expect(html).toContain('Last change');
+      expect(html).toContain('<span class="date">November 9, 2018</span> – <span class="date">19:38:08</span>');
+      expect(html).toContain('<span class="label">Author of last change</span>: <span class="value align-top">miron</span>');
+    });
   });
 
   describe('the header, logged-in vs. anonymous', () => {

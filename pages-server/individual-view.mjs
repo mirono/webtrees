@@ -17,8 +17,10 @@
 // scoped-down replica of resources/views/individual-page*.phtml, same
 // convention as tree-view.mjs (dir="ltr", escapeHtml(), CSRF meta tag
 // only when logged in). See docs/php-to-js-migration/phase5-individual-page.md
-// for the full scope: identity header (name/sex/lifespan/age) + a flat
-// list of vital-event facts only - no tabs, no sidebars, no charts.
+// for the full scope: identity header (name/sex/lifespan/age) + a
+// "Families" section (step 11) + a flat list of event/attribute facts
+// (widened from the original vital-events-only v1 scope, step 12) -
+// no tabs, no sidebars, no charts, no NOTE/SOUR/OBJE fact rendering.
 
 function escapeHtml(value) {
   return String(value)
@@ -28,13 +30,47 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
+// Verified against app/Gedcom.php's real 'INDI:TAG' element
+// definitions (the I18N::translate() argument each entry passes), not
+// guessed - widened from the original BIRT/DEAT-only set after the
+// user's real imported tree turned out to have RESI/CENS/IMMI/EVEN
+// facts that were silently invisible. A tag not listed here falls
+// back to the raw tag name.
 const FACT_LABELS = {
   BIRT: 'Birth',
   CHR: 'Christening',
   BAPM: 'Baptism',
+  CHRA: 'Adult christening',
+  CONF: 'Confirmation',
+  FCOM: 'First communion',
+  BARM: 'Bar mitzvah',
+  BASM: 'Bat mitzvah',
+  BLES: 'Blessing',
+  ADOP: 'Adoption',
+  NATU: 'Naturalization',
+  EMIG: 'Emigration',
+  IMMI: 'Immigration',
+  CENS: 'Census',
+  PROB: 'Probate',
+  WILL: 'Will',
+  GRAD: 'Graduation',
+  RETI: 'Retirement',
   DEAT: 'Death',
   BURI: 'Burial',
   CREM: 'Cremation',
+  RESI: 'Residence',
+  EVEN: 'Event',
+  OCCU: 'Occupation',
+  EDUC: 'Education',
+  DSCR: 'Description',
+  NATI: 'Nationality',
+  RELI: 'Religion',
+  TITL: 'Title',
+  CAST: 'Caste',
+  IDNO: 'Identification number',
+  NMR: 'Number of marriages',
+  SSN: 'Social security number',
+  CHAN: 'Last change',
 };
 
 /**
@@ -48,12 +84,25 @@ const FACT_LABELS = {
  * sub-fact citations (SOUR/NOTE/OBJE), no edit controls - but using
  * the REAL class names (`wt-fact-label`, `wt-fact-icon-<TAG>`,
  * `wt-fact-date-age`, `date`, `wt-fact-place`) so the existing
- * stylesheet actually applies.
+ * stylesheet actually applies. `date` is already locale-formatted text
+ * (individual.mjs's displayDate()); `time`/`address`/`author` mirror
+ * family-view.mjs's identical CHAN/ADDR handling - see that file's own
+ * doc comment for the real markup shapes these match
+ * (`fact-date.phtml`'s two-separate-`<span class="date">` rendering,
+ * `AbstractElement::labelValue()`'s bolded-label markup).
  */
-function renderFact({ tag, date, place }) {
+function renderFact({ tag, date, time, place, address, author }) {
   const label = FACT_LABELS[tag] ?? tag;
-  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span></span>` : '';
+  const timeHtml = time ? ` – <span class="date">${escapeHtml(time)}</span>` : '';
+  const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span>${timeHtml}</span>` : '';
   const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';
+  const addressHtml = address
+    ? `<div class="wt-fact-place"><span class="label">Address</span>: <span class="value align-top">${escapeHtml(address)}</span></div>`
+    : '';
+  const authorHtml =
+    tag === 'CHAN' && author
+      ? `<div class="wt-fact-place"><span class="label">Author of last change</span>: <span class="value align-top">${escapeHtml(author)}</span></div>`
+      : '';
 
   return `
         <tr>
@@ -65,6 +114,8 @@ function renderFact({ tag, date, place }) {
                 <div class="wt-fact-main-attributes">
                     ${dateHtml}
                     ${placeHtml}
+                    ${addressHtml}
+                    ${authorHtml}
                 </div>
             </td>
         </tr>`;
@@ -125,7 +176,7 @@ function renderFamiliesSection(parentFamilies, spouseFamilies) {
  *   fullNameHtml: string,
  *   lifespan: string,
  *   age: string,
- *   facts: {tag: string, date: string, place: string}[],
+ *   facts: {tag: string, date: string, time: string, place: string, address: string, author: string}[],
  *   parentFamilies: {titleHtml: string, url: string}[],
  *   spouseFamilies: {titleHtml: string, url: string}[],
  * }} params.individual `fullNameHtml` is PRE-ESCAPED SAFE HTML (see

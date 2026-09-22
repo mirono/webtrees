@@ -706,10 +706,58 @@ async function handleTreePage(req, res, treeName) {
   res.end(html);
 }
 
-// The individual's own vital-event facts this v1 slice renders - see
-// docs/php-to-js-migration/phase5-individual-page.md's scope decision
-// (MARR and every other GEDCOM tag are out of scope).
-const VITAL_FACT_TAGS = ['BIRT', 'CHR', 'BAPM', 'DEAT', 'BURI', 'CREM'];
+// The individual's own event/attribute facts this route renders -
+// widened from the original BIRT/DEAT-only v1 scope after the user's
+// real imported tree turned out to have plenty of RESI/CENS/IMMI/EVEN
+// facts that were silently invisible (same class of gap already found
+// and fixed for FamilyPage's own facts table). Deliberately still an
+// ALLOWLIST, not "everything except a few structural tags" the way
+// FamilyPage's filter is - unlike FamilyPage, real PHP routes several
+// individual-level tags to OTHER tabs entirely (NAME/SEX to the page
+// header itself; OBJE to MediaTabModule; NOTE to NotesTabModule; SOUR
+// to SourcesTabModule; FAMC/FAMS to RelativesTabModule, now partially
+// covered by this page's own "Families" section) - none of those have
+// a sensible date+place-shaped rendering, so a denylist approach here
+// would show them as broken-looking empty rows instead of omitting
+// them, unlike FamilyPage where the excluded set really is just
+// HUSB/WIFE/CHIL. Every label verified against app/Gedcom.php's real
+// 'INDI:TAG' element definitions, not guessed.
+const VITAL_FACT_TAGS = [
+  'BIRT',
+  'CHR',
+  'BAPM',
+  'CHRA',
+  'CONF',
+  'FCOM',
+  'BARM',
+  'BASM',
+  'BLES',
+  'ADOP',
+  'NATU',
+  'EMIG',
+  'IMMI',
+  'CENS',
+  'PROB',
+  'WILL',
+  'GRAD',
+  'RETI',
+  'DEAT',
+  'BURI',
+  'CREM',
+  'RESI',
+  'EVEN',
+  'OCCU',
+  'EDUC',
+  'DSCR',
+  'NATI',
+  'RELI',
+  'TITL',
+  'CAST',
+  'IDNO',
+  'NMR',
+  'SSN',
+  'CHAN',
+];
 
 async function handleIndividualPage(req, res, treeName, xref) {
   if (req.method !== 'GET') {
@@ -878,11 +926,20 @@ async function handleIndividualPage(req, res, treeName, xref) {
 
     const dateMatch = /\n2 DATE (.+)/.exec(fact);
     const placeMatch = /\n2 PLAC (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const addressMatch = /\n2 ADDR (.+)/.exec(fact);
+    // CHAN's own author sub-tag - see family.mjs's identical handling;
+    // 'INDI:CHAN' => [['_WT_USER', '0:1']] confirmed in app/Gedcom.php,
+    // same shape as the family-level version already ported.
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
 
     visibleFacts.push({
       tag,
       date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      time: timeMatch ? timeMatch[1] : '',
       place: placeMatch ? placeMatch[1] : '',
+      address: addressMatch ? addressMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
     });
   }
 

@@ -200,6 +200,44 @@ account):
    `wt_default_resn` rows, the `X2` test individual) deleted afterward;
    `data/config.yaml` restored; both local test server processes killed.
 
+## Follow-up: widened facts list (step 12, 2026-09-22)
+
+The original vital-facts allowlist (`BIRT`/`CHR`/`BAPM`/`DEAT`/`BURI`/
+`CREM`) turned out too narrow once the user's real imported tree was
+browsed — the same class of gap already found and fixed for
+FamilyPage's own facts table. Real individuals in the tree carry
+plenty of `RESI`/`CENS`/`IMMI`/`EVEN`/`OCCU`/`NATU` and similar event/
+attribute facts that were silently invisible.
+
+Unlike FamilyPage's fix (which widened to "everything except
+`HUSB`/`WIFE`/`CHIL`"), this stays an **allowlist**, now covering ~30
+real GEDCOM individual event/attribute tags, each label verified
+against `app/Gedcom.php`'s real `'INDI:TAG'` element definitions. A
+denylist wouldn't be safe here the way it was for FamilyPage: real PHP
+routes several individual-level tags to *other* tabs entirely this
+migration hasn't built (`NAME`/`SEX` to the page header itself, `OBJE`
+to `MediaTabModule`, `NOTE` to `NotesTabModule`, `SOUR` to
+`SourcesTabModule`, `FAMC`/`FAMS` to `RelativesTabModule` — now
+partially covered by step 11's "Families" section) — none of those
+have a sensible date+place-shaped rendering, so showing them via this
+route's simple renderer would produce broken-looking empty rows
+instead of correctly omitting them.
+
+Also added `CHAN` support (date+time in two separate `<span
+class="date">` elements, `_WT_USER` "Author of last change" line) and
+`ADDR` sub-line rendering, both reusing the exact markup/CSS-class
+patterns already verified for FamilyPage's own `CHAN`/`RESI` handling
+(`AbstractElement::labelValue()`'s bolded-label markup,
+`fact-date.phtml`'s real date/time separation).
+
+Verified live against a real public individual in the imported tree
+(Arie Leib Gutgold, already used in prior steps' verification): his
+page now shows Birth, Death, Burial, Naturalization, a second Birth
+(a genuine data-quality artifact in the real GEDCOM — both facts
+correctly rendered, not deduplicated), Occupation, Residence (with a
+`BEF` date qualifier and an `ADDR` line), and Last change with author
+— all with real month-name dates. Full JS suite: 4352 tests, green.
+
 ## Docker note
 
 Same as every prior `pages-server` step: **needs `docker compose
