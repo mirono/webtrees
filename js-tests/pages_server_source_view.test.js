@@ -50,6 +50,59 @@ describe('renderSourcePage', () => {
       expect(renderSourcePage(baseParams())).not.toContain('wt-facts-table');
     });
 
+    test('renders TITL as its own fact row too, labeled "Title" (matches real PHP\'s record-page-details.phtml, which has no tag allowlist - TITL shows redundantly with the page heading)', () => {
+      const html = renderSourcePage(
+        baseParams({
+          source: { ...baseParams().source, facts: [{ tag: 'TITL', value: 'Census 1900', date: '', time: '', author: '' }] },
+        }),
+      );
+
+      expect(html).toContain('Title');
+      expect(html).toContain('<div class="wt-fact-value">Census 1900</div>');
+    });
+
+    // Regression test: an earlier draft omitted REPO entirely, reported
+    // live as "not showing ... the Repository". Mirrors
+    // XrefRepository::value() (app/Elements/AbstractXrefElement.php's
+    // valueXrefLink()): a link to the repository's own page, not a
+    // plain-text value div.
+    test('renders REPO as a link to the repository, labeled "Repository"', () => {
+      const html = renderSourcePage(
+        baseParams({
+          source: {
+            ...baseParams().source,
+            facts: [
+              {
+                tag: 'REPO',
+                value: '',
+                date: '',
+                time: '',
+                author: '',
+                repoUrl: '/tree/ophir/repository/R3',
+                repoNameHtml: '<span class="NAME" dir="auto" translate="no">Israel State Archives</span>',
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('Repository');
+      expect(html).toContain(
+        '<div class="wt-fact-value"><a href="/tree/ophir/repository/R3"><span class="NAME" dir="auto" translate="no">Israel State Archives</span></a></div>',
+      );
+    });
+
+    test('a REPO fact whose repository no longer exists (or isn\'t showable) renders no link, just the label', () => {
+      const html = renderSourcePage(
+        baseParams({
+          source: { ...baseParams().source, facts: [{ tag: 'REPO', value: '', date: '', time: '', author: '' }] },
+        }),
+      );
+
+      expect(html).toContain('Repository');
+      expect(html).not.toContain('<a href=');
+    });
+
     test('renders AUTH/PUBL/ABBR with a known label and plain-text value', () => {
       const html = renderSourcePage(
         baseParams({

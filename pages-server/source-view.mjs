@@ -33,26 +33,40 @@ function escapeHtml(value) {
 // Verified against app/Gedcom.php's real 'SOUR:TAG' element
 // definitions, not guessed.
 const FACT_LABELS = {
+  TITL: 'Title',
   AUTH: 'Author',
   PUBL: 'Publication',
   ABBR: 'Abbreviation',
   TEXT: 'Text',
+  REPO: 'Repository',
   CHAN: 'Last change',
 };
 
 /**
  * Matches resources/views/fact.phtml's real 2-column row shape and
  * class names - same convention already established for
- * individual-view.mjs/family-view.mjs's own renderFact(). Source facts
- * are plain VALUE text (AUTH/PUBL/ABBR/TEXT), not DATE/PLAC-structured
- * events like Individual/Family's - rendered via the real
+ * individual-view.mjs/family-view.mjs's own renderFact(). Most source
+ * facts are plain VALUE text (TITL/AUTH/PUBL/ABBR/TEXT), not DATE/PLAC-
+ * structured events like Individual/Family's - rendered via the real
  * `wt-fact-value` class rather than `wt-fact-place`. `value` may
  * contain embedded newlines (joined CONT/CONC continuation lines, e.g.
  * for a long TEXT transcription) - rendered as <br> after escaping.
+ * REPO is the one exception: mirrors XrefRepository::value()
+ * (app/Elements/AbstractXrefElement.php's valueXrefLink()) - a link to
+ * the repository's own page (still PHP-served; index.mjs resolves
+ * `repoUrl`/`repoNameHtml` via phpRouteUrl() so this works correctly
+ * whether or not rewrite_urls is on), not a plain value div.
  */
-function renderFact({ tag, value, date, time, author }) {
+function renderFact({ tag, value, date, time, author, repoUrl, repoNameHtml }) {
   const label = FACT_LABELS[tag] ?? tag;
-  const valueHtml = value ? `<div class="wt-fact-value">${escapeHtml(value).replaceAll('\n', '<br>')}</div>` : '';
+  const valueHtml =
+    tag === 'REPO'
+      ? repoUrl !== undefined
+        ? `<div class="wt-fact-value"><a href="${escapeHtml(repoUrl)}">${repoNameHtml}</a></div>`
+        : ''
+      : value
+        ? `<div class="wt-fact-value">${escapeHtml(value).replaceAll('\n', '<br>')}</div>`
+        : '';
   const timeHtml = time ? ` – <span class="date">${escapeHtml(time)}</span>` : '';
   const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span>${timeHtml}</span>` : '';
   const authorHtml =
@@ -84,10 +98,12 @@ function renderFact({ tag, value, date, time, author }) {
  * @param {{
  *   xref: string,
  *   fullNameHtml: string,
- *   facts: {tag: string, value: string, date: string, time: string, author: string}[],
- * }} params.source `fullNameHtml` is PRE-ESCAPED SAFE HTML (see
- *   pages-server/individual.mjs's extractNameFromFact()) - inserted
- *   RAW, never passed through escapeHtml() again.
+ *   facts: {tag: string, value: string, date: string, time: string, author: string, repoUrl?: string, repoNameHtml?: string}[],
+ * }} params.source `fullNameHtml` (and a REPO fact's `repoNameHtml`) is
+ *   PRE-ESCAPED SAFE HTML (see pages-server/individual.mjs's
+ *   extractNameFromFact()) - inserted RAW, never passed through
+ *   escapeHtml() again. `repoUrl`/`repoNameHtml` are present only for
+ *   a REPO fact whose referenced repository still exists.
  */
 export function renderSourcePage({ tree, user, csrfToken, source }) {
   const csrfMetaTag =

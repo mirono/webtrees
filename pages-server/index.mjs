@@ -1315,6 +1315,7 @@ async function handleSourcePage(req, res, treeName, xref) {
   let shown;
   let accessLevel;
   let defaultResnInfo;
+  let repoInfoByXref;
 
   try {
     source = await loadSource(pool, tree.gedcomId, xref);
@@ -1335,6 +1336,7 @@ async function handleSourcePage(req, res, treeName, xref) {
     const sourceViewer = { accessLevel, isSelfRecord: false };
 
     const repoCanShowResults = [];
+    repoInfoByXref = new Map();
 
     for (const repoXref of repoXrefs(facts)) {
       const repository = await loadRepository(pool, tree.gedcomId, repoXref);
@@ -1345,10 +1347,27 @@ async function handleSourcePage(req, res, treeName, xref) {
 
       const repoDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, repository.xref);
       const repoTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: repoDefaultResnInfo.individualResn };
+      const repoShown = repositoryCanShowRecord(repoTreeForPrivacy, repository.gedcom, sourceViewer, repoDefaultResnInfo.treeFactResn);
 
-      repoCanShowResults.push(
-        repositoryCanShowRecord(repoTreeForPrivacy, repository.gedcom, sourceViewer, repoDefaultResnInfo.treeFactResn),
-      );
+      repoCanShowResults.push(repoShown);
+
+      // Only feed a showable repository's name into the REPO fact row
+      // below (mirrors XrefRepository::value()'s own factory lookup,
+      // which is subject to the SAME canShow() gate real PHP applies
+      // to every cross-referenced record - Source::canShowByType()
+      // already hides the whole source when any repo is unshowable, so
+      // this only ever matters for the vacuous "some repos shown, some
+      // not" case that can't actually occur given that gate, but
+      // guarding it here costs nothing and avoids ever leaking a
+      // hidden repository's name through this specific fact row).
+      if (repoShown) {
+        const repoName = extractNameFromFact(repository.gedcom, 'NAME');
+
+        repoInfoByXref.set(repoXref, {
+          url: phpRouteUrl(`/tree/${tree.name}/repository/${repository.xref}`, siteUrlConfig),
+          nameHtml: repoName !== null ? repoName.full : `<span class="NAME" dir="auto" translate="no">${repository.xref}</span>`,
+        });
+      }
     }
 
     shown = sourceCanShowRecord(treeForPrivacy, source.gedcom, sourceViewer, defaultResnInfo.treeFactResn, repoCanShowResults);
@@ -1378,13 +1397,17 @@ async function handleSourcePage(req, res, treeName, xref) {
     const dateMatch = /\n2 DATE (.+)/.exec(fact);
     const timeMatch = /\n3 TIME (.+)/.exec(fact);
     const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+    const repoXrefMatch = tag === 'REPO' ? /^1 REPO @([^@]+)@/.exec(fact) : null;
+    const repoInfo = repoXrefMatch ? repoInfoByXref.get(repoXrefMatch[1]) : undefined;
 
     visibleFacts.push({
       tag,
-      value: tag === 'CHAN' ? '' : sourceFactValue(fact),
+      value: tag === 'CHAN' || tag === 'REPO' ? '' : sourceFactValue(fact),
       date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
       time: timeMatch ? timeMatch[1] : '',
       author: authorMatch ? authorMatch[1] : '',
+      repoUrl: repoInfo?.url,
+      repoNameHtml: repoInfo?.nameHtml,
     });
   }
 

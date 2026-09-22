@@ -78,22 +78,31 @@ describe('repoXrefs', () => {
 });
 
 describe('displayableSourceFacts', () => {
-  test('keeps AUTH/PUBL/ABBR/TEXT/CHAN, drops TITL/REPO/NOTE', () => {
+  // Matches real PHP's record-page-details.phtml exactly: NO tag
+  // allowlist at all ($record->facts([], true), app/GedcomRecord.php:
+  // 552-570 - empty $filter). TITL and REPO are shown as their own
+  // fact rows too (TITL redundantly with the page heading - confirmed
+  // this duplication is genuinely what real PHP renders, not a guess).
+  // NOTE is the one deliberate exclusion (needs its own shared-note
+  // handling this simple renderer doesn't have yet).
+  test('keeps TITL/AUTH/PUBL/ABBR/TEXT/REPO/CHAN, drops NOTE', () => {
     const facts = parseFacts(
       '0 @S1@ SOUR\n1 TITL Census 1900\n1 AUTH J. Smith\n1 PUBL Somewhere\n1 ABBR Census\n1 TEXT Some transcription\n1 REPO @R1@\n1 NOTE A note\n1 CHAN\n2 DATE 1 JAN 2020',
     );
 
     const displayable = displayableSourceFacts(facts);
-    expect(displayable).toHaveLength(5);
-    expect(displayable[0]).toContain('1 AUTH');
-    expect(displayable[1]).toContain('1 PUBL');
-    expect(displayable[2]).toContain('1 ABBR');
-    expect(displayable[3]).toContain('1 TEXT');
-    expect(displayable[4]).toContain('1 CHAN');
+    expect(displayable).toHaveLength(7);
+    expect(displayable[0]).toContain('1 TITL');
+    expect(displayable[1]).toContain('1 AUTH');
+    expect(displayable[2]).toContain('1 PUBL');
+    expect(displayable[3]).toContain('1 ABBR');
+    expect(displayable[4]).toContain('1 TEXT');
+    expect(displayable[5]).toContain('1 REPO');
+    expect(displayable[6]).toContain('1 CHAN');
   });
 
-  test('a source with only TITL/REPO returns an empty array', () => {
-    expect(displayableSourceFacts(parseFacts('1 TITL Census 1900\n1 REPO @R1@'))).toEqual([]);
+  test('a source with only NOTE returns an empty array', () => {
+    expect(displayableSourceFacts(parseFacts('1 NOTE A note'))).toEqual([]);
   });
 });
 

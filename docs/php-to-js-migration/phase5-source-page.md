@@ -5,11 +5,14 @@
 ## What this is
 
 The third route serving real GEDCOM record data, and the first that
-isn't Individual or Family: title (from `TITL`) plus a basic facts
-table (`AUTH`/`PUBL`/`ABBR`/`TEXT`/`CHAN`). No linked-record
-reverse-lookup section (which individuals/families/media cite this
-source — a separate, real PHP feature), no slug canonicalization —
-same "shell + narrow slice" precedent as every step so far.
+isn't Individual or Family: title heading (from `TITL`) plus a facts
+table matching real PHP's own record-page-details.phtml exactly — see
+"Follow-up fix" below for why that means every real fact
+(`TITL`/`AUTH`/`PUBL`/`ABBR`/`TEXT`/`REPO`/`CHAN`), not a curated
+subset. No linked-record reverse-lookup section (which individuals/
+families/media cite this source — a separate, real PHP feature), no
+slug canonicalization — same "shell + narrow slice" precedent as every
+step so far.
 
 ## Key finding: Source's real privacy chain is the simplest yet
 
@@ -142,3 +145,59 @@ restore pattern:
 7. All disposable fixtures (2 test users, their settings/session rows,
    the temporary xref-scoped RESN row) deleted afterward;
    `data/config.yaml` restored; the local test server process killed.
+
+## Follow-up fix (2026-09-22, after real-world use)
+
+Once the user actually visited `/tree/ophir/source/S473` in the app UI,
+they reported the page was "not showing the source title and the
+Repository like in the original screen." Reading
+`resources/views/record-page-details.phtml` (the real template
+`SourcePage` uses) directly revealed the root cause: it renders `$record
+->facts([], true)` — an **empty** `$filter` array
+(`app/GedcomRecord.php:552-570`), meaning EVERY fact on the record
+becomes its own table row, filtered only by privacy, never by tag. The
+v1 `SOURCE_FACT_TAGS` allowlist (`AUTH`/`PUBL`/`ABBR`/`TEXT`/`CHAN`)
+had silently dropped both `TITL` (shown a second time as its own "Title"
+row, in addition to the page heading — confirmed this exact duplication
+is genuinely what real PHP renders, not assumed) and `REPO` entirely —
+the same class of "narrow allowlist becomes a real gap" mistake already
+found and fixed twice before, for FamilyPage's facts table (step 10's
+follow-up) and IndividualPage's (step 12).
+
+Unlike those two steps, though, this isn't a case where a *denylist*
+was correct and the allowlist just needed widening to match: Source's
+real template has **no exclusions of any kind** (it has no tabs to
+route other tags to, unlike Individual/Family) — so `TITL`/`REPO`
+joined the allowlist as real rows rather than the allowlist being
+dropped for a denylist. `NOTE` remains the one deliberate omission
+(needs its own shared-note-record rendering this simple renderer
+doesn't have yet).
+
+`REPO`'s real rendering (`app/Elements/XrefRepository.php` →
+`AbstractXrefElement::valueXrefLink()`) is a link to the repository's
+own page with its name as the link text — not a plain value. Since a
+Node `RepositoryPage` doesn't exist yet, the link correctly points at
+the still-PHP-served `/tree/{tree}/repository/{xref}` route via the
+existing `phpRouteUrl()` helper (same convention already used for
+other still-PHP links, e.g. `/register/{tree}`), which proxies through
+to PHP unchanged. `handleSourcePage()` already loads every referenced
+repository for the privacy check, so resolving its real name (via
+`extractNameFromFact(repository.gedcom, 'NAME')`) needed no new query
+— only a small map built during that existing loop, populated only for
+repositories that actually passed `repositoryCanShowRecord()` (a hidden
+repository's name is never leaked through this row, even though
+`Source::canShowByType()`'s own gate already makes that case
+unreachable — a source is hidden entirely the moment any one of its
+repositories is hidden, so this is a belt-and-braces guard, not a
+load-bearing check).
+
+Live-verified against `S473` again: the facts table now shows Title
+("Department Of Immigration"), Author, **Repository** (a real link to
+"Israel State Archives", `R3`'s actual name — cross-checked against the
+raw `o_gedcom` row), and Last change, matching the original PHP page's
+real content. The repository link's own target 500s through the live
+PHP app in this dev sandbox — confirmed this is the same pre-existing,
+unrelated "fact-sorting service" dependency gap already noted for
+FamilyPage/IndividualPage's own PHP cross-checks in prior steps, not
+something this fix introduced. Full JS suite: **4397 tests, green**
+(4394 + 3 new).

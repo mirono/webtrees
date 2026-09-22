@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-22 (`/tree/{tree}/source/{xref}` (SourcePage) served entirely by Node — phase 5 step 13, the third real-GEDCOM-record route and the first that isn't Individual/Family). This is the entry point for "where are we" —
+**Last updated: 2026-09-22 (SourcePage's facts table widened to match real PHP's own tag-agnostic rendering — a Title row and a real Repository link were missing, reported live after the user tried the new route). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4394 tests, all green.
+# Expect: 4397 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>

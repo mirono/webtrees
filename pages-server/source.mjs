@@ -23,10 +23,12 @@
 // themselves use PHP's base GedcomRecord::canShowByType() unmodified -
 // same shared chain, no repository-specific override at all. See
 // docs/php-to-js-migration/phase5-source-page.md for the full scope:
-// title (from TITL) + basic source facts (AUTH/PUBL/ABBR/TEXT/CHAN)
-// only - no linked-individuals/families/media reverse-lookup section
-// (a separate, real PHP feature - deferred, same "narrow slice" cut
-// as every prior step), no slug canonicalization.
+// title heading (from TITL) + every real fact
+// (TITL/AUTH/PUBL/ABBR/TEXT/REPO/CHAN, matching real PHP's own
+// record-page-details.phtml, which has no tag allowlist at all) - no
+// linked-individuals/families/media reverse-lookup section (a separate,
+// real PHP feature - deferred, same "narrow slice" cut as every prior
+// step), no slug canonicalization.
 
 import { canShowViaResnChain } from './individual.mjs';
 
@@ -113,13 +115,22 @@ export function repoXrefs(facts) {
   return xrefs;
 }
 
-// Tags this route's facts table renders - TITL (identity, rendered in
-// the page title, not the table), NOTE, and REPO (rendered as their
-// own thing, not a date+place-shaped fact row) are deliberately
-// excluded, same "avoid broken-looking rows for tags this simple
-// renderer can't do justice to" reasoning as IndividualPage's own
-// allowlist.
-const SOURCE_FACT_TAGS = ['AUTH', 'PUBL', 'ABBR', 'TEXT', 'CHAN'];
+// Tags this route's facts table renders. Real PHP's record-page-details.phtml
+// (used for Source, same as Note/Media/Repository/Submitter) has NO
+// allowlist at all - it renders EVERY fact on the record via
+// `$record->facts([], true)` (app/GedcomRecord.php:552-570, empty
+// $filter = no tag filtering, privacy-filtered only) - unlike
+// Individual/Family, which route several tags to separate tab modules
+// this migration hasn't built and so genuinely need a narrower
+// allowlist (see individual.mjs's VITAL_FACT_TAGS doc comment).
+// Source has no such tabs (record-page.phtml has none), so TITL is
+// included here too even though it's ALSO shown in the page heading -
+// confirmed this exact duplication is what real PHP does, not a
+// guess. NOTE is still excluded: NoteStructure's value rendering needs
+// its own multi-line-with-shared-note-record handling this simple
+// renderer doesn't have yet, same class of deliberate cut as
+// Individual/Family's own NOTE omission.
+const SOURCE_FACT_TAGS = ['TITL', 'AUTH', 'PUBL', 'ABBR', 'TEXT', 'REPO', 'CHAN'];
 
 /**
  * @param {string[]} facts
