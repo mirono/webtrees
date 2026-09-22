@@ -177,3 +177,17 @@ export function matchFamilyPagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Same shape as matchIndividualPagePath()/matchFamilyPagePath() above,
+ * for PHP's `/tree/{tree}/source/{xref}{/slug}` route
+ * (app/Http/Routes/WebRoutes.php:670).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchSourcePagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/source\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}

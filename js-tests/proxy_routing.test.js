@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isNodeRoute, isTreePagePath, isIndividualPagePath, isFamilyPagePath, rewriteForPages } from '../proxy/routing.mjs';
+import { isNodeRoute, isTreePagePath, isIndividualPagePath, isFamilyPagePath, isSourcePagePath, rewriteForPages } from '../proxy/routing.mjs';
 
 function urlFor(pathAndQuery) {
   return new URL(pathAndQuery, 'http://localhost');
@@ -150,6 +150,21 @@ describe('isNodeRoute', () => {
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
+  test('/tree/{tree}/source/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/source/S1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/source/{xref}/{slug} is a Node route', () => {
+    const url = urlFor('/tree/ophir/source/S1/Census-1900');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/source/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fsource%2FS1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
   test('plain /language/{value}', () => {
     const url = urlFor('/language/en-US');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
@@ -228,6 +243,27 @@ describe('isFamilyPagePath', () => {
   test('does not match the bare prefix', () => {
     expect(isFamilyPagePath('/tree/ophir/family')).toBe(false);
     expect(isFamilyPagePath('/tree/ophir/family/')).toBe(false);
+  });
+});
+
+describe('isSourcePagePath', () => {
+  test('matches the bare path', () => {
+    expect(isSourcePagePath('/tree/ophir/source/S1')).toBe(true);
+  });
+
+  test('a trailing slug is tolerated', () => {
+    expect(isSourcePagePath('/tree/ophir/source/S1/Census-1900')).toBe(true);
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(isSourcePagePath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isSourcePagePath('/tree/ophir/family/F1')).toBe(false);
+    expect(isSourcePagePath('/tree/ophir/media/M1')).toBe(false);
+  });
+
+  test('does not match the bare prefix', () => {
+    expect(isSourcePagePath('/tree/ophir/source')).toBe(false);
+    expect(isSourcePagePath('/tree/ophir/source/')).toBe(false);
   });
 });
 

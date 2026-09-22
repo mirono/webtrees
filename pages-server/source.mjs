@@ -1,0 +1,171 @@
+/**
+ * webtrees: online genealogy
+ * Copyright (C) 2026 webtrees development team
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+// Data/logic layer for /tree/{tree}/source/{xref} (SourcePage) - the
+// third real-GEDCOM-record route, and the first that ISN'T Individual
+// or Family. Source's real privacy chain (app/Source.php) turns out to
+// be the simplest yet: no relationship-BFS, no keep-alive, no
+// dead-people logic - just the shared RESN chain
+// (canShowViaResnChain(), already built) plus ONE extra check: a
+// source attached to a private repository is hidden too. Repositories
+// themselves use PHP's base GedcomRecord::canShowByType() unmodified -
+// same shared chain, no repository-specific override at all. See
+// docs/php-to-js-migration/phase5-source-page.md for the full scope:
+// title (from TITL) + basic source facts (AUTH/PUBL/ABBR/TEXT/CHAN)
+// only - no linked-individuals/families/media reverse-lookup section
+// (a separate, real PHP feature - deferred, same "narrow slice" cut
+// as every prior step), no slug canonicalization.
+
+import { canShowViaResnChain } from './individual.mjs';
+
+// Base GedcomRecord::canShowByType() (app/GedcomRecord.php:841-852)'s
+// own record-type-level default: PUBLIC unless a tree-wide
+// wt_default_resn row exists for this record type (tag_type = 'SOUR'
+// or 'REPO', xref IS NULL) - notably DIFFERENT from Individual's own
+// canShowByType() default (member-only) - confirmed by reading the
+// base method directly, not assumed from Individual's more elaborate
+// override.
+function defaultRecordCanShow(treeFactResn, recordType, viewer) {
+  const resn = treeFactResn.get(recordType) ?? null;
+
+  if (resn === null) {
+    return true;
+  }
+
+  return { none: 2, privacy: 1, confidential: 0, hidden: -1 }[resn] >= viewer.accessLevel;
+}
+
+function factTag(factGedcom) {
+  const match = /^1 (\S+)/.exec(factGedcom);
+  return match ? match[1] : '';
+}
+
+/**
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @param {string} xref
+ * @returns {Promise<{xref: string, gedcom: string}|null>}
+ */
+export async function loadSource(pool, gedcomId, xref) {
+  const result = await pool.query('SELECT s_id, s_gedcom FROM wt_sources WHERE s_id = $1 AND s_file = $2', [xref, gedcomId]);
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return { xref: result.rows[0].s_id, gedcom: result.rows[0].s_gedcom };
+}
+
+/**
+ * Repositories have no dedicated table (unlike individuals/families/
+ * sources) - confirmed live they're stored in the generic wt_other
+ * table, discriminated by `o_type = 'REPO'` (alongside NOTE/SUBM/SUBN/
+ * HEAD/TRLR rows).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @param {string} xref
+ * @returns {Promise<{xref: string, gedcom: string}|null>}
+ */
+export async function loadRepository(pool, gedcomId, xref) {
+  const result = await pool.query("SELECT o_id, o_gedcom FROM wt_other WHERE o_id = $1 AND o_file = $2 AND o_type = 'REPO'", [
+    xref,
+    gedcomId,
+  ]);
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return { xref: result.rows[0].o_id, gedcom: result.rows[0].o_gedcom };
+}
+
+/**
+ * Mirrors Source::canShowByType()'s own REPO scan
+ * (app/Source.php:36-49): every `1 REPO @Rn@` xref referenced.
+ *
+ * @param {string[]} facts
+ * @returns {string[]}
+ */
+export function repoXrefs(facts) {
+  const xrefs = [];
+
+  for (const fact of facts) {
+    const match = /^1 REPO @([^@]+)@/.exec(fact);
+
+    if (match) {
+      xrefs.push(match[1]);
+    }
+  }
+
+  return xrefs;
+}
+
+// Tags this route's facts table renders - TITL (identity, rendered in
+// the page title, not the table), NOTE, and REPO (rendered as their
+// own thing, not a date+place-shaped fact row) are deliberately
+// excluded, same "avoid broken-looking rows for tags this simple
+// renderer can't do justice to" reasoning as IndividualPage's own
+// allowlist.
+const SOURCE_FACT_TAGS = ['AUTH', 'PUBL', 'ABBR', 'TEXT', 'CHAN'];
+
+/**
+ * @param {string[]} facts
+ * @returns {string[]}
+ */
+export function displayableSourceFacts(facts) {
+  return facts.filter((fact) => SOURCE_FACT_TAGS.includes(factTag(fact)));
+}
+
+/**
+ * Mirrors Repository's privacy (no override - base
+ * GedcomRecord::canShowByType() only) via the shared RESN chain.
+ *
+ * @param {{defaultResn: string|null}} tree individual-scoped default-resn
+ *   info for THIS repository's own xref (loadDefaultResn(), reused as-is)
+ * @param {string} gedcom the repository's raw record text
+ * @param {{accessLevel: 0|1|2, isSelfRecord: boolean}} viewer isSelfRecord
+ *   always false (the self-record exception is individual-only)
+ * @param {Map<string,string>} treeFactResn from the SAME loadDefaultResn() call
+ * @returns {boolean}
+ */
+export function repositoryCanShowRecord(tree, gedcom, viewer, treeFactResn) {
+  return canShowViaResnChain(tree, gedcom, viewer, () => defaultRecordCanShow(treeFactResn, 'REPO', viewer));
+}
+
+/**
+ * Mirrors Source::canShowByType() (app/Source.php:36-49) exactly: hide
+ * the source if ANY referenced repository can't be shown, else fall
+ * back to the base per-record-type default.
+ *
+ * @param {{defaultResn: string|null}} tree
+ * @param {string} gedcom the source's raw record text
+ * @param {{accessLevel: 0|1|2, isSelfRecord: boolean}} viewer
+ * @param {Map<string,string>} treeFactResn
+ * @param {boolean[]} repoCanShowResults one per referenced repo that
+ *   actually exists - matches Source::canShowByType()'s own
+ *   `Registry::repositoryFactory()->make(...)` null-check (a broken
+ *   reference is silently skipped, not treated as "hidden")
+ * @returns {boolean}
+ */
+export function sourceCanShowRecord(tree, gedcom, viewer, treeFactResn, repoCanShowResults) {
+  return canShowViaResnChain(tree, gedcom, viewer, () => {
+    if (repoCanShowResults.some((shown) => !shown)) {
+      return false;
+    }
+
+    return defaultRecordCanShow(treeFactResn, 'SOUR', viewer);
+  });
+}

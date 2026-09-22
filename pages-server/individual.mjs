@@ -192,33 +192,50 @@ function addName(value, gedcom) {
 }
 
 /**
- * Mirrors getAllNames()[0] for the FIRST `1 NAME` fact only - no
- * ROMN/FONE/_HEB/_MARNM sub-tag variants (those are only reachable via
+ * Mirrors getAllNames()[0] generalized to any tag GedcomRecord::extractNames()
+ * feeds through addName() - not just Individual's `1 NAME` (used by
+ * Source::extractNames(): `extractNamesFromFacts(1, 'TITL', ...)`,
+ * confirmed in app/Source.php - a source's TITL is plain text with no
+ * slashes, and addName()'s own logic degrades gracefully for that
+ * case: no `/.../ ` pattern to match means no SURN span, no surname
+ * extraction, `full` ends up as just the escaped title text wrapped in
+ * the same `<span class="NAME">` markup - a faithful reuse, not a
+ * coincidental one). Only the FIRST matching fact - no ROMN/FONE/_HEB/
+ * _MARNM sub-tag variants (only reachable via
  * GedcomRecord::extractNamesFromFacts()'s nested regex over a NAME
- * fact's own sub-lines) - a faithful, not approximate, v1 slice for
- * the common single-name case.
+ * fact's own sub-lines, and meaningless for TITL anyway) - a faithful,
+ * not approximate, v1 slice for the common single-name/single-title case.
  *
- * @param {string} gedcom the individual's raw record text
+ * @param {string} gedcom the record's raw text
+ * @param {string} tag e.g. 'NAME' (individual/family) or 'TITL' (source)
  * @returns {{full: string, fullNN: string, sort: string, givn: string, surn: string, surname: string}|null}
  */
-export function extractPrimaryName(gedcom) {
+export function extractNameFromFact(gedcom, tag) {
   const facts = parseFacts(gedcom);
-  const nameFact = facts.find((f) => factTag(f) === 'NAME');
+  const nameFact = facts.find((f) => factTag(f) === tag);
 
   if (!nameFact) {
     return null;
   }
 
-  const lineMatch = /^1 NAME (.+)/.exec(nameFact);
+  const lineMatch = new RegExp(`^1 ${tag} (.+)`).exec(nameFact);
 
   if (!lineMatch) {
     // Matches PHP: extractNamesFromFacts()'s own regex requires a
-    // non-empty value after "1 NAME " - an empty NAME line is simply
+    // non-empty value after "1 <TAG> " - an empty line is simply
     // never turned into a name entry.
     return null;
   }
 
   return addName(lineMatch[1], nameFact);
+}
+
+/**
+ * @param {string} gedcom the individual's raw record text
+ * @returns {{full: string, fullNN: string, sort: string, givn: string, surn: string, surname: string}|null}
+ */
+export function extractPrimaryName(gedcom) {
+  return extractNameFromFact(gedcom, 'NAME');
 }
 
 function dateForTagList(facts, tagList) {

@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-22 (IndividualPage's facts list widened from vital-events-only to ~30 real event/attribute tags, phase 5 step 12 — the same class of gap already found and fixed for FamilyPage). This is the entry point for "where are we" —
+**Last updated: 2026-09-22 (`/tree/{tree}/source/{xref}` (SourcePage) served entirely by Node — phase 5 step 13, the third real-GEDCOM-record route and the first that isn't Individual/Family). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4352 tests, all green.
+# Expect: 4394 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -110,6 +110,7 @@ just adding latency.
 | 5.10 | `/tree/{tree}/family/{xref}` (FamilyPage) served entirely by Node — closes the MARR gap; reuses IndividualPage's privacy chain almost entirely; first step verified against a real user-imported GEDCOM tree | **Done (2026-09-21)** — [phase5-family-page.md](phase5-family-page.md) |
 | 5.11 | IndividualPage gains a "Families" section — closes the navigation loop back to FamilyPage, reusing its exact privacy chain via a new `wt_link`-based lookup | **Done (2026-09-22)** — [phase5-individual-page-families.md](phase5-individual-page-families.md) |
 | 5.12 | IndividualPage's facts list widened from 6 vital-event tags to ~30 real event/attribute tags, plus CHAN/ADDR rendering | **Done (2026-09-22)** — see phase5-individual-page.md's follow-up section |
+| 5.13 | `/tree/{tree}/source/{xref}` (SourcePage) served entirely by Node — the third real-GEDCOM-record route, and the first that isn't Individual/Family; privacy additionally gated on every referenced repository | **Done (2026-09-22)** — [phase5-source-page.md](phase5-source-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 

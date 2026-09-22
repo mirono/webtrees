@@ -15,17 +15,18 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Phase 5, steps 2-10 of the php-to-js migration
+// Phase 5, steps 2-13 of the php-to-js migration
 // (docs/php-to-js-migration/phase5-first-node-route.md): real HTTP
 // routes served entirely by Node instead of PHP. Sits behind
 // proxy/index.mjs, which sends /my-account*, /login*, /logout,
 // /my-account-delete, /, /language/*, /theme/*, the exact-match
-// /tree/{tree} page, /tree/{tree}/individual/{xref}, and
-// /tree/{tree}/family/{xref} here and everything else to the PHP app -
-// both processes share the same Postgres database and the same login
-// session (see auth.mjs and, for /login/logout/language/theme
-// specifically, session-store.mjs + php-serialize.mjs). /tree/{tree}
-// (step 8, docs/php-to-js-migration/phase5-tree-page.md) is the first
+// /tree/{tree} page, /tree/{tree}/individual/{xref},
+// /tree/{tree}/family/{xref}, and /tree/{tree}/source/{xref} here and
+// everything else to the PHP app - both processes share the same
+// Postgres database and the same login session (see auth.mjs and, for
+// /login/logout/language/theme specifically, session-store.mjs +
+// php-serialize.mjs). /tree/{tree} (step 8,
+// docs/php-to-js-migration/phase5-tree-page.md) is the first
 // tree-scoped route and renders only one of TreePage's up to 8
 // configurable blocks (WelcomeBlockModule) - every other block a tree
 // might have configured is simply omitted from the layout.
@@ -39,6 +40,12 @@
 // husband/wife/children identity cards (each linking to their own
 // individual page) + marriage/divorce vital facts, reusing almost all
 // of individual.mjs's privacy chain and identity rendering.
+// /tree/{tree}/source/{xref} (step 13,
+// docs/php-to-js-migration/phase5-source-page.md) is the third
+// real-GEDCOM-record route and the first that isn't Individual/Family:
+// title (TITL) + basic source facts (AUTH/PUBL/ABBR/TEXT/CHAN), with a
+// source's privacy additionally gated on every repository (REPO) it
+// references - no linked-record reverse-lookup section.
 //
 // Deliberately plain node:http, no framework - same convention as
 // server/migration-service.mjs.
@@ -57,6 +64,7 @@ import {
   matchTreePagePath,
   matchIndividualPagePath,
   matchFamilyPagePath,
+  matchSourcePagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -87,10 +95,20 @@ import {
   ageString,
   factCanShow,
   displayDate,
+  extractNameFromFact,
 } from './individual.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
 import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
+import { renderSourcePage } from './source-view.mjs';
+import {
+  loadSource,
+  loadRepository,
+  repoXrefs,
+  displayableSourceFacts,
+  repositoryCanShowRecord,
+  sourceCanShowRecord,
+} from './source.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -1229,6 +1247,170 @@ async function handleFamilyPage(req, res, treeName, xref) {
   res.end(html);
 }
 
+// Extracts a source fact's plain-text VALUE, joining CONT/CONC
+// continuation lines (real GEDCOM's line-wrap mechanism for long text
+// like TEXT transcriptions) into one multi-line string - source.mjs's
+// SOURCE_FACT_TAGS (AUTH/PUBL/ABBR/TEXT) are all bare-value tags, none
+// DATE/PLAC-structured like Individual/Family's vital events.
+function sourceFactValue(factGedcom) {
+  const lines = factGedcom.split('\n');
+  const firstLine = lines[0] ?? '';
+  const valueMatch = /^1 \S+ ?(.*)$/.exec(firstLine);
+  const parts = [valueMatch ? valueMatch[1] : ''];
+
+  for (const line of lines.slice(1)) {
+    const contMatch = /^2 CONT ?(.*)$/.exec(line);
+    const concMatch = /^2 CONC ?(.*)$/.exec(line);
+
+    if (contMatch) {
+      parts.push(contMatch[1]);
+    } else if (concMatch) {
+      parts[parts.length - 1] += concMatch[1];
+    }
+  }
+
+  return parts.join('\n');
+}
+
+async function handleSourcePage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let source;
+  let facts;
+  let shown;
+  let accessLevel;
+  let defaultResnInfo;
+
+  try {
+    source = await loadSource(pool, tree.gedcomId, xref);
+
+    if (source === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(source.gedcom);
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, source.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+    const sourceViewer = { accessLevel, isSelfRecord: false };
+
+    const repoCanShowResults = [];
+
+    for (const repoXref of repoXrefs(facts)) {
+      const repository = await loadRepository(pool, tree.gedcomId, repoXref);
+
+      if (repository === null) {
+        continue;
+      }
+
+      const repoDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, repository.xref);
+      const repoTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: repoDefaultResnInfo.individualResn };
+
+      repoCanShowResults.push(
+        repositoryCanShowRecord(repoTreeForPrivacy, repository.gedcom, sourceViewer, repoDefaultResnInfo.treeFactResn),
+      );
+    }
+
+    shown = sourceCanShowRecord(treeForPrivacy, source.gedcom, sourceViewer, defaultResnInfo.treeFactResn, repoCanShowResults);
+  } catch (error) {
+    console.error('Failed to resolve source privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const visibleFacts = [];
+
+  for (const fact of displayableSourceFacts(facts)) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+
+    visibleFacts.push({
+      tag,
+      value: tag === 'CHAN' ? '' : sourceFactValue(fact),
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      time: timeMatch ? timeMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+    });
+  }
+
+  const titleName = extractNameFromFact(source.gedcom, 'TITL');
+  const fullNameHtml =
+    titleName !== null ? titleName.full : `<span class="NAME" dir="auto" translate="no">${source.xref}</span>`;
+
+  const sourceViewModel = {
+    xref: source.xref,
+    fullNameHtml,
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderSourcePage({ tree, user, csrfToken, source: sourceViewModel });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -1294,6 +1476,13 @@ const server = createServer(async (req, res) => {
 
   if (familyMatch !== null) {
     await handleFamilyPage(req, res, familyMatch.tree, familyMatch.xref);
+    return;
+  }
+
+  const sourceMatch = matchSourcePagePath(url.pathname);
+
+  if (sourceMatch !== null) {
+    await handleSourcePage(req, res, sourceMatch.tree, sourceMatch.xref);
     return;
   }
 

@@ -73,6 +73,14 @@ export function isFamilyPagePath(pathname) {
   return /^\/tree\/[^/]+\/family\/[^/]+(?:\/.*)?$/.test(pathname);
 }
 
+// /tree/{tree}/source/{xref}{/slug}: phase 5 step 13 - the third
+// real-GEDCOM-record route, and the first that isn't Individual/Family
+// (see docs/php-to-js-migration/phase5-source-page.md). Same reasoning
+// as isIndividualPagePath() above.
+export function isSourcePagePath(pathname) {
+  return /^\/tree\/[^/]+\/source\/[^/]+(?:\/.*)?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -88,7 +96,8 @@ export function isNodeRoute(pathname, searchParams) {
     NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, pathname)) ||
     isTreePagePath(pathname) ||
     isIndividualPagePath(pathname) ||
-    isFamilyPagePath(pathname)
+    isFamilyPagePath(pathname) ||
+    isSourcePagePath(pathname)
   ) {
     return true;
   }
@@ -103,7 +112,8 @@ export function isNodeRoute(pathname, searchParams) {
     NODE_ROUTE_PATHS.some((path) => matchesNodeRoute(path, route)) ||
     isTreePagePath(route) ||
     isIndividualPagePath(route) ||
-    isFamilyPagePath(route)
+    isFamilyPagePath(route) ||
+    isSourcePagePath(route)
   );
 }
 
