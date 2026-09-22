@@ -65,6 +65,35 @@ export async function loadFamily(pool, gedcomId, xref) {
 }
 
 /**
+ * Mirrors Individual::childFamilies()/spouseFamilies() (via their
+ * shared FAMC/FAMS fact scan) using `wt_link` - a general-purpose
+ * fact-target index table (`l_file`/`l_from`/`l_to`/`l_type`) that
+ * already exists in the real schema for exactly this kind of lookup,
+ * confirmed live to hold BOTH directions of every relationship (e.g.
+ * both `I1 FAMS F1` from the individual's own gedcom AND the
+ * reciprocal `F1 HUSB I1` from the family's) - querying it directly is
+ * both simpler and more reliable than regex-scanning every family's
+ * `f_gedcom` for a `1 CHIL @I1@` match, which `wt_families` has no
+ * denormalized column for (unlike `f_husb`/`f_wife`).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @param {string} xref the individual's xref
+ * @returns {Promise<{parentFamilies: string[], spouseFamilies: string[]}>}
+ */
+export async function loadRelatedFamilyXrefs(pool, gedcomId, xref) {
+  const result = await pool.query(
+    "SELECT l_type, l_to FROM wt_link WHERE l_file = $1 AND l_from = $2 AND l_type IN ('FAMC', 'FAMS')",
+    [gedcomId, xref],
+  );
+
+  return {
+    parentFamilies: result.rows.filter((row) => row.l_type === 'FAMC').map((row) => row.l_to),
+    spouseFamilies: result.rows.filter((row) => row.l_type === 'FAMS').map((row) => row.l_to),
+  };
+}
+
+/**
  * Mirrors Family::children()'s CHIL-fact extraction
  * (app/Family.php:177-192) - the xrefs only; each caller resolves and
  * privacy-checks the individual itself via `pages-server/individual.mjs`.

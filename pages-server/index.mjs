@@ -90,7 +90,7 @@ import {
 } from './individual.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
-import { loadFamily, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
+import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -809,6 +809,43 @@ async function handleIndividualPage(req, res, treeName, xref) {
     return;
   }
 
+  // "Families" section (new step: closes the navigation loop back to
+  // FamilyPage - see docs/php-to-js-migration/phase5-individual-page-families.md).
+  // Mirrors RelativesTabModule's parent_families/spouse_families
+  // (app/Module/RelativesTabModule.php:61-71), reduced to a flat list
+  // of links - no step-families (adoption-driven second parent/spouse
+  // sets, app/Individual.php's spouseStepFamilies()/childStepFamilies(),
+  // a rarer relationship type this v1 doesn't chase), no
+  // SHOW_PRIVATE_RELATIONSHIPS bypass (same accepted, display-only cut
+  // already made for FamilyPage's own member cards).
+  let parentFamilies;
+  let spouseFamilies;
+
+  try {
+    const relatedFamilyXrefs = await loadRelatedFamilyXrefs(pool, tree.gedcomId, individual.xref);
+
+    parentFamilies = [];
+    for (const familyXref of relatedFamilyXrefs.parentFamilies) {
+      const summary = await resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
+      if (summary !== null) {
+        parentFamilies.push(summary);
+      }
+    }
+
+    spouseFamilies = [];
+    for (const familyXref of relatedFamilyXrefs.spouseFamilies) {
+      const summary = await resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
+      if (summary !== null) {
+        spouseFamilies.push(summary);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to resolve related families:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
   const primaryName = extractPrimaryName(individual.gedcom);
   // Fallback for the rare individual with zero NAME facts - PHP has its
   // own "Private"/no-name display fallback via fullName(); this v1 slice
@@ -855,6 +892,8 @@ async function handleIndividualPage(req, res, treeName, xref) {
     lifespan: lifespan({ birthDate, deathDate, isDead: dead }),
     age: ageString({ birthDate, deathDate, isDead: dead, sex: individualSex }),
     facts: visibleFacts,
+    parentFamilies,
+    spouseFamilies,
   };
 
   const csrfToken = user !== null ? generateCsrfToken() : null;
@@ -944,6 +983,53 @@ function familyMemberViewModel(tree, member) {
     birthSummary: birthSummary(birthDate),
     url: `/tree/${tree.name}/individual/${member.individual.xref}`,
   };
+}
+
+const UNKNOWN_NAME_HTML = '<span class="NAME" dir="auto" translate="no">…</span>';
+
+/**
+ * Resolves ONE family (a parent family or a spouse family, from
+ * loadRelatedFamilyXrefs()) to a summary link for IndividualPage's new
+ * "Families" section - reuses the exact same member-resolution and
+ * family-level privacy chain handleFamilyPage() already uses below,
+ * since a family referenced from an individual's page needs the
+ * identical "every member must be showable" gate as the family's own
+ * page (`familyCanShowRecord()`) - returns null if the family
+ * shouldn't be shown to this viewer at all, matching how
+ * Individual::childFamilies()/spouseFamilies() themselves already
+ * filter via canShow() internally (app/GedcomRecord.php's target
+ * resolution), not something IndividualPage does separately in PHP.
+ */
+async function resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref) {
+  const family = await loadFamily(pool, tree.gedcomId, familyXref);
+
+  if (family === null) {
+    return null;
+  }
+
+  const facts = parseFacts(family.gedcom);
+  const husband = await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, family.husb);
+  const wife = await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, family.wife);
+  const children = [];
+
+  for (const childXref of childrenXrefs(facts)) {
+    children.push(await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, childXref));
+  }
+
+  const memberCanShowResults = [husband, wife, ...children].filter((member) => member !== null).map((member) => member.canShow);
+  const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, family.xref);
+  const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+  const familyViewer = { accessLevel, isSelfRecord: false };
+
+  if (!familyCanShowRecord(treeForPrivacy, family.gedcom, familyViewer, memberCanShowResults)) {
+    return null;
+  }
+
+  const husbandVM = familyMemberViewModel(tree, husband);
+  const wifeVM = familyMemberViewModel(tree, wife);
+  const titleHtml = `${husbandVM !== null ? husbandVM.fullNameHtml : UNKNOWN_NAME_HTML} + ${wifeVM !== null ? wifeVM.fullNameHtml : UNKNOWN_NAME_HTML}`;
+
+  return { titleHtml, url: `/tree/${tree.name}/family/${family.xref}` };
 }
 
 async function handleFamilyPage(req, res, treeName, xref) {

@@ -27,6 +27,8 @@ function baseParams(overrides = {}) {
       lifespan: '1870–1920',
       age: '(aged 50 years)',
       facts: [],
+      parentFamilies: [],
+      spouseFamilies: [],
     },
     ...overrides,
   };
@@ -60,6 +62,63 @@ describe('renderIndividualPage', () => {
 
     expect(html).toContain('1870–1920');
     expect(html).toContain('(aged 50 years)');
+  });
+
+  describe('the Families section', () => {
+    test('is omitted entirely when there are no related families', () => {
+      const html = renderIndividualPage(baseParams());
+
+      expect(html).not.toContain('Families');
+    });
+
+    test('renders a parent family with a "Parents" label, linking to the family page', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            parentFamilies: [{ titleHtml: '<span class="NAME">Dad</span> + <span class="NAME">Mom</span>', url: '/tree/ophir/family/F1' }],
+          },
+        }),
+      );
+
+      expect(html).toContain('Families');
+      expect(html).toContain('Parents');
+      expect(html).toContain('href="/tree/ophir/family/F1"');
+      expect(html).toContain('<span class="NAME">Dad</span> + <span class="NAME">Mom</span>');
+    });
+
+    test('renders a spouse family with a "Spouse family" label', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            spouseFamilies: [{ titleHtml: '<span class="NAME">John</span> + <span class="NAME">Jane</span>', url: '/tree/ophir/family/F2' }],
+          },
+        }),
+      );
+
+      expect(html).toContain('Spouse family');
+      expect(html).toContain('href="/tree/ophir/family/F2"');
+    });
+
+    test('renders multiple parent and spouse families, each on their own row', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            parentFamilies: [{ titleHtml: 'Family A', url: '/tree/ophir/family/F1' }],
+            spouseFamilies: [
+              { titleHtml: 'Family B', url: '/tree/ophir/family/F2' },
+              { titleHtml: 'Family C', url: '/tree/ophir/family/F3' },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('Family A');
+      expect(html).toContain('Family B');
+      expect(html).toContain('Family C');
+    });
   });
 
   describe('the vital-facts list', () => {

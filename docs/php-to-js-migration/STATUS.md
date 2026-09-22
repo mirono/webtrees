@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-21 (`/tree/{tree}/family/{xref}` ported to Node, phase 5 step 10 — closes the MARR gap, verified live against a real user-imported GEDCOM tree for the first time). This is the entry point for "where are we" —
+**Last updated: 2026-09-22 (IndividualPage gained a "Families" section, phase 5 step 11 — closes the navigation loop back to FamilyPage). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4344 tests, all green.
+# Expect: 4350 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -108,6 +108,7 @@ just adding latency.
 | 5.8 | `/tree/{tree}` (TreePage) served entirely by Node — the first tree-scoped route; ports one of TreePage's up to 8 configurable blocks (WelcomeBlockModule) | **Done (2026-09-20)** — [phase5-tree-page.md](phase5-tree-page.md) |
 | 5.9 | `/tree/{tree}/individual/{xref}` (IndividualPage) served entirely by Node — the first route with real GEDCOM record data and a genuinely nontrivial privacy chain; caught and fixed a real privacy-chain design flaw before shipping | **Done (2026-09-20)** — [phase5-individual-page.md](phase5-individual-page.md) |
 | 5.10 | `/tree/{tree}/family/{xref}` (FamilyPage) served entirely by Node — closes the MARR gap; reuses IndividualPage's privacy chain almost entirely; first step verified against a real user-imported GEDCOM tree | **Done (2026-09-21)** — [phase5-family-page.md](phase5-family-page.md) |
+| 5.11 | IndividualPage gains a "Families" section — closes the navigation loop back to FamilyPage, reusing its exact privacy chain via a new `wt_link`-based lookup | **Done (2026-09-22)** — [phase5-individual-page-families.md](phase5-individual-page-families.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -311,6 +312,36 @@ that a disposable test admin account reveals the previously-hidden
 family, proving the privacy gate rather than a coincidental denial.
 Full JS suite: 4320 tests, green. See
 [phase5-family-page.md](phase5-family-page.md).
+
+Step 10 also got several **real-world follow-up fixes** after the user
+actually browsed their own imported tree (all 2026-09-21): the facts
+table widened from a fixed tag list to PHP's real "everything except
+HUSB/WIFE/CHIL" filter (catching a second bug along the way — the
+family record's own leading `"0 @Fn@ FAM"` line slipping through as a
+fake fact row); invented CSS classes on both member cards and fact
+rows replaced with the real ones, found via a user-provided side-by-
+side screenshot comparison (which also surfaced that a real,
+correctly-named `wt-chart-box-lifespan` div was still invisible
+because the real stylesheet hides it in this exact context — the real
+page shows a birth-event summary instead); a tree-title bug (`tree.name`
+where `tree.title` was needed); missing bold styling on "Address"/
+"Author of last change" labels; and `Date::display()` itself, ported
+after the user reported unformatted dates — reusing month-name/format-
+code machinery that turned out to already be fully ported in
+`lib/date/`, plus the full qualifier-phrase switch, using the real
+en-US date-format string confirmed against the locale catalog.
+
+**Step 11** adds a "Families" section to IndividualPage, closing the
+navigation loop FamilyPage only built one direction: an individual's
+own page previously had no link back to the families they belong to.
+New `wt_link`-based lookup (`loadRelatedFamilyXrefs()`) replaces what
+would otherwise need a full-table gedcom-text scan for parent
+families — a general-purpose fact-target index table already existed
+in the schema for exactly this. Reuses FamilyPage's own member-
+resolution and privacy chain exactly (not a separate, weaker check),
+so a family only shows in the list if the viewer could also visit it
+directly. Full JS suite: 4350 tests, green. See
+[phase5-individual-page-families.md](phase5-individual-page-families.md).
 
 ## The 6 bridges: final state
 

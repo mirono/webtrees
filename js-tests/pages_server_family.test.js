@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import { loadFamily, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from '../pages-server/family.mjs';
+import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from '../pages-server/family.mjs';
 import { parseFacts } from '../pages-server/individual.mjs';
 
 function mockPool(queryImpl) {
@@ -44,6 +44,33 @@ describe('loadFamily', () => {
     const pool = mockPool(async () => ({ rows: [] }));
 
     expect(await loadFamily(pool, 1, 'F999')).toBeNull();
+  });
+});
+
+describe('loadRelatedFamilyXrefs', () => {
+  test('separates FAMC (parent) from FAMS (spouse) families', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('FROM wt_link');
+      expect(params).toEqual([1, 'I1']);
+      return {
+        rows: [
+          { l_type: 'FAMC', l_to: 'F002' },
+          { l_type: 'FAMS', l_to: 'F001' },
+          { l_type: 'FAMS', l_to: 'F003' },
+        ],
+      };
+    });
+
+    expect(await loadRelatedFamilyXrefs(pool, 1, 'I1')).toEqual({
+      parentFamilies: ['F002'],
+      spouseFamilies: ['F001', 'F003'],
+    });
+  });
+
+  test('no related families -> both empty arrays', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await loadRelatedFamilyXrefs(pool, 1, 'I1')).toEqual({ parentFamilies: [], spouseFamilies: [] });
   });
 });
 

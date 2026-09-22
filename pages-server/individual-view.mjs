@@ -71,6 +71,51 @@ function renderFact({ tag, date, place }) {
 }
 
 /**
+ * Mirrors RelativesTabModule's parent_families/spouse_families
+ * (app/Module/RelativesTabModule.php), reduced to a flat list of
+ * links rather than the full per-member chart-box + relationship-name
+ * rendering `modules/relatives/family.phtml` does (that's effectively
+ * re-embedding FamilyPage's own member cards inline - a bigger lift
+ * deferred for this v1). Reuses the real `wt-facts-table`/
+ * `table table-sm` wrapper classes so it's visually consistent with
+ * the vital-facts table below it, rather than inventing new ones.
+ *
+ * @param {{titleHtml: string, url: string}[]} parentFamilies
+ * @param {{titleHtml: string, url: string}[]} spouseFamilies
+ */
+function renderFamiliesSection(parentFamilies, spouseFamilies) {
+  if (parentFamilies.length === 0 && spouseFamilies.length === 0) {
+    return '';
+  }
+
+  const parentRows = parentFamilies
+    .map(
+      (family) => `
+        <tr>
+            <th scope="row">Parents</th>
+            <td><a href="${escapeHtml(family.url)}">${family.titleHtml}</a></td>
+        </tr>`,
+    )
+    .join('');
+  const spouseRows = spouseFamilies
+    .map(
+      (family) => `
+        <tr>
+            <th scope="row">Spouse family</th>
+            <td><a href="${escapeHtml(family.url)}">${family.titleHtml}</a></td>
+        </tr>`,
+    )
+    .join('');
+
+  return `
+                    <h3 class="mt-4">Families</h3>
+    <table class="table table-sm wt-facts-table">
+        <tbody>${parentRows}${spouseRows}
+        </tbody>
+    </table>`;
+}
+
+/**
  * @param {object} params
  * @param {{title: string}} params.tree
  * @param {{realName: string}|null} params.user
@@ -81,9 +126,13 @@ function renderFact({ tag, date, place }) {
  *   lifespan: string,
  *   age: string,
  *   facts: {tag: string, date: string, place: string}[],
+ *   parentFamilies: {titleHtml: string, url: string}[],
+ *   spouseFamilies: {titleHtml: string, url: string}[],
  * }} params.individual `fullNameHtml` is PRE-ESCAPED SAFE HTML (see
  *   pages-server/individual.mjs's addName()) - inserted RAW, never
- *   passed through escapeHtml() again.
+ *   passed through escapeHtml() again. `titleHtml` in each family
+ *   entry is likewise pre-escaped (built from two such fullNameHtml
+ *   values in pages-server/index.mjs).
  */
 export function renderIndividualPage({ tree, user, csrfToken, individual }) {
   const csrfMetaTag =
@@ -109,6 +158,8 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
                     <li class="nav-item">
                         <a class="nav-link" href="/login">Sign in</a>
                     </li>`;
+
+  const familiesHtml = renderFamiliesSection(individual.parentFamilies, individual.spouseFamilies);
 
   const factsHtml =
     individual.facts.length > 0
@@ -148,7 +199,7 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
         <div class="container-lg wt-main-container">
             <div class="row">
                 <div class="col-md-12">
-                    <h2 class="wt-page-title">${individual.fullNameHtml} <span class="wt-lifespan">${escapeHtml(individual.lifespan)}</span> ${escapeHtml(individual.age)}</h2>${factsHtml}
+                    <h2 class="wt-page-title">${individual.fullNameHtml} <span class="wt-lifespan">${escapeHtml(individual.lifespan)}</span> ${escapeHtml(individual.age)}</h2>${familiesHtml}${factsHtml}
                 </div>
             </div>
         </div>
