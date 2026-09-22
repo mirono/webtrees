@@ -29,6 +29,7 @@ import {
   canShowByType,
   canShowName,
   factCanShow,
+  otherFactAttributes,
   loadIndividual,
   loadTreePrivacyPrefs,
   loadDefaultResn,
@@ -420,6 +421,38 @@ describe('factCanShow', () => {
   test('a default RESN (fact-specific or tree-wide, already resolved by the caller) gates visibility', () => {
     expect(factCanShow('1 BIRT\n2 DATE 1 JAN 1900', 1, 'privacy')).toBe(true);
     expect(factCanShow('1 BIRT\n2 DATE 1 JAN 1900', 2, 'privacy')).toBe(false);
+  });
+});
+
+describe('otherFactAttributes', () => {
+  test('a level-2 subtag not in the real denylist gets its own {subtag, value} entry', () => {
+    expect(otherFactAttributes('1 TITL Some title\n2 _HEB מחלקת ההגירה')).toEqual([
+      { subtag: '_HEB', value: 'מחלקת ההגירה' },
+    ]);
+  });
+
+  test('denylisted subtags (DATE, PLAC, NOTE, OBJE, SOUR, ...) are excluded - already rendered by dedicated views', () => {
+    const fact =
+      '1 BIRT\n2 DATE 1 JAN 1900\n2 PLAC London\n2 NOTE A note\n2 OBJE @M1@\n2 SOUR @S1@\n2 TYPE Something\n2 _CUSTOM real value';
+
+    expect(otherFactAttributes(fact)).toEqual([{ subtag: '_CUSTOM', value: 'real value' }]);
+  });
+
+  test('extraSkipTags excludes additional subtags already given dedicated rendering elsewhere', () => {
+    const fact = '1 CHAN\n2 DATE 1 JAN 2020\n2 _WT_USER miron';
+
+    expect(otherFactAttributes(fact)).toEqual([{ subtag: '_WT_USER', value: 'miron' }]);
+    expect(otherFactAttributes(fact, ['_WT_USER'])).toEqual([]);
+  });
+
+  test('joins CONT/CONC continuation lines (level 3) into the subtag value', () => {
+    const fact = '1 TITL Some title\n2 _HEB line one\n3 CONT line two\n3 CONC -continued';
+
+    expect(otherFactAttributes(fact)).toEqual([{ subtag: '_HEB', value: 'line one\nline two-continued' }]);
+  });
+
+  test('a fact with no other subtags returns an empty array', () => {
+    expect(otherFactAttributes('1 AUTH J. Smith')).toEqual([]);
   });
 });
 

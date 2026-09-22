@@ -103,6 +103,43 @@ describe('renderSourcePage', () => {
       expect(html).not.toContain('<a href=');
     });
 
+    // Regression test: a real, common case in the imported tree - a
+    // TITL fact's _HEB Hebrew transliteration subtag wasn't rendered at
+    // all, reported live as "not showing ... SOUR:TITL:_HEB: ...".
+    test('renders a fact\'s "other attributes" (e.g. TITL\'s _HEB subtag) as their own label/value line', () => {
+      const html = renderSourcePage(
+        baseParams({
+          source: {
+            ...baseParams().source,
+            facts: [
+              {
+                tag: 'TITL',
+                value: 'Department Of Immigration',
+                date: '',
+                time: '',
+                author: '',
+                otherAttributes: [{ label: 'SOUR:TITL:_HEB', value: 'מחלקת ההגירה' }],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain(
+        '<div><span class="label">SOUR:TITL:_HEB</span>: <span class="value align-top">מחלקת ההגירה</span></div>',
+      );
+    });
+
+    test('a fact with no "other attributes" renders no extra label/value lines', () => {
+      const html = renderSourcePage(
+        baseParams({
+          source: { ...baseParams().source, facts: [{ tag: 'AUTH', value: 'J. Smith', date: '', time: '', author: '' }] },
+        }),
+      );
+
+      expect(html).not.toContain('<span class="label">SOUR:');
+    });
+
     test('renders AUTH/PUBL/ABBR with a known label and plain-text value', () => {
       const html = renderSourcePage(
         baseParams({

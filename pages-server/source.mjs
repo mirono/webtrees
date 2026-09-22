@@ -30,7 +30,7 @@
 // real PHP feature - deferred, same "narrow slice" cut as every prior
 // step), no slug canonicalization.
 
-import { canShowViaResnChain } from './individual.mjs';
+import { canShowViaResnChain, otherFactAttributes } from './individual.mjs';
 
 // Base GedcomRecord::canShowByType() (app/GedcomRecord.php:841-852)'s
 // own record-type-level default: PUBLIC unless a tree-wide
@@ -138,6 +138,43 @@ const SOURCE_FACT_TAGS = ['TITL', 'AUTH', 'PUBL', 'ABBR', 'TEXT', 'REPO', 'CHAN'
  */
 export function displayableSourceFacts(facts) {
   return facts.filter((fact) => SOURCE_FACT_TAGS.includes(factTag(fact)));
+}
+
+// A subtag with a real translated label this migration happens to
+// know (confirmed against app/Gedcom.php), overriding
+// otherFactAttributes()'s raw-tag-path fallback - a real, common case
+// in the imported tree (REPO facts with a CALN call-number line).
+const SOURCE_SUBTAG_LABELS = {
+  REPO: { CALN: 'Call number' },
+};
+
+// CHAN's _WT_USER is already hand-rendered elsewhere (the "Author of
+// last change" line, matching real PHP's SOUR:CHAN:_WT_USER =>
+// WebtreesUser element output exactly) - skip it here so it isn't
+// shown twice.
+const SOURCE_SUBTAG_EXTRA_SKIP = {
+  CHAN: ['_WT_USER'],
+};
+
+/**
+ * One fact's "other attributes" - every level-2 subtag not already
+ * rendered by this route's own specific handling (date/time/author for
+ * CHAN, the repository link for REPO) or excluded by the real denylist
+ * (see individual.mjs's otherFactAttributes()). A real, common case in
+ * the imported tree: `SOUR:TITL:_HEB` (a Hebrew transliteration of the
+ * title) and `SOUR:REPO:CALN` (a repository call number).
+ *
+ * @param {string} factGedcom
+ * @param {string} tag this fact's own top-level tag, e.g. 'TITL'
+ * @returns {{label: string, value: string}[]}
+ */
+export function sourceFactOtherAttributes(factGedcom, tag) {
+  const attributes = otherFactAttributes(factGedcom, SOURCE_SUBTAG_EXTRA_SKIP[tag] ?? []);
+
+  return attributes.map(({ subtag, value }) => ({
+    label: SOURCE_SUBTAG_LABELS[tag]?.[subtag] ?? `SOUR:${tag}:${subtag}`,
+    value,
+  }));
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   loadRepository,
   repoXrefs,
   displayableSourceFacts,
+  sourceFactOtherAttributes,
   repositoryCanShowRecord,
   sourceCanShowRecord,
 } from '../pages-server/source.mjs';
@@ -103,6 +104,39 @@ describe('displayableSourceFacts', () => {
 
   test('a source with only NOTE returns an empty array', () => {
     expect(displayableSourceFacts(parseFacts('1 NOTE A note'))).toEqual([]);
+  });
+});
+
+describe('sourceFactOtherAttributes', () => {
+  // Regression test: a real, common case in the imported tree - TITL's
+  // _HEB Hebrew transliteration wasn't rendered at all, reported live
+  // as "not showing ... SOUR:TITL:_HEB: מחלקת ההגירה". Since this
+  // migration hasn't ported any subtag-level element registry, the raw
+  // colon-delimited tag path IS the correct label (matches real PHP's
+  // own UnknownElement fallback exactly for a tag it doesn't know).
+  test("an unknown subtag (e.g. TITL's _HEB) falls back to the raw 'SOUR:TAG:subtag' path as its label", () => {
+    expect(sourceFactOtherAttributes('1 TITL Department Of Immigration\n2 _HEB מחלקת ההגירה', 'TITL')).toEqual([
+      { label: 'SOUR:TITL:_HEB', value: 'מחלקת ההגירה' },
+    ]);
+  });
+
+  // Regression test: a real, common case - REPO facts with a CALN
+  // call-number line, silently dropped entirely before this fix.
+  test("a known subtag (REPO's CALN) uses its real translated label, not the raw path", () => {
+    expect(sourceFactOtherAttributes('1 REPO @R3@\n2 CALN ISA-000etdl', 'REPO')).toEqual([
+      { label: 'Call number', value: 'ISA-000etdl' },
+    ]);
+  });
+
+  // Regression test: CHAN's _WT_USER is already hand-rendered as
+  // "Author of last change" elsewhere - must not also appear here, or
+  // it would show twice.
+  test("CHAN's _WT_USER is excluded - already rendered as the dedicated author line", () => {
+    expect(sourceFactOtherAttributes('1 CHAN\n2 DATE 1 JAN 2020\n2 _WT_USER miron', 'CHAN')).toEqual([]);
+  });
+
+  test('a fact with no other subtags returns an empty array', () => {
+    expect(sourceFactOtherAttributes('1 AUTH J. Smith', 'AUTH')).toEqual([]);
   });
 });
 

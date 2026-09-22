@@ -106,6 +106,7 @@ import {
   loadRepository,
   repoXrefs,
   displayableSourceFacts,
+  sourceFactOtherAttributes,
   repositoryCanShowRecord,
   sourceCanShowRecord,
 } from './source.mjs';
@@ -1408,6 +1409,7 @@ async function handleSourcePage(req, res, treeName, xref) {
       author: authorMatch ? authorMatch[1] : '',
       repoUrl: repoInfo?.url,
       repoNameHtml: repoInfo?.nameHtml,
+      otherAttributes: sourceFactOtherAttributes(fact, tag),
     });
   }
 

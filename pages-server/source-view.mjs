@@ -56,8 +56,14 @@ const FACT_LABELS = {
  * the repository's own page (still PHP-served; index.mjs resolves
  * `repoUrl`/`repoNameHtml` via phpRouteUrl() so this works correctly
  * whether or not rewrite_urls is on), not a plain value div.
+ * `otherAttributes` mirrors fact.phtml's real "wt-fact-other-attributes"
+ * block (source.mjs's sourceFactOtherAttributes()) - any subtag not
+ * already covered by this fact's own specific rendering, e.g. TITL's
+ * `_HEB` transliteration or REPO's `CALN` call number, each its own
+ * label/value line matching AbstractElement::labelValue()'s real
+ * markup (same bolded-`.label` convention as the CHAN author line).
  */
-function renderFact({ tag, value, date, time, author, repoUrl, repoNameHtml }) {
+function renderFact({ tag, value, date, time, author, repoUrl, repoNameHtml, otherAttributes = [] }) {
   const label = FACT_LABELS[tag] ?? tag;
   const valueHtml =
     tag === 'REPO'
@@ -73,6 +79,12 @@ function renderFact({ tag, value, date, time, author, repoUrl, repoNameHtml }) {
     tag === 'CHAN' && author
       ? `<div class="wt-fact-place"><span class="label">Author of last change</span>: <span class="value align-top">${escapeHtml(author)}</span></div>`
       : '';
+  const otherAttributesHtml = otherAttributes
+    .map(
+      ({ label: attrLabel, value: attrValue }) =>
+        `<div><span class="label">${escapeHtml(attrLabel)}</span>: <span class="value align-top">${escapeHtml(attrValue).replaceAll('\n', '<br>')}</span></div>`,
+    )
+    .join('');
 
   return `
         <tr>
@@ -86,6 +98,9 @@ function renderFact({ tag, value, date, time, author, repoUrl, repoNameHtml }) {
                     ${dateHtml}
                     ${authorHtml}
                 </div>
+                <div class="wt-fact-other-attributes mt-2">
+                    ${otherAttributesHtml}
+                </div>
             </td>
         </tr>`;
 }
@@ -98,7 +113,7 @@ function renderFact({ tag, value, date, time, author, repoUrl, repoNameHtml }) {
  * @param {{
  *   xref: string,
  *   fullNameHtml: string,
- *   facts: {tag: string, value: string, date: string, time: string, author: string, repoUrl?: string, repoNameHtml?: string}[],
+ *   facts: {tag: string, value: string, date: string, time: string, author: string, repoUrl?: string, repoNameHtml?: string, otherAttributes?: {label: string, value: string}[]}[],
  * }} params.source `fullNameHtml` (and a REPO fact's `repoNameHtml`) is
  *   PRE-ESCAPED SAFE HTML (see pages-server/individual.mjs's
  *   extractNameFromFact()) - inserted RAW, never passed through

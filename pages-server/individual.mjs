@@ -721,6 +721,101 @@ export function factCanShow(factGedcom, accessLevel, defaultResn) {
   return true;
 }
 
+// Denylist mirrors fact.phtml's real "wt-fact-other-attributes" loop
+// (resources/views/fact.phtml:148-155) exactly: level-2 subtags NOT in
+// this list get their own generic label/value line below the fact's
+// main value - these are the subtags already rendered elsewhere (by
+// fact-date.phtml, fact-place.phtml, fact-sources.phtml,
+// fact-notes.phtml, fact-media.phtml, or the associates view) and
+// would be shown twice otherwise.
+const OTHER_ATTRIBUTE_SKIP_TAGS = new Set([
+  'DATE',
+  'AGE',
+  'HUSB',
+  'WIFE',
+  'PLAC',
+  'ASSO',
+  '_ASSO',
+  'STAT',
+  'TEMP',
+  'TYPE',
+  'CONT',
+  'NOTE',
+  'OBJE',
+  'SOUR',
+]);
+
+/**
+ * Mirrors the non-recursive case of fact-gedcom-fields.phtml (called
+ * from fact.phtml's own "wt-fact-other-attributes" loop): every level-2
+ * subtag of a fact NOT already rendered by a dedicated view and not in
+ * the real denylist above gets its own generic label/value line. Real
+ * PHP looks up each subtag's element via `Registry::elementFactory()`,
+ * which - since this migration hasn't ported ANY subtag-level element
+ * definitions - would find nothing for every one of them and fall back
+ * to `UnknownElement`, whose label is literally the raw colon-delimited
+ * tag path itself (e.g. "SOUR:TITL:_HEB") - so that raw path IS the
+ * correct default here too, not a placeholder. A caller that DOES know
+ * a subtag's real translated label (e.g. `SOUR:REPO:CALN` => "Call
+ * number") should override it after calling this - see source.mjs.
+ * v1 simplification: only ONE level of nesting (this fact's direct
+ * level-2 subtags, with CONT/CONC continuations merged) - real PHP's
+ * hierarchy-building handles arbitrarily deep nesting, but no real
+ * data encountered so far goes past level 2 for the tags this
+ * migration renders.
+ *
+ * @param {string} factGedcom
+ * @param {string[]} extraSkipTags additional tags to skip beyond the
+ *   real denylist above - for a subtag already given its OWN dedicated
+ *   rendering elsewhere in this migration's simplified view (e.g.
+ *   CHAN's `_WT_USER`, hand-rendered as "Author of last change"
+ *   already, matching real PHP's `SOUR:CHAN:_WT_USER` => WebtreesUser
+ *   element output exactly - included here so it isn't shown twice)
+ * @returns {{subtag: string, value: string}[]}
+ */
+export function otherFactAttributes(factGedcom, extraSkipTags = []) {
+  const skip = new Set([...OTHER_ATTRIBUTE_SKIP_TAGS, ...extraSkipTags]);
+  const lines = factGedcom.split('\n');
+  const attributes = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const match = /^2 (\S+) ?(.*)$/.exec(lines[i]);
+
+    if (!match) {
+      continue;
+    }
+
+    const [, subtag, firstValue] = match;
+
+    if (skip.has(subtag)) {
+      continue;
+    }
+
+    const valueParts = [firstValue];
+    let next = i + 1;
+
+    while (next < lines.length) {
+      const contMatch = /^3 CONT ?(.*)$/.exec(lines[next]);
+      const concMatch = /^3 CONC ?(.*)$/.exec(lines[next]);
+
+      if (contMatch) {
+        valueParts.push(contMatch[1]);
+        next += 1;
+      } else if (concMatch) {
+        valueParts[valueParts.length - 1] += concMatch[1];
+        next += 1;
+      } else {
+        break;
+      }
+    }
+
+    attributes.push({ subtag, value: valueParts.join('\n') });
+    i = next - 1;
+  }
+
+  return attributes;
+}
+
 /**
  * Mirrors Tree::DEFAULT_PREFERENCES (app/Tree.php:48-93) for the
  * handful of settings this route's privacy chain needs, falling back

@@ -201,3 +201,57 @@ unrelated "fact-sorting service" dependency gap already noted for
 FamilyPage/IndividualPage's own PHP cross-checks in prior steps, not
 something this fix introduced. Full JS suite: **4397 tests, green**
 (4394 + 3 new).
+
+## Second follow-up fix (2026-09-22, same day): `SOUR:TITL:_HEB` and other subtag lines
+
+Immediately after the fix above shipped, the user pointed out one more
+difference against the real page: `S473`'s title has a Hebrew
+transliteration sub-line, `SOUR:TITL:_HEB: מחלקת ההגירה`, that the
+migrated page still didn't show. Reading `resources/views/fact.phtml`
+directly (lines 148-155) found the real mechanism: every fact renders
+a generic **"other attributes"** block below its main value — every
+level-2 GEDCOM subtag NOT already covered by a dedicated view (a real
+denylist: `DATE`/`AGE`/`HUSB`/`WIFE`/`PLAC`/`ASSO`/`_ASSO`/`STAT`/
+`TEMP`/`TYPE`/`CONT`/`NOTE`/`OBJE`/`SOUR`) gets its own label/value
+line, via `resources/views/fact-gedcom-fields.phtml`. Each subtag's
+label comes from `Registry::elementFactory()->make()`, which for any
+tag this migration hasn't defined an element for — genuinely every
+subtag, since this migration only ever built a small curated top-level
+`FACT_LABELS` map, never a full element registry — falls back to
+`UnknownElement`, whose label is literally **the raw colon-delimited
+tag path itself** (e.g. `SOUR:TITL:_HEB`). That raw-path fallback is
+therefore the objectively correct default here too, not a placeholder
+pending a "real" implementation.
+
+**New exports**: `individual.mjs::otherFactAttributes(factGedcom,
+extraSkipTags)` — the generic, shared mechanism (matches the real
+denylist exactly, merges CONT/CONC continuations, one level of nesting
+only since no real data goes deeper) — and `source.mjs`'s
+`sourceFactOtherAttributes(factGedcom, tag)`, which calls it and
+overrides the raw-path fallback with a real translated label for the
+one subtag this migration happens to know for certain
+(`SOUR:REPO:CALN` → "Call number", confirmed against `app/Gedcom.php`
+and, while verifying against real data, found to be a genuinely common
+case too — 5+ real sources in the imported tree have a repository call
+number). CHAN's `_WT_USER` is excluded via `extraSkipTags`: it already
+has its own dedicated "Author of last change" rendering (built in the
+original v1), which — confirmed by reading `app/Gedcom.php` — happens
+to be functionally the exact same thing real PHP's generic mechanism
+would produce for it (`SOUR:CHAN:_WT_USER` → `WebtreesUser` element,
+same label, same shape), so excluding it here avoids a double-render
+rather than losing any fidelity.
+
+Live-verified end-to-end against `S474` (chosen because real data
+confirmed it exercises BOTH new cases at once: a `TITL` with a real
+`_HEB` line and a `REPO` with a real `CALN` line) using a single,
+self-restoring verification script (`trap`-guarded `mv` back to
+`data/config.yaml`'s real `dbhost` value, guaranteed even on error) —
+learned the hard way this session after an earlier ad hoc swap-and-
+forget briefly broke the live app's DB connection (`dbhost` left
+pointing at `localhost`, unreachable from inside the `app` container).
+The rendered page now shows `SOUR:TITL:_HEB: גוטגולד לייב, תעודת
+התאזרחות` under the title and `Call number:
+ISA-MandatoryOrganizations-Naturalization-000etdl` under the
+repository link, exactly matching real PHP's shape; CHAN's own
+`wt-fact-other-attributes` block correctly stays empty (no duplicated
+author line). Full JS suite: **4408 tests, green** (4397 + 11 new).
