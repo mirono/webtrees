@@ -17,7 +17,10 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   parseFacts,
   sex,
+  sexLabel,
+  nameSubTagAttributes,
   extractPrimaryName,
+  extractAllNameFacts,
   getBirthDate,
   getDeathDate,
   isDead,
@@ -72,6 +75,49 @@ describe('sex', () => {
   // matching PHP's own \n-anchored regex exactly.
   test('SEX as the literal first fact (no preceding newline) is not detected', () => {
     expect(sex('1 SEX M')).toBe('U');
+  });
+});
+
+describe('sexLabel', () => {
+  test.each([
+    ['M', 'Male'],
+    ['F', 'Female'],
+    ['U', 'Unknown'],
+  ])('%s -> %s', (value, expected) => {
+    expect(sexLabel(value)).toBe(expected);
+  });
+
+  test("'X' is not a controlled value - falls back to the raw character", () => {
+    expect(sexLabel('X')).toBe('X');
+  });
+});
+
+describe('nameSubTagAttributes', () => {
+  test('known subtags get their real translated labels', () => {
+    const attrs = nameSubTagAttributes('1 NAME Robert /de Gliderow/\n2 GIVN Robert\n2 SPFX de\n2 SURN CLITHEROW\n2 NICK The Bald');
+
+    expect(attrs).toEqual([
+      { label: 'Given names', value: 'Robert' },
+      { label: 'Surname prefix', value: 'de' },
+      { label: 'Surname', value: 'CLITHEROW' },
+      { label: 'Nickname', value: 'The Bald' },
+    ]);
+  });
+
+  test('an unknown subtag (e.g. a custom _HEB transliteration) falls back to the raw INDI:NAME:<TAG> path', () => {
+    const attrs = nameSubTagAttributes('1 NAME Miron /Ophir/\n2 _HEB מירון /אופיר/');
+
+    expect(attrs).toEqual([{ label: 'INDI:NAME:_HEB', value: 'מירון /אופיר/' }]);
+  });
+
+  test('SOUR and NOTE subtags are excluded (rendered elsewhere in real PHP, not ported here)', () => {
+    const attrs = nameSubTagAttributes('1 NAME John /Smith/\n2 SOUR @S1@\n2 NOTE A note\n2 GIVN John');
+
+    expect(attrs).toEqual([{ label: 'Given names', value: 'John' }]);
+  });
+
+  test('a NAME fact with no subtags returns an empty array', () => {
+    expect(nameSubTagAttributes('1 NAME John /Smith/')).toEqual([]);
   });
 });
 
@@ -147,6 +193,41 @@ describe('extractPrimaryName', () => {
 
   test('no NAME fact at all returns null', () => {
     expect(extractPrimaryName('1 SEX M')).toBeNull();
+  });
+});
+
+describe('extractAllNameFacts', () => {
+  test('a single NAME fact returns a one-element array', () => {
+    const names = extractAllNameFacts('1 NAME John /Smith/\n1 SEX M', 'NAME');
+
+    expect(names).toHaveLength(1);
+    expect(names[0].givn).toBe('John');
+    expect(names[0].surn).toBe('Smith');
+  });
+
+  test('multiple NAME facts each get their own entry, in document order', () => {
+    const names = extractAllNameFacts('1 NAME John /Smith/\n1 NAME Jack /Smith/\n2 TYPE nick', 'NAME');
+
+    expect(names).toHaveLength(2);
+    expect(names[0].givn).toBe('John');
+    expect(names[1].givn).toBe('Jack');
+  });
+
+  test('each entry carries its own raw fact gedcom (needed for a stable per-name id)', () => {
+    const names = extractAllNameFacts('1 NAME John /Smith/\n2 GIVN John', 'NAME');
+
+    expect(names[0].gedcom).toBe('1 NAME John /Smith/\n2 GIVN John');
+  });
+
+  test('a NAME fact with an empty value is skipped, not fatal to the rest', () => {
+    const names = extractAllNameFacts('1 NAME \n1 NAME Jack /Smith/', 'NAME');
+
+    expect(names).toHaveLength(1);
+    expect(names[0].givn).toBe('Jack');
+  });
+
+  test('no matching facts -> empty array', () => {
+    expect(extractAllNameFacts('1 SEX M', 'NAME')).toEqual([]);
   });
 });
 
@@ -485,6 +566,8 @@ describe('loadTreePrivacyPrefs', () => {
       keepAliveYearsBirth: 0,
       keepAliveYearsDeath: 0,
       showLivingNames: 1,
+      useSilhouette: true,
+      showNoWatermark: 1,
     });
   });
 
@@ -494,17 +577,25 @@ describe('loadTreePrivacyPrefs', () => {
     expect((await loadTreePrivacyPrefs(pool, 1)).hideLivePeople).toBe(false);
   });
 
+  test("USE_SILHOUETTE = '0' is falsy (matches PHP string-falsy semantics)", async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_name: 'USE_SILHOUETTE', setting_value: '0' }] }));
+
+    expect((await loadTreePrivacyPrefs(pool, 1)).useSilhouette).toBe(false);
+  });
+
   test('explicit DB rows override the defaults', async () => {
     const pool = mockPool(async () => ({
       rows: [
         { setting_name: 'SHOW_DEAD_PEOPLE', setting_value: '0' },
         { setting_name: 'MAX_ALIVE_AGE', setting_value: '80' },
+        { setting_name: 'SHOW_NO_WATERMARK', setting_value: '2' },
       ],
     }));
 
     const prefs = await loadTreePrivacyPrefs(pool, 1);
     expect(prefs.showDeadPeople).toBe(0);
     expect(prefs.maxAliveAge).toBe(80);
+    expect(prefs.showNoWatermark).toBe(2);
   });
 });
 

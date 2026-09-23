@@ -86,7 +86,10 @@ import {
   viewerRelationshipPrefs,
   canShowRecord,
   sex,
+  sexLabel,
   extractPrimaryName,
+  extractAllNameFacts,
+  nameSubTagAttributes,
   parseFacts,
   getBirthDate,
   getDeathDate,
@@ -97,6 +100,7 @@ import {
   displayDate,
   extractNameFromFact,
 } from './individual.mjs';
+import { loadFactsMedia, mediaThumbnailUrl, loadGlideKey, needsWatermark } from './media.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
 import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
@@ -921,6 +925,61 @@ async function handleIndividualPage(req, res, treeName, xref) {
   // embedding it directly here is safe without a separate escape step.
   const fullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
 
+  // Photo box (phase 5 step 14a - docs/php-to-js-migration/phase5-individual-page-full.md).
+  // Mirrors IndividualPage::handle()'s own inline OBJE-fact resolution:
+  // only DIRECT `1 OBJE` facts on this individual (not family-linked
+  // media), each privacy-filtered the same way every other fact here
+  // is (factCanShow()), matching real PHP's facts(['OBJE']) which
+  // applies the same per-fact canShow() check internally.
+  let photoImages;
+
+  try {
+    const objeFacts = facts.filter((fact) => {
+      const tag = /^1 (\S+)/.exec(fact)?.[1];
+
+      if (tag !== 'OBJE') {
+        return false;
+      }
+
+      const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+      return factCanShow(fact, accessLevel, resolvedDefaultResn);
+    });
+    const imageFiles = await loadFactsMedia(pool, tree.gedcomId, objeFacts);
+
+    let glideKey = null;
+
+    if (imageFiles.length > 0) {
+      glideKey = await loadGlideKey(pool);
+    }
+
+    const watermark = needsWatermark(accessLevel, treePrivacyPrefs.showNoWatermark);
+
+    photoImages = imageFiles.map((file) => {
+      const baseParams = { xref: file.mediaXref, treeName: tree.name, factId: file.factId, fit: 'crop', needsWatermark: watermark };
+
+      return {
+        thumbnailUrl: mediaThumbnailUrl({ ...baseParams, width: 200, height: 260 }, glideKey, siteUrlConfig),
+        srcset: [2, 3, 4]
+          .map((density) => `${mediaThumbnailUrl({ ...baseParams, width: 200 * density, height: 260 * density }, glideKey, siteUrlConfig)} ${density}x`)
+          .join(','),
+        alt: fullNameHtml.replace(/<[^>]*>/g, ''),
+      };
+    });
+  } catch (error) {
+    console.error('Failed to resolve individual media:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const names = extractAllNameFacts(individual.gedcom, 'NAME').map((name) => ({
+    full: name.full,
+    rawValue: name.rawValue,
+    gedcom: name.gedcom,
+    subAttributes: nameSubTagAttributes(name.gedcom),
+  }));
+
   const birthDate = getBirthDate(facts);
   const deathDate = getDeathDate(facts);
   const individualSex = sex(individual.gedcom);
@@ -967,6 +1026,11 @@ async function handleIndividualPage(req, res, treeName, xref) {
     fullNameHtml,
     lifespan: lifespan({ birthDate, deathDate, isDead: dead }),
     age: ageString({ birthDate, deathDate, isDead: dead, sex: individualSex }),
+    sex: individualSex,
+    sexValueLabel: sexLabel(individualSex),
+    photoImages,
+    useSilhouette: treePrivacyPrefs.useSilhouette,
+    names,
     facts: visibleFacts,
     parentFamilies,
     spouseFamilies,

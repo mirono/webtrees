@@ -94,6 +94,54 @@ export function sex(gedcom) {
   return match ? match[1] : 'U';
 }
 
+// Mirrors SexValue::values() (app/Elements/SexValue.php:67-74) - 'X'
+// isn't a controlled value there, so it falls through
+// AbstractElement::value()'s generic fallback (the raw character,
+// unescaped since it's always exactly "X").
+const SEX_LABELS = { M: 'Male', F: 'Female', U: 'Unknown' };
+
+/**
+ * @param {'M'|'F'|'X'|'U'} sexValue
+ * @returns {string}
+ */
+export function sexLabel(sexValue) {
+  return SEX_LABELS[sexValue] ?? sexValue;
+}
+
+// Mirrors the small set of real INDI:NAME:<TAG> element labels this
+// migration knows for certain (verified against app/Gedcom.php) - any
+// other subtag (e.g. a custom "_HEB" transliteration) falls back to
+// the raw "INDI:NAME:<TAG>" path, same UnknownElement-fallback
+// convention already established for source.mjs's own subtag handling.
+const NAME_SUBTAG_LABELS = {
+  NPFX: 'Name prefix',
+  GIVN: 'Given names',
+  NICK: 'Nickname',
+  SPFX: 'Surname prefix',
+  SURN: 'Surname',
+  NSFX: 'Name suffix',
+  FONE: 'Phonetic name',
+  ROMN: 'Romanized name',
+  TYPE: 'Type of name',
+};
+
+/**
+ * Mirrors individual-page-name.phtml:59-71's own inline sub-tag loop -
+ * a NAME fact's own level-2 lines (GIVN/SURN/NICK/_HEB/...), excluding
+ * SOUR/NOTE (rendered separately in real PHP, not ported here - same
+ * "no sub-fact citations" cut already made for the main facts list).
+ *
+ * @param {string} nameFactGedcom the full NAME fact block
+ * @returns {{label: string, value: string}[]}
+ */
+export function nameSubTagAttributes(nameFactGedcom) {
+  const matches = [...nameFactGedcom.matchAll(/\n2 (\w+) (.+)/g)];
+
+  return matches
+    .filter(([, tag]) => tag !== 'SOUR' && tag !== 'NOTE')
+    .map(([, tag, value]) => ({ label: NAME_SUBTAG_LABELS[tag] ?? `INDI:NAME:${tag}`, value }));
+}
+
 /**
  * Mirrors Individual::addName() (app/Individual.php:891-1008) for a
  * single NAME-type fact block. Deliberately reproduces its exact
@@ -208,26 +256,40 @@ function addName(value, gedcom) {
  *
  * @param {string} gedcom the record's raw text
  * @param {string} tag e.g. 'NAME' (individual/family) or 'TITL' (source)
- * @returns {{full: string, fullNN: string, sort: string, givn: string, surn: string, surname: string}|null}
+ * @returns {{full: string, fullNN: string, sort: string, givn: string, surn: string, surname: string, gedcom: string}[]}
+ */
+export function extractAllNameFacts(gedcom, tag) {
+  const facts = parseFacts(gedcom);
+  const results = [];
+
+  for (const nameFact of facts) {
+    if (factTag(nameFact) !== tag) {
+      continue;
+    }
+
+    const lineMatch = new RegExp(`^1 ${tag} (.+)`).exec(nameFact);
+
+    if (!lineMatch) {
+      // Matches PHP: extractNamesFromFacts()'s own regex requires a
+      // non-empty value after "1 <TAG> " - an empty line simply never
+      // becomes a name entry (this fact is skipped, not fatal to the
+      // whole extraction - a later, valid NAME fact still counts).
+      continue;
+    }
+
+    results.push({ ...addName(lineMatch[1], nameFact), rawValue: lineMatch[1], gedcom: nameFact });
+  }
+
+  return results;
+}
+
+/**
+ * @param {string} gedcom the record's raw text
+ * @param {string} tag e.g. 'NAME' (individual/family) or 'TITL' (source)
+ * @returns {{full: string, fullNN: string, sort: string, givn: string, surn: string, surname: string, gedcom: string}|null}
  */
 export function extractNameFromFact(gedcom, tag) {
-  const facts = parseFacts(gedcom);
-  const nameFact = facts.find((f) => factTag(f) === tag);
-
-  if (!nameFact) {
-    return null;
-  }
-
-  const lineMatch = new RegExp(`^1 ${tag} (.+)`).exec(nameFact);
-
-  if (!lineMatch) {
-    // Matches PHP: extractNamesFromFacts()'s own regex requires a
-    // non-empty value after "1 <TAG> " - an empty line is simply
-    // never turned into a name entry.
-    return null;
-  }
-
-  return addName(lineMatch[1], nameFact);
+  return extractAllNameFacts(gedcom, tag)[0] ?? null;
 }
 
 /**
@@ -824,11 +886,11 @@ export function otherFactAttributes(factGedcom, extraSkipTags = []) {
  *
  * @param {import('pg').Pool} pool
  * @param {number} gedcomId
- * @returns {Promise<{hideLivePeople: boolean, showDeadPeople: number, maxAliveAge: number, keepAliveYearsBirth: number, keepAliveYearsDeath: number}>}
+ * @returns {Promise<{hideLivePeople: boolean, showDeadPeople: number, maxAliveAge: number, keepAliveYearsBirth: number, keepAliveYearsDeath: number, useSilhouette: boolean, showNoWatermark: number}>}
  */
 export async function loadTreePrivacyPrefs(pool, gedcomId) {
   const result = await pool.query(
-    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('HIDE_LIVE_PEOPLE', 'SHOW_DEAD_PEOPLE', 'MAX_ALIVE_AGE', 'KEEP_ALIVE_YEARS_BIRTH', 'KEEP_ALIVE_YEARS_DEATH', 'SHOW_LIVING_NAMES')",
+    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('HIDE_LIVE_PEOPLE', 'SHOW_DEAD_PEOPLE', 'MAX_ALIVE_AGE', 'KEEP_ALIVE_YEARS_BIRTH', 'KEEP_ALIVE_YEARS_DEATH', 'SHOW_LIVING_NAMES', 'USE_SILHOUETTE', 'SHOW_NO_WATERMARK')",
     [gedcomId],
   );
   const byName = Object.fromEntries(result.rows.map((row) => [row.setting_name, row.setting_value]));
@@ -837,6 +899,7 @@ export async function loadTreePrivacyPrefs(pool, gedcomId) {
   // (app/GedcomRecord.php:953) - ONLY '' and '0' are falsy in PHP;
   // every other value (including the default '1') is truthy.
   const hideLivePeopleRaw = byName.HIDE_LIVE_PEOPLE ?? '1';
+  const useSilhouetteRaw = byName.USE_SILHOUETTE ?? '1';
 
   return {
     hideLivePeople: hideLivePeopleRaw !== '0' && hideLivePeopleRaw !== '',
@@ -845,6 +908,12 @@ export async function loadTreePrivacyPrefs(pool, gedcomId) {
     keepAliveYearsBirth: Number(byName.KEEP_ALIVE_YEARS_BIRTH ?? '0'),
     keepAliveYearsDeath: Number(byName.KEEP_ALIVE_YEARS_DEATH ?? '0'),
     showLivingNames: Number(byName.SHOW_LIVING_NAMES ?? '1'),
+    useSilhouette: useSilhouetteRaw !== '0' && useSilhouetteRaw !== '',
+    // Auth::needsWatermark() (app/Auth.php:126-129) compares the
+    // VIEWER's access level against this pref as a raw number, not a
+    // boolean - kept numeric here rather than pre-resolved, since the
+    // comparison needs the caller's own accessLevel.
+    showNoWatermark: Number(byName.SHOW_NO_WATERMARK ?? '1'),
   };
 }
 

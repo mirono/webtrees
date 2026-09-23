@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-22 (SourcePage's fact rows gained real PHP's generic "other attributes" line — TITL's `_HEB` transliteration and REPO's `CALN` call number, both reported/found live after the user tried the new route). This is the entry point for "where are we" —
+**Last updated: 2026-09-23 (IndividualPage's full page structure, step 14a: photo box, Name/Gender accordion, and the complete 8-tab bar — the user asked for the page's real structure to be complete, not just growing one flat facts list). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4408 tests, all green.
+# Expect: 4460 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -111,6 +111,7 @@ just adding latency.
 | 5.11 | IndividualPage gains a "Families" section — closes the navigation loop back to FamilyPage, reusing its exact privacy chain via a new `wt_link`-based lookup | **Done (2026-09-22)** — [phase5-individual-page-families.md](phase5-individual-page-families.md) |
 | 5.12 | IndividualPage's facts list widened from 6 vital-event tags to ~30 real event/attribute tags, plus CHAN/ADDR rendering | **Done (2026-09-22)** — see phase5-individual-page.md's follow-up section |
 | 5.13 | `/tree/{tree}/source/{xref}` (SourcePage) served entirely by Node — the third real-GEDCOM-record route, and the first that isn't Individual/Family; privacy additionally gated on every referenced repository | **Done (2026-09-22)** — [phase5-source-page.md](phase5-source-page.md) |
+| 5.14a | IndividualPage full page structure: photo box (real signed thumbnail URLs, no Node-side image processing), Name/Gender accordion, and the complete 8-tab bar (Facts and events + Families real, Sources/Notes/Media/Album/Interactive tree/Places stubbed for now) | **Done (2026-09-23)** — [phase5-individual-page-full.md](phase5-individual-page-full.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 

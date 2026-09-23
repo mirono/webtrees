@@ -13,13 +13,17 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Mirrors app/Factories/RouteFactory.php::route()'s URL-generation for
-// the one shape the home-page route needs: a plain path with no extra
-// query parameters (every redirect target HomePage.php can produce -
-// UserPage, TreePage, ManageTrees, CreateTreePage - takes only a
-// {tree} path segment, never a query param). Not a general
-// implementation of RouteFactory's full parameter/query-string
-// handling - this project doesn't need one yet.
+// Mirrors app/Factories/RouteFactory.php::route()'s URL-generation.
+// `extraParams` covers routes that take query-string parameters
+// alongside (or instead of) path placeholders - e.g. MediaFileThumbnail
+// registers at the bare path `/media-thumbnail` with every real
+// parameter (xref/tree/fact_id/w/h/fit/mark/s) passed as a query
+// param. Confirmed via app/Http/Middleware/Router.php:54-70: the
+// ugly-URL branch does `$uri = $request->getUri()->withPath($url_route)`
+// - this replaces ONLY the path, so any OTHER query params on the
+// original request (the ones this function must therefore also emit)
+// survive as sibling top-level params next to `route=`, not nested
+// inside it.
 //
 // Confirmed live (2026-09-20): with rewrite_urls off (this dev
 // config), PHP's router only accepts the ugly-URL ?route= form for a
@@ -28,14 +32,18 @@
 /**
  * @param {string} path e.g. "/tree/ophir/my-page"
  * @param {{baseUrl: string, rewriteUrls: boolean}} siteUrlConfig
+ * @param {Record<string, string>} extraParams query-string parameters
+ *   beyond the path itself - e.g. MediaFileThumbnail's xref/tree/etc.
  * @returns {string}
  */
-export function phpRouteUrl(path, { baseUrl, rewriteUrls }) {
+export function phpRouteUrl(path, { baseUrl, rewriteUrls }, extraParams = {}) {
   if (rewriteUrls) {
-    return baseUrl + path;
+    const query = new URLSearchParams(extraParams).toString();
+
+    return query === '' ? baseUrl + path : `${baseUrl}${path}?${query}`;
   }
 
-  const query = new URLSearchParams({ route: path }).toString();
+  const query = new URLSearchParams({ route: path, ...extraParams }).toString();
 
   return `${baseUrl}/index.php?${query}`;
 }

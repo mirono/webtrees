@@ -26,6 +26,11 @@ function baseParams(overrides = {}) {
       fullNameHtml: '<span class="NAME" dir="auto" translate="no">John <span class="SURN">DOE</span></span>',
       lifespan: '1870–1920',
       age: '(aged 50 years)',
+      sex: 'M',
+      sexValueLabel: 'Male',
+      photoImages: [],
+      useSilhouette: false,
+      names: [],
       facts: [],
       parentFamilies: [],
       spouseFamilies: [],
@@ -64,11 +69,211 @@ describe('renderIndividualPage', () => {
     expect(html).toContain('(aged 50 years)');
   });
 
-  describe('the Families section', () => {
-    test('is omitted entirely when there are no related families', () => {
+  test('the <title> is the plain-text name, not the raw xref', () => {
+    const html = renderIndividualPage(baseParams());
+
+    expect(html).toContain('<title>John DOE</title>');
+  });
+
+  describe('the photo box', () => {
+    test('is omitted entirely when there are no images and silhouettes are disabled', () => {
+      const html = renderIndividualPage(baseParams({ individual: { ...baseParams().individual, photoImages: [], useSilhouette: false } }));
+
+      expect(html).not.toContain('col-sm-3');
+      expect(html).not.toContain('wt-individual-silhouette');
+    });
+
+    test('shows a sex-specific silhouette when there are no images but silhouettes are enabled', () => {
+      const html = renderIndividualPage(
+        baseParams({ individual: { ...baseParams().individual, sex: 'F', photoImages: [], useSilhouette: true } }),
+      );
+
+      expect(html).toContain('wt-individual-silhouette wt-individual-silhouette-f wt-icon-flip-rtl');
+    });
+
+    test('renders a single real image directly, with the real img-thumbnail classes', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            photoImages: [{ thumbnailUrl: '/index.php?route=%2Fmedia-thumbnail&xref=M1', srcset: 'a 2x,b 3x,c 4x', alt: 'John DOE' }],
+          },
+        }),
+      );
+
+      expect(html).toContain('src="/index.php?route=%2Fmedia-thumbnail&amp;xref=M1"');
+      expect(html).toContain('srcset="a 2x,b 3x,c 4x"');
+      expect(html).toContain('class="img-thumbnail img-fluid w-100"');
+      expect(html).not.toContain('wt-individual-silhouette');
+    });
+
+    test('renders a Bootstrap carousel for multiple images', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            photoImages: [
+              { thumbnailUrl: '/img1.jpg', srcset: '', alt: 'John DOE' },
+              { thumbnailUrl: '/img2.jpg', srcset: '', alt: 'John DOE' },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('id="individual-images" class="carousel slide"');
+      expect(html).toContain('carousel-item active');
+      expect(html).toContain('src="/img1.jpg"');
+      expect(html).toContain('src="/img2.jpg"');
+      expect(html).toContain('carousel-control-prev');
+      expect(html).toContain('carousel-control-next');
+    });
+  });
+
+  describe('the Name/Gender accordion', () => {
+    test('renders one accordion item per NAME fact, showing the styled full name in the header', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            names: [
+              {
+                full: '<span class="NAME" dir="auto" translate="no">John <span class="SURN">DOE</span></span>',
+                rawValue: 'John /DOE/',
+                gedcom: '1 NAME John /DOE/',
+                subAttributes: [],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('id="individual-names"');
+      expect(html).toContain('accordion-item');
+      expect(html).toContain('<span class="NAME" dir="auto" translate="no">John <span class="SURN">DOE</span></span>');
+    });
+
+    // Regression-guarding test: the accordion BODY shows the raw GEDCOM
+    // value (slashes included), not the styled header HTML - a
+    // deliberate difference matching real PHP's own
+    // individual-page-name.phtml ($fact->value() vs. fullName()).
+    test('the accordion body shows the raw NAME value, not the styled header HTML', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            names: [
+              {
+                full: '<span class="NAME" dir="auto" translate="no">John <span class="SURN">DOE</span></span>',
+                rawValue: 'John /DOE/',
+                gedcom: '1 NAME John /DOE/',
+                subAttributes: [],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('<bdi>John /DOE/</bdi>');
+    });
+
+    test('renders each name subAttribute as a dt/dd pair', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            names: [
+              {
+                full: '<span class="NAME">John DOE</span>',
+                rawValue: 'John /DOE/',
+                gedcom: '1 NAME John /DOE/\n2 GIVN John\n2 SURN DOE',
+                subAttributes: [
+                  { label: 'Given names', value: 'John' },
+                  { label: 'Surname', value: 'DOE' },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('<dt class="col-md-4 col-lg-3">Given names</dt>');
+      expect(html).toContain('<dd class="col-md-8 col-lg-9">John</dd>');
+      expect(html).toContain('<dt class="col-md-4 col-lg-3">Surname</dt>');
+      expect(html).toContain('<dd class="col-md-8 col-lg-9">DOE</dd>');
+    });
+
+    test('multiple NAME facts each get their own accordion item', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            names: [
+              { full: '<span class="NAME">Primary Name</span>', rawValue: 'Primary /Name/', gedcom: '1 NAME Primary /Name/', subAttributes: [] },
+              { full: '<span class="NAME">Nick Name</span>', rawValue: 'Nick /Name/', gedcom: '1 NAME Nick /Name/\n2 TYPE aka', subAttributes: [] },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('Primary Name');
+      expect(html).toContain('Nick Name');
+      expect(html).toContain('— aka');
+    });
+
+    test('always renders a Sex accordion item, with the real translated value label', () => {
+      const html = renderIndividualPage(baseParams({ individual: { ...baseParams().individual, sexValueLabel: 'Female' } }));
+
+      expect(html).toContain('<span class="label">Sex</span>');
+      expect(html).toContain('Female');
+    });
+  });
+
+  describe('the tabs bar', () => {
+    test('all 8 real tabs are present, in their real default order', () => {
       const html = renderIndividualPage(baseParams());
 
-      expect(html).not.toContain('Families');
+      const order = ['Facts and events', 'Families', 'Sources', 'Notes', 'Media', 'Album', 'Interactive tree', 'Places'];
+      let lastIndex = -1;
+
+      for (const title of order) {
+        const index = html.indexOf(`href="#tab-${title === 'Facts and events' ? 'facts' : title.toLowerCase().replace(/ /g, '-')}"`);
+        expect(index).toBeGreaterThan(lastIndex);
+        lastIndex = index;
+      }
+
+      expect(html).toContain('Facts and events');
+      expect(html).toContain('Families');
+      expect(html).toContain('Sources');
+      expect(html).toContain('Notes');
+      expect(html).toContain('Media');
+      expect(html).toContain('Album');
+      expect(html).toContain('Interactive tree');
+      expect(html).toContain('Places');
+    });
+
+    test('the first tab (Facts and events) is active by default', () => {
+      const html = renderIndividualPage(baseParams());
+
+      expect(html).toContain('<a class="nav-link active" data-bs-toggle="tab" role="tab" href="#tab-facts">Facts and events</a>');
+      expect(html).toContain('<div id="tab-facts" class="tab-pane mt-2 fade show active"');
+    });
+
+    test('stub tabs (Sources/Notes/Media/Album/Interactive tree/Places) show the "not yet available" placeholder', () => {
+      const html = renderIndividualPage(baseParams());
+      const stubCount = html.split('This feature has not been migrated yet.').length - 1;
+
+      // 6 permanently-stubbed tabs + Facts (empty facts list) + Families
+      // (no related families) both also falling back to the same
+      // placeholder in this default (empty) fixture.
+      expect(stubCount).toBe(8);
+    });
+  });
+
+  describe('the Families tab', () => {
+    test('shows the stub placeholder when there are no related families', () => {
+      const html = renderIndividualPage(baseParams());
+
+      expect(html).toContain('id="tab-families"');
     });
 
     test('renders a parent family with a "Parents" label, linking to the family page', () => {
@@ -81,7 +286,6 @@ describe('renderIndividualPage', () => {
         }),
       );
 
-      expect(html).toContain('Families');
       expect(html).toContain('Parents');
       expect(html).toContain('href="/tree/ophir/family/F1"');
       expect(html).toContain('<span class="NAME">Dad</span> + <span class="NAME">Mom</span>');
@@ -121,8 +325,8 @@ describe('renderIndividualPage', () => {
     });
   });
 
-  describe('the vital-facts list', () => {
-    test('is omitted entirely when there are no facts', () => {
+  describe('the Facts and events tab', () => {
+    test('shows the stub placeholder when there are no facts', () => {
       const html = renderIndividualPage(baseParams({ individual: { ...baseParams().individual, facts: [] } }));
 
       expect(html).not.toContain('wt-facts-table');

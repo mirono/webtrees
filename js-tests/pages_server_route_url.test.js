@@ -22,4 +22,27 @@ describe('phpRouteUrl', () => {
       'http://example.com/trees/create',
     );
   });
+
+  // MediaFileThumbnail-shaped case: a route with no path placeholders,
+  // every real parameter passed via the query string instead. Real
+  // PHP's ugly-URL branch only replaces the PATH (Router.php:54-70) -
+  // any other query params survive as siblings of `route=`, not nested
+  // inside its value.
+  describe('extraParams', () => {
+    test('ugly-URL form: extraParams are sibling top-level params next to route=', () => {
+      const url = phpRouteUrl('/media-thumbnail', { baseUrl: '', rewriteUrls: false }, { xref: 'M1', w: '200' });
+
+      expect(url).toBe('/index.php?route=%2Fmedia-thumbnail&xref=M1&w=200');
+    });
+
+    test('pretty-URL form: extraParams become a normal query string after the path', () => {
+      const url = phpRouteUrl('/media-thumbnail', { baseUrl: '', rewriteUrls: true }, { xref: 'M1', w: '200' });
+
+      expect(url).toBe('/media-thumbnail?xref=M1&w=200');
+    });
+
+    test('pretty-URL form with no extraParams is unchanged (no trailing "?")', () => {
+      expect(phpRouteUrl('/tree/ophir/my-page', { baseUrl: '', rewriteUrls: true })).toBe('/tree/ophir/my-page');
+    });
+  });
 });
