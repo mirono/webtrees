@@ -891,10 +891,12 @@ async function handleIndividualPage(req, res, treeName, xref) {
   // already made for FamilyPage's own member cards).
   let parentFamilies;
   let spouseFamilies;
+  let spouseFamilyXrefs;
 
   try {
     const relatedFamilyXrefs = await loadRelatedFamilyXrefs(pool, tree.gedcomId, individual.xref);
 
+    spouseFamilyXrefs = relatedFamilyXrefs.spouseFamilies;
     parentFamilies = [];
     for (const familyXref of relatedFamilyXrefs.parentFamilies) {
       const summary = await resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
@@ -984,41 +986,26 @@ async function handleIndividualPage(req, res, treeName, xref) {
   const deathDate = getDeathDate(facts);
   const individualSex = sex(individual.gedcom);
 
-  const visibleFacts = [];
+  const ownFacts = facts.filter((fact) => VITAL_FACT_TAGS.includes(/^1 (\S+)/.exec(fact)?.[1]));
+  const visibleFacts = extractVisibleFacts(ownFacts, defaultResnInfo, accessLevel);
 
-  for (const fact of facts) {
-    const tag = /^1 (\S+)/.exec(fact)?.[1];
+  // Mirrors IndividualFactsTabModule's own merge of individualFacts()
+  // with familyFacts() (app/Services/IndividualFactsService.php) -
+  // reported live: Miron Ophir's own page was missing his Marriage/
+  // Family residence facts, both of which live on his FAMILY record
+  // (F000001), not his own. See familyFactsForIndividual()'s doc
+  // comment for what's ported vs. simplified (year-only sort, no
+  // relativeFacts()/associateFacts()/historicFacts()).
+  try {
+    const familyFacts = await familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, relPrefs, spouseFamilyXrefs);
 
-    if (!VITAL_FACT_TAGS.includes(tag)) {
-      continue;
-    }
-
-    // Fact-specific default RESN overrides the tree-wide one when both
-    // exist - matches Fact::canShow()'s own check order
-    // (individual_fact_privacy before fact_privacy, app/Fact.php:229-233).
-    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
-
-    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
-      continue;
-    }
-
-    const dateMatch = /\n2 DATE (.+)/.exec(fact);
-    const placeMatch = /\n2 PLAC (.+)/.exec(fact);
-    const timeMatch = /\n3 TIME (.+)/.exec(fact);
-    const addressMatch = /\n2 ADDR (.+)/.exec(fact);
-    // CHAN's own author sub-tag - see family.mjs's identical handling;
-    // 'INDI:CHAN' => [['_WT_USER', '0:1']] confirmed in app/Gedcom.php,
-    // same shape as the family-level version already ported.
-    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
-
-    visibleFacts.push({
-      tag,
-      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
-      time: timeMatch ? timeMatch[1] : '',
-      place: placeMatch ? placeMatch[1] : '',
-      address: addressMatch ? addressMatch[1] : '',
-      author: authorMatch ? authorMatch[1] : '',
-    });
+    visibleFacts.push(...familyFacts);
+    visibleFacts.sort((a, b) => a.sortYear - b.sortYear);
+  } catch (error) {
+    console.error('Failed to resolve family facts for individual:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
   }
 
   const individualViewModel = {
@@ -1129,18 +1116,19 @@ const UNKNOWN_NAME_HTML = '<span class="NAME" dir="auto" translate="no">…</spa
 
 /**
  * Resolves ONE family (a parent family or a spouse family, from
- * loadRelatedFamilyXrefs()) to a summary link for IndividualPage's new
- * "Families" section - reuses the exact same member-resolution and
- * family-level privacy chain handleFamilyPage() already uses below,
- * since a family referenced from an individual's page needs the
- * identical "every member must be showable" gate as the family's own
- * page (`familyCanShowRecord()`) - returns null if the family
- * shouldn't be shown to this viewer at all, matching how
- * Individual::childFamilies()/spouseFamilies() themselves already
- * filter via canShow() internally (app/GedcomRecord.php's target
- * resolution), not something IndividualPage does separately in PHP.
+ * loadRelatedFamilyXrefs()) fully - every member plus the family's own
+ * privacy gate - or null if the family shouldn't be shown to this
+ * viewer at all, matching how Individual::childFamilies()/
+ * spouseFamilies() themselves already filter via canShow() internally
+ * (app/GedcomRecord.php's target resolution), not something
+ * IndividualPage/FamilyPage do separately in PHP. Shared by
+ * resolveFamilySummary() (IndividualPage's "Families" tab link) and
+ * familyFactsForIndividual() (the individual's OWN Facts tab, which
+ * merges in facts from every showable spouse family - see that
+ * function's own doc comment) so both reuse the SAME single family
+ * load/member-resolution/privacy computation rather than querying twice.
  */
-async function resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref) {
+async function resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref) {
   const family = await loadFamily(pool, tree.gedcomId, familyXref);
 
   if (family === null) {
@@ -1165,11 +1153,126 @@ async function resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPref
     return null;
   }
 
-  const husbandVM = familyMemberViewModel(tree, husband);
-  const wifeVM = familyMemberViewModel(tree, wife);
+  return { family, facts, husband, wife, children, defaultResnInfo };
+}
+
+async function resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref) {
+  const shown = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
+
+  if (shown === null) {
+    return null;
+  }
+
+  const husbandVM = familyMemberViewModel(tree, shown.husband);
+  const wifeVM = familyMemberViewModel(tree, shown.wife);
   const titleHtml = `${husbandVM !== null ? husbandVM.fullNameHtml : UNKNOWN_NAME_HTML} + ${wifeVM !== null ? wifeVM.fullNameHtml : UNKNOWN_NAME_HTML}`;
 
-  return { titleHtml, url: `/tree/${tree.name}/family/${family.xref}` };
+  return { titleHtml, url: `/tree/${tree.name}/family/${shown.family.xref}` };
+}
+
+/**
+ * Mirrors Fact::canShow()-filtered, date/time/place/address/author-
+ * extracted fact rows - the exact shape renderFact() (individual-view.mjs/
+ * family-view.mjs) already expects. Shared so handleFamilyPage()'s own
+ * facts table and IndividualPage's Facts tab (both personal facts and,
+ * now, merged-in family facts) don't each hand-roll the same
+ * extraction loop three times.
+ *
+ * @param {string[]} facts already-filtered to the tags that should
+ *   display (e.g. via displayableFamilyFacts() or a VITAL_FACT_TAGS check)
+ * @param {{factResn: Map<string,string>, treeFactResn: Map<string,string>}} defaultResnInfo
+ * @param {number} accessLevel
+ * @returns {{tag: string, date: string, time: string, place: string, address: string, author: string, sortYear: number}[]}
+ */
+function extractVisibleFacts(facts, defaultResnInfo, accessLevel) {
+  const visibleFacts = [];
+
+  for (const fact of facts) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const placeMatch = /\n2 PLAC (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const addressMatch = /\n2 ADDR (.+)/.exec(fact);
+    // CHAN's own author sub-tag (app/GedcomRecord.php's updateChange()
+    // writes it as "2 _WT_USER <username>") - only ever meaningful on
+    // a CHAN fact, harmless to extract unconditionally elsewhere since
+    // no other tag carries it.
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+    const gedcomDate = dateMatch ? new GedcomDate(dateMatch[1]) : null;
+
+    visibleFacts.push({
+      tag,
+      date: gedcomDate ? displayDate(gedcomDate) : '',
+      time: timeMatch ? timeMatch[1] : '',
+      place: placeMatch ? placeMatch[1] : '',
+      address: addressMatch ? addressMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+      // A simple year-only sort key (undated facts sort last) - real
+      // PHP's FactSortService does a full date-precision-aware
+      // comparison; this migration doesn't port that whole comparator,
+      // just enough to put a family's MARR/RESI facts in roughly the
+      // right chronological position among an individual's own facts
+      // (the actual gap this extraction step exists to close), not a
+      // faithful full reproduction of the real sort.
+      sortYear: gedcomDate && gedcomDate.isOK() ? gedcomDate.minimumDate().yearValue() : Infinity,
+    });
+  }
+
+  return visibleFacts;
+}
+
+// Mirrors IndividualFactsTabModule::getTabContent()'s own hardcoded
+// family-metadata exclusion (app/Module/IndividualFactsTabModule.php:96):
+// a family's own CHAN/_UID/UID/SUBM facts are meaningless mixed into an
+// individual's personal timeline (CHAN in particular would misleadingly
+// read as "this person last changed", when it's really the FAMILY
+// record's own last-changed stamp) - excluded from the merge, not from
+// the family's own FamilyPage facts table (unaffected).
+const FAMILY_FACTS_EXCLUDED_ON_INDIVIDUAL_TAB = new Set(['CHAN', '_UID', 'UID', 'SUBM']);
+
+/**
+ * Mirrors IndividualFactsService::familyFacts() (app/Services/
+ * IndividualFactsService.php:66-72): every displayable fact from EVERY
+ * spouse family the individual belongs to (marriage, family residence,
+ * divorce, ...) gets merged into their own Facts and events tab, not
+ * just shown on the separate family page - the gap reported live
+ * (Miron Ophir's own page was missing his Marriage/Family residence
+ * facts, both of which live on his family record, not his own). Only
+ * spouse families (real PHP's own scope here) - not parent families
+ * (a person's own birth-family facts are the PARENTS' story, not
+ * theirs).
+ *
+ * @param {{gedcomId: number}} tree
+ * @param {object} treePrivacyPrefs
+ * @param {number} accessLevel
+ * @param {object} relPrefs
+ * @param {string[]} spouseFamilyXrefs
+ * @returns {Promise<ReturnType<typeof extractVisibleFacts>>}
+ */
+async function familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, relPrefs, spouseFamilyXrefs) {
+  const facts = [];
+
+  for (const familyXref of spouseFamilyXrefs) {
+    const shown = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
+
+    if (shown === null) {
+      continue;
+    }
+
+    const displayable = displayableFamilyFacts(shown.facts).filter(
+      (fact) => !FAMILY_FACTS_EXCLUDED_ON_INDIVIDUAL_TAB.has(/^1 (\S+)/.exec(fact)?.[1]),
+    );
+
+    facts.push(...extractVisibleFacts(displayable, shown.defaultResnInfo, accessLevel).map((fact) => ({ ...fact, fromFamily: true })));
+  }
+
+  return facts;
 }
 
 async function handleFamilyPage(req, res, treeName, xref) {
@@ -1262,35 +1365,7 @@ async function handleFamilyPage(req, res, treeName, xref) {
     return;
   }
 
-  const visibleFacts = [];
-
-  for (const fact of displayableFamilyFacts(facts)) {
-    const tag = /^1 (\S+)/.exec(fact)?.[1];
-    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
-
-    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
-      continue;
-    }
-
-    const dateMatch = /\n2 DATE (.+)/.exec(fact);
-    const placeMatch = /\n2 PLAC (.+)/.exec(fact);
-    const timeMatch = /\n3 TIME (.+)/.exec(fact);
-    const addressMatch = /\n2 ADDR (.+)/.exec(fact);
-    // CHAN's own author sub-tag (app/GedcomRecord.php's updateChange()
-    // writes it as "2 _WT_USER <username>") - only ever meaningful on
-    // a CHAN fact, harmless to extract unconditionally elsewhere since
-    // no other family-level tag carries it.
-    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
-
-    visibleFacts.push({
-      tag,
-      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
-      time: timeMatch ? timeMatch[1] : '',
-      place: placeMatch ? placeMatch[1] : '',
-      address: addressMatch ? addressMatch[1] : '',
-      author: authorMatch ? authorMatch[1] : '',
-    });
-  }
+  const visibleFacts = extractVisibleFacts(displayableFamilyFacts(facts), defaultResnInfo, accessLevel);
 
   const familyViewModel = {
     husband: familyMemberViewModel(tree, husband),

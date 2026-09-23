@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-23 (IndividualPage's full page structure, step 14a: photo box, Name/Gender accordion, and the complete 8-tab bar — the user asked for the page's real structure to be complete, not just growing one flat facts list). This is the entry point for "where are we" —
+**Last updated: 2026-09-23 (step 14a follow-up: the Facts tab now merges in facts from the individual's own spouse families — e.g. Marriage, Family residence — reported live as missing right after 14a shipped). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4460 tests, all green.
+# Expect: 4462 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>

@@ -83,6 +83,34 @@ const FACT_LABELS = {
   CHAN: 'Last change',
 };
 
+// A family fact merged onto the individual's own Facts tab (see
+// familyFactsForIndividual() in index.mjs) keeps its ORIGINAL record's
+// label, not the individual-level one - real PHP's Fact::label() looks
+// up `$this->record->tag() . ':' . $this->tag`, and `$fact->record()`
+// for a merged family fact is still the FAMILY, not the individual
+// viewing it (e.g. a family's own RESI is "Family residence", distinct
+// from an individual's own RESI = "Residence" - both real, different
+// tree-of-life). Verified against family-view.mjs's own FACT_LABELS
+// (not re-exported from there - this migration's convention is small
+// per-file label maps, not a shared registry).
+const FAMILY_FACT_LABELS = {
+  MARR: 'Marriage',
+  DIV: 'Divorce',
+  DIVF: 'Divorce filed',
+  ANUL: 'Annulment',
+  _SEPR: 'Separation',
+  ENGA: 'Engagement',
+  MARB: 'Marriage banns',
+  MARC: 'Marriage contract',
+  MARL: 'Marriage license',
+  MARS: 'Marriage settlement',
+  CENS: 'Family census',
+  RESI: 'Family residence',
+  EVEN: 'Event',
+  NCHI: 'Number of children',
+  CHAN: 'Last change',
+};
+
 /**
  * Matches resources/views/fact.phtml's ACTUAL row shape (a 2-column
  * `<th scope="row">` label / `<td>` value table, not the 3-column
@@ -101,8 +129,8 @@ const FACT_LABELS = {
  * (`fact-date.phtml`'s two-separate-`<span class="date">` rendering,
  * `AbstractElement::labelValue()`'s bolded-label markup).
  */
-function renderFact({ tag, date, time, place, address, author }) {
-  const label = FACT_LABELS[tag] ?? tag;
+function renderFact({ tag, date, time, place, address, author, fromFamily }) {
+  const label = (fromFamily ? FAMILY_FACT_LABELS[tag] : FACT_LABELS[tag]) ?? tag;
   const timeHtml = time ? ` – <span class="date">${escapeHtml(time)}</span>` : '';
   const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span>${timeHtml}</span>` : '';
   const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';

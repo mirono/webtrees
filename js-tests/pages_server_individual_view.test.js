@@ -418,6 +418,42 @@ describe('renderIndividualPage', () => {
       expect(html).toContain('<span class="date">November 9, 2018</span> – <span class="date">19:38:08</span>');
       expect(html).toContain('<span class="label">Author of last change</span>: <span class="value align-top">miron</span>');
     });
+
+    // Regression test: reported live - Miron Ophir's own page was
+    // missing his Marriage/Family residence facts, both of which live
+    // on his FAMILY record, not his own (index.mjs's
+    // familyFactsForIndividual() merges them in, tagged fromFamily).
+    // A family fact keeps its ORIGINAL record's label (e.g. "Family
+    // residence", not "Residence") - real PHP's Fact::label() looks up
+    // the fact's OWN record's tag prefix, not the viewing page's.
+    test('a merged-in family fact (fromFamily: true) uses the FAMILY-level label, distinct from the same tag on the individual\'s own record', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            facts: [
+              { tag: 'RESI', date: '27 APR 1996', place: 'Ramat Gan, Israel', fromFamily: true },
+              { tag: 'MARR', date: '17 AUG 1995', place: 'Kibutz Einat, Israel', fromFamily: true },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('Family residence');
+      expect(html).toContain('Marriage');
+      expect(html).not.toMatch(/wt-fact-label">Residence</);
+    });
+
+    test('the same RESI tag on the individual\'s OWN record (fromFamily unset) still uses the individual-level label', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: { ...baseParams().individual, facts: [{ tag: 'RESI', date: '1 JAN 2000', place: 'London' }] },
+        }),
+      );
+
+      expect(html).toContain('wt-fact-label">Residence');
+      expect(html).not.toContain('Family residence');
+    });
   });
 
   describe('the header, logged-in vs. anonymous', () => {

@@ -161,3 +161,60 @@ instead):
    verification passes, their settings/session rows) deleted
    afterward; `data/config.yaml` restored via the trap-guarded script
    pattern on every single run, confirmed via `grep dbhost` after each.
+
+## Follow-up fix (2026-09-23, same day): merge in family facts
+
+Reported live immediately after shipping: Miron Ophir's own Facts tab
+was missing his Marriage and Family residence facts (both real, both
+shown correctly on his separate FamilyPage). Root cause: real PHP's
+Facts and events tab doesn't only show an individual's OWN facts -
+`IndividualFactsService::familyFacts()` (`app/Services/
+IndividualFactsService.php:66-72`) merges in every displayable fact
+from EVERY spouse family the individual belongs to, sorted together
+with their personal facts. This migration's Facts tab only ever read
+`individual.gedcom`'s own facts.
+
+**Fixed** by reusing infrastructure already built for the Families
+tab: `index.mjs`'s existing family-resolution loop (`loadFamily()` +
+member privacy + `familyCanShowRecord()`, previously only producing a
+`{titleHtml, url}` summary) was refactored into a shared
+`resolveShownFamily()` returning the full resolved family (gedcom,
+members, `defaultResnInfo`), so `resolveFamilySummary()` (Families tab)
+and a new `familyFactsForIndividual()` (Facts tab) both reuse the SAME
+single family load/privacy computation rather than querying twice. A
+new shared `extractVisibleFacts()` (the `factCanShow()`-filtered,
+date/time/place/address/author-extraction loop, previously duplicated
+almost verbatim between `handleIndividualPage()` and
+`handleFamilyPage()`) is now used by both handlers plus the new merge
+path.
+
+Real PHP excludes a family's own `CHAN`/`_UID`/`UID`/`SUBM` from this
+merge (`IndividualFactsTabModule.php:96` - "Don't show family
+meta-data tags") - replicated via
+`FAMILY_FACTS_EXCLUDED_ON_INDIVIDUAL_TAB`, since a family's own
+"last changed" timestamp would misleadingly read as the *individual's*
+on their own timeline.
+
+**A markup subtlety found while fixing this**: a merged-in family fact
+keeps its ORIGINAL record's label, not the individual-level one - real
+PHP's `Fact::label()` looks up `$this->record->tag() . ':' . $this->tag`,
+and a merged family fact's `$fact->record()` is still the FAMILY, so
+e.g. `RESI` renders as "Family residence" (not "Residence") even
+though it's showing up on the individual's own page. `individual-view.mjs`
+gained a small `FAMILY_FACT_LABELS` map and a `fromFamily` flag on each
+fact entry to pick the right one.
+
+**Sort order simplification (documented, not silently approximate)**:
+real PHP's `FactSortService` is a full date-precision-aware comparator,
+also interleaving `relativeFacts()`/`associateFacts()`/`historicFacts()`
+(niche timeline features not ported at all here). This fix does a
+simple year-only ascending sort (undated facts sort last) - enough to
+put a family's Marriage/Residence facts in roughly the right
+chronological position among personal facts (the actual gap being
+closed), not a faithful full reproduction of the real sort.
+
+Live-verified against Miron Ophir's real page again: Facts tab now
+shows Birth (1963) → Marriage (1995) → Family residence with its real
+address (1996) → Last change (2018), in correct chronological order,
+with the family's own `CHAN` correctly excluded (no duplicate "Last
+change" row). Full JS suite: **4462 tests, green** (4460 + 2 new).
