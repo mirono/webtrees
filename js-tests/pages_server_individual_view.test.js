@@ -34,8 +34,10 @@ function baseParams(overrides = {}) {
       facts: [],
       extraInformationFacts: [],
       familyNavigator: { parentFamilies: [], spouseFamilies: [] },
-      parentFamilies: [],
-      spouseFamilies: [],
+      familiesTab: { parentFamilies: [], spouseFamilies: [] },
+      sourcesTab: [],
+      notesTab: [],
+      mediaImages: [],
     },
     ...overrides,
   };
@@ -260,71 +262,147 @@ describe('renderIndividualPage', () => {
       expect(html).toContain('<div id="tab-facts" class="tab-pane mt-2 fade show active"');
     });
 
-    test('stub tabs (Sources/Notes/Media/Album/Interactive tree/Places) show the "not yet available" placeholder', () => {
+    test('the 2 permanently-stubbed tabs (Interactive tree/Places) show the "not yet available" placeholder', () => {
       const html = renderIndividualPage(baseParams());
       const stubCount = html.split('This feature has not been migrated yet.').length - 1;
 
-      // 6 permanently-stubbed tabs + Facts (empty facts list) + Families
-      // (no related families) + Extra information (no matching facts)
-      // all also falling back to the same placeholder in this default
-      // (empty) fixture.
-      expect(stubCount).toBe(9);
+      // 2 permanently-stubbed tabs + Facts (empty facts list) +
+      // Families (no related families) + Extra information (no
+      // matching facts) all also falling back to the same placeholder
+      // in this default (empty) fixture. Sources/Notes/Media/Album now
+      // have their own real empty-state messages instead (see the
+      // dedicated tests below), not this shared stub text.
+      expect(stubCount).toBe(5);
+    });
+
+    test('Sources/Notes/Media/Album show their own real empty-state messages, not the generic stub', () => {
+      const html = renderIndividualPage(baseParams());
+
+      expect(html).toContain('There are no source citations for this individual.');
+      expect(html).toContain('There are no notes for this individual.');
+      expect(html.split('There are no media objects for this individual.').length - 1).toBe(2); // Media + Album
     });
   });
 
   describe('the Families tab', () => {
+    function familyMember(name, xref, sex = 'M') {
+      return {
+        fullNameHtml: `<span class="NAME" dir="auto" translate="no">${name}</span>`,
+        sex,
+        birthSummary: 'Birth: 12 AUG 1870, London',
+        url: `/tree/ophir/individual/${xref}`,
+      };
+    }
+
     test('shows the stub placeholder when there are no related families', () => {
       const html = renderIndividualPage(baseParams());
 
       expect(html).toContain('id="tab-families"');
+      expect(html).toContain('This feature has not been migrated yet.');
     });
 
-    test('renders a parent family with a "Parents" label, linking to the family page', () => {
+    test('renders a parent family with a "Parents" label, real member cards, and a link to the family page', () => {
       const html = renderIndividualPage(
         baseParams({
           individual: {
             ...baseParams().individual,
-            parentFamilies: [{ titleHtml: '<span class="NAME">Dad</span> + <span class="NAME">Mom</span>', url: '/tree/ophir/family/F1' }],
+            familiesTab: {
+              parentFamilies: [
+                {
+                  label: 'Parents',
+                  url: '/tree/ophir/family/F1',
+                  husband: familyMember('Dad', 'I1', 'M'),
+                  wife: familyMember('Mom', 'I2', 'F'),
+                  children: [],
+                  facts: [],
+                },
+              ],
+              spouseFamilies: [],
+            },
           },
         }),
       );
 
       expect(html).toContain('Parents');
       expect(html).toContain('href="/tree/ophir/family/F1"');
-      expect(html).toContain('<span class="NAME">Dad</span> + <span class="NAME">Mom</span>');
+      expect(html).toContain('wt-chart-box wt-chart-box-m');
+      expect(html).toContain('wt-chart-box wt-chart-box-f');
+      expect(html).toContain('Dad');
+      expect(html).toContain('Mom');
+      expect(html).toContain('href="/tree/ophir/individual/I1"');
     });
 
-    test('renders a spouse family with a "Spouse family" label', () => {
+    test('renders a spouse family with a "Spouse family" label and each child\'s own card', () => {
       const html = renderIndividualPage(
         baseParams({
           individual: {
             ...baseParams().individual,
-            spouseFamilies: [{ titleHtml: '<span class="NAME">John</span> + <span class="NAME">Jane</span>', url: '/tree/ophir/family/F2' }],
+            familiesTab: {
+              parentFamilies: [],
+              spouseFamilies: [
+                {
+                  label: 'Spouse family',
+                  url: '/tree/ophir/family/F2',
+                  husband: familyMember('John', 'I3', 'M'),
+                  wife: familyMember('Jane', 'I4', 'F'),
+                  children: [familyMember('Kid', 'I5', 'M')],
+                  facts: [],
+                },
+              ],
+            },
           },
         }),
       );
 
       expect(html).toContain('Spouse family');
       expect(html).toContain('href="/tree/ophir/family/F2"');
+      expect(html).toContain('Kid');
+      expect(html).toContain('href="/tree/ophir/individual/I5"');
     });
 
-    test('renders multiple parent and spouse families, each on their own row', () => {
+    test('a null husband or wife renders the unknown-name placeholder card, not a broken link', () => {
       const html = renderIndividualPage(
         baseParams({
           individual: {
             ...baseParams().individual,
-            parentFamilies: [{ titleHtml: 'Family A', url: '/tree/ophir/family/F1' }],
-            spouseFamilies: [
-              { titleHtml: 'Family B', url: '/tree/ophir/family/F2' },
-              { titleHtml: 'Family C', url: '/tree/ophir/family/F3' },
-            ],
+            familiesTab: {
+              parentFamilies: [],
+              spouseFamilies: [
+                { label: 'Spouse family', url: '/tree/ophir/family/F2', husband: null, wife: familyMember('Jane', 'I4', 'F'), children: [], facts: [] },
+              ],
+            },
           },
         }),
       );
 
-      expect(html).toContain('Family A');
-      expect(html).toContain('Family B');
-      expect(html).toContain('Family C');
+      expect(html).toContain('…');
+      expect(html).not.toContain('href="/tree/ophir/individual/undefined"');
+    });
+
+    test("renders the family's own vital facts (e.g. Marriage) below the member cards, with the family-level label", () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            familiesTab: {
+              parentFamilies: [],
+              spouseFamilies: [
+                {
+                  label: 'Spouse family',
+                  url: '/tree/ophir/family/F2',
+                  husband: familyMember('John', 'I3', 'M'),
+                  wife: familyMember('Jane', 'I4', 'F'),
+                  children: [],
+                  facts: [{ tag: 'MARR', date: '17 AUG 1995', place: 'London', fromFamily: true }],
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('Marriage');
+      expect(html).toContain('17 AUG 1995');
     });
   });
 
@@ -447,6 +525,22 @@ describe('renderIndividualPage', () => {
       expect(html).not.toMatch(/wt-fact-label">Residence</);
     });
 
+    // Regression test: reported live - a real family record can carry
+    // a tag app/Gedcom.php never defines for FAM (e.g. FAM:EMIG/
+    // FAM:IMMI - non-standard but real GEDCOM usage found in the
+    // imported tree). An earlier draft fell back to the bare tag
+    // ("EMIG"); real PHP's own UnknownElement fallback is the full
+    // colon path ("FAM:EMIG").
+    test('an unknown family-level tag falls back to the full "FAM:<TAG>" path, not the bare tag', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: { ...baseParams().individual, facts: [{ tag: 'EMIG', date: '20 FEB 1933', place: 'Warszawa, Poland', fromFamily: true }] },
+        }),
+      );
+
+      expect(html).toContain('FAM:EMIG');
+    });
+
     test('the same RESI tag on the individual\'s OWN record (fromFamily unset) still uses the individual-level label', () => {
       const html = renderIndividualPage(
         baseParams({
@@ -456,6 +550,108 @@ describe('renderIndividualPage', () => {
 
       expect(html).toContain('wt-fact-label">Residence');
       expect(html).not.toContain('Family residence');
+    });
+  });
+
+  describe('the Sources tab', () => {
+    test('renders a fact\'s label and each cited source, linked by real title', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            sourcesTab: [
+              {
+                tag: 'BIRT',
+                fromFamily: false,
+                sourceLinks: [{ url: '/tree/ophir/source/S1', nameHtml: '<span class="NAME">Birth Certificate</span>' }],
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('wt-tab-sources');
+      expect(html).toContain('>Birth');
+      expect(html).toContain('href="/tree/ophir/source/S1"');
+      expect(html).toContain('Birth Certificate');
+    });
+
+    test('a family-derived item uses the family-level label', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            sourcesTab: [{ tag: 'MARR', fromFamily: true, sourceLinks: [{ url: '/tree/ophir/source/S2', nameHtml: 'Marriage Record' }] }],
+          },
+        }),
+      );
+
+      expect(html).toContain('Marriage');
+    });
+  });
+
+  describe('the Notes tab', () => {
+    test('renders inline note text', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            notesTab: [{ tag: 'BIRT', fromFamily: false, notes: [{ isShared: false, text: 'Born at home' }] }],
+          },
+        }),
+      );
+
+      expect(html).toContain('wt-tab-notes');
+      expect(html).toContain('Born at home');
+      expect(html).not.toContain('Shared note');
+    });
+
+    test('marks a shared note distinctly from inline text', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            notesTab: [{ tag: 'BIRT', fromFamily: false, notes: [{ isShared: true, text: 'A real shared note' }] }],
+          },
+        }),
+      );
+
+      expect(html).toContain('Shared note');
+      expect(html).toContain('A real shared note');
+    });
+
+    test('escapes note text and preserves line breaks', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            notesTab: [{ tag: 'BIRT', fromFamily: false, notes: [{ isShared: false, text: '<script>alert(1)</script>\nline two' }] }],
+          },
+        }),
+      );
+
+      expect(html).not.toContain('<script>alert(1)</script>');
+      expect(html).toContain('&lt;script&gt;');
+      expect(html).toContain('<br>line two');
+    });
+  });
+
+  describe('the Media and Album tabs', () => {
+    test('renders the same images in both tabs, in different layouts', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            mediaImages: [{ thumbnailUrl: '/thumb.jpg', srcset: '/thumb2x.jpg 2x', alt: 'John DOE' }],
+          },
+        }),
+      );
+
+      expect(html).toContain('wt-tab-media');
+      expect(html).toContain('wt-tab-album');
+      expect(html.split('src="/thumb.jpg"').length - 1).toBe(2);
+      // Media renders a table row; Album renders a bare gallery tile.
+      expect(html).toContain('wt-media-tile');
     });
   });
 

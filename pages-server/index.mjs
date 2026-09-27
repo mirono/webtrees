@@ -120,6 +120,7 @@ import {
   repositoryCanShowRecord,
   sourceCanShowRecord,
 } from './source.mjs';
+import { loadNote, noteCanShowRecord, noteText } from './note.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -792,6 +793,41 @@ const VITAL_FACT_TAGS = [
 // three (app/Module/IndividualMetadataModule.php:38-53,97-100) - so
 // real PHP never shows them on the main Facts tab either.
 
+/**
+ * Resolved media files -> real signed thumbnail URLs (200x260 crop,
+ * 2x/3x/4x srcset) - shared by the photo box (step 14a) and the
+ * Media/Album tabs (step 14c), since both need the exact same
+ * signature-building call, just for a different set of source images.
+ * Skips the glide-key lookup entirely when there's nothing to sign.
+ *
+ * @param {{mediaXref: string, factId: string}[]} imageFiles
+ * @param {{name: string}} tree
+ * @param {number} accessLevel
+ * @param {{showNoWatermark: number}} treePrivacyPrefs
+ * @param {string} altText
+ * @returns {Promise<{thumbnailUrl: string, srcset: string, alt: string}[]>}
+ */
+async function buildThumbnails(imageFiles, tree, accessLevel, treePrivacyPrefs, altText) {
+  if (imageFiles.length === 0) {
+    return [];
+  }
+
+  const glideKey = await loadGlideKey(pool);
+  const watermark = needsWatermark(accessLevel, treePrivacyPrefs.showNoWatermark);
+
+  return imageFiles.map((file) => {
+    const baseParams = { xref: file.mediaXref, treeName: tree.name, factId: file.factId, fit: 'crop', needsWatermark: watermark };
+
+    return {
+      thumbnailUrl: mediaThumbnailUrl({ ...baseParams, width: 200, height: 260 }, glideKey, siteUrlConfig),
+      srcset: [2, 3, 4]
+        .map((density) => `${mediaThumbnailUrl({ ...baseParams, width: 200 * density, height: 260 * density }, glideKey, siteUrlConfig)} ${density}x`)
+        .join(','),
+      alt: altText,
+    };
+  });
+}
+
 async function handleIndividualPage(req, res, treeName, xref) {
   if (req.method !== 'GET') {
     res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
@@ -890,17 +926,18 @@ async function handleIndividualPage(req, res, treeName, xref) {
     return;
   }
 
-  // "Families" section (new step: closes the navigation loop back to
-  // FamilyPage - see docs/php-to-js-migration/phase5-individual-page-families.md).
+  // "Families" tab (phase 5 step 14c - docs/php-to-js-migration/
+  // phase5-individual-page-full.md): real per-member cards + the
+  // family's own vital facts, upgraded from step 11's flat link list.
   // Mirrors RelativesTabModule's parent_families/spouse_families
-  // (app/Module/RelativesTabModule.php:61-71), reduced to a flat list
-  // of links - no step-families (adoption-driven second parent/spouse
-  // sets, app/Individual.php's spouseStepFamilies()/childStepFamilies(),
-  // a rarer relationship type this v1 doesn't chase), no
-  // SHOW_PRIVATE_RELATIONSHIPS bypass (same accepted, display-only cut
-  // already made for FamilyPage's own member cards).
-  let parentFamilies;
-  let spouseFamilies;
+  // (app/Module/RelativesTabModule.php:61-71) - no step-families
+  // (adoption-driven second parent/spouse sets,
+  // app/Individual.php's spouseStepFamilies()/childStepFamilies(), a
+  // rarer relationship type this v1 doesn't chase), no
+  // SHOW_PRIVATE_RELATIONSHIPS bypass, no edit affordances (add/
+  // reorder - modules/relatives/tab.phtml's own `can_edit` block, same
+  // "no editing capability yet" cut already made everywhere else).
+  let familiesTab;
   let parentFamilyXrefs;
   let spouseFamilyXrefs;
 
@@ -909,21 +946,24 @@ async function handleIndividualPage(req, res, treeName, xref) {
 
     parentFamilyXrefs = relatedFamilyXrefs.parentFamilies;
     spouseFamilyXrefs = relatedFamilyXrefs.spouseFamilies;
-    parentFamilies = [];
-    for (const familyXref of relatedFamilyXrefs.parentFamilies) {
-      const summary = await resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
-      if (summary !== null) {
-        parentFamilies.push(summary);
+
+    const parentFamilies = [];
+    for (const familyXref of parentFamilyXrefs) {
+      const family = await resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, 'Parents');
+      if (family !== null) {
+        parentFamilies.push(family);
       }
     }
 
-    spouseFamilies = [];
-    for (const familyXref of relatedFamilyXrefs.spouseFamilies) {
-      const summary = await resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
-      if (summary !== null) {
-        spouseFamilies.push(summary);
+    const spouseFamilies = [];
+    for (const familyXref of spouseFamilyXrefs) {
+      const family = await resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, 'Spouse family');
+      if (family !== null) {
+        spouseFamilies.push(family);
       }
     }
+
+    familiesTab = { parentFamilies, spouseFamilies };
   } catch (error) {
     console.error('Failed to resolve related families:', error);
     res.writeHead(502, { 'content-type': 'text/plain' });
@@ -961,25 +1001,7 @@ async function handleIndividualPage(req, res, treeName, xref) {
     });
     const imageFiles = await loadFactsMedia(pool, tree.gedcomId, objeFacts);
 
-    let glideKey = null;
-
-    if (imageFiles.length > 0) {
-      glideKey = await loadGlideKey(pool);
-    }
-
-    const watermark = needsWatermark(accessLevel, treePrivacyPrefs.showNoWatermark);
-
-    photoImages = imageFiles.map((file) => {
-      const baseParams = { xref: file.mediaXref, treeName: tree.name, factId: file.factId, fit: 'crop', needsWatermark: watermark };
-
-      return {
-        thumbnailUrl: mediaThumbnailUrl({ ...baseParams, width: 200, height: 260 }, glideKey, siteUrlConfig),
-        srcset: [2, 3, 4]
-          .map((density) => `${mediaThumbnailUrl({ ...baseParams, width: 200 * density, height: 260 * density }, glideKey, siteUrlConfig)} ${density}x`)
-          .join(','),
-        alt: fullNameHtml.replace(/<[^>]*>/g, ''),
-      };
-    });
+    photoImages = await buildThumbnails(imageFiles, tree, accessLevel, treePrivacyPrefs, fullNameHtml.replace(/<[^>]*>/g, ''));
   } catch (error) {
     console.error('Failed to resolve individual media:', error);
     res.writeHead(502, { 'content-type': 'text/plain' });
@@ -1086,6 +1108,41 @@ async function handleIndividualPage(req, res, treeName, xref) {
     return;
   }
 
+  // Sources/Notes/Media/Album tabs (phase 5 step 14c) - all four share
+  // the same "own facts + every showable spouse family's own facts"
+  // base pool (see ownAndSpouseFamilyShowableFacts()'s own doc comment).
+  let sourcesTab;
+  let notesTab;
+  let mediaImages;
+
+  try {
+    const factPairs = await ownAndSpouseFamilyShowableFacts(
+      tree,
+      treePrivacyPrefs,
+      accessLevel,
+      relPrefs,
+      facts,
+      defaultResnInfo,
+      spouseFamilyXrefs,
+    );
+
+    sourcesTab = await sourcesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs);
+    notesTab = await notesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs);
+
+    const mediaFiles = await loadFactsMedia(
+      pool,
+      tree.gedcomId,
+      factPairs.map(({ fact }) => fact),
+    );
+
+    mediaImages = await buildThumbnails(mediaFiles, tree, accessLevel, treePrivacyPrefs, fullNameHtml.replace(/<[^>]*>/g, ''));
+  } catch (error) {
+    console.error('Failed to resolve sources/notes/media tabs:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
   const individualViewModel = {
     xref: individual.xref,
     fullNameHtml,
@@ -1099,8 +1156,10 @@ async function handleIndividualPage(req, res, treeName, xref) {
     facts: visibleFacts,
     extraInformationFacts,
     familyNavigator,
-    parentFamilies,
-    spouseFamilies,
+    familiesTab,
+    sourcesTab,
+    notesTab,
+    mediaImages,
   };
 
   const csrfToken = user !== null ? generateCsrfToken() : null;
@@ -1202,11 +1261,14 @@ const UNKNOWN_NAME_HTML = '<span class="NAME" dir="auto" translate="no">…</spa
  * spouseFamilies() themselves already filter via canShow() internally
  * (app/GedcomRecord.php's target resolution), not something
  * IndividualPage/FamilyPage do separately in PHP. Shared by
- * resolveFamilySummary() (IndividualPage's "Families" tab link) and
+ * resolveFamiliesTabFamily() (IndividualPage's own "Families" tab),
+ * resolveFamilyNavigatorFamily() (the Family navigator sidebar), and
  * familyFactsForIndividual() (the individual's OWN Facts tab, which
  * merges in facts from every showable spouse family - see that
- * function's own doc comment) so both reuse the SAME single family
- * load/member-resolution/privacy computation rather than querying twice.
+ * function's own doc comment) so all three reuse the SAME single
+ * family load/member-resolution/privacy computation rather than each
+ * querying separately (a known, accepted redundancy across sections of
+ * the same page request, not eliminated by a page-level cache here).
  */
 async function resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref) {
   const family = await loadFamily(pool, tree.gedcomId, familyXref);
@@ -1236,18 +1298,39 @@ async function resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs,
   return { family, facts, husband, wife, children, defaultResnInfo };
 }
 
-async function resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref) {
+/**
+ * The Families tab's own per-family entry (phase 5 step 14c) - real
+ * member cards (reusing familyMemberViewModel(), the exact shape
+ * already built for FamilyPage's own husband/wife/children cards) plus
+ * the family's own displayable facts (MARR/RESI/etc, the exact same
+ * extraction already shared with FamilyPage and the Facts-tab merge) -
+ * upgraded from step 11's flat "husband + wife" link summary.
+ *
+ * @param {string} label 'Parents' or 'Spouse family' - matches the
+ *   labels already used by the Family navigator sidebar and (before
+ *   this step) the flat list this replaces; real PHP computes a
+ *   fuller label via Individual::getChildFamilyLabel()/
+ *   getSpouseFamilyLabel() (e.g. distinguishing "Adoptive parents"),
+ *   not ported - same "small hardcoded set, not the full label engine"
+ *   cut as the Family navigator's own relationship labels.
+ */
+async function resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, label) {
   const shown = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
 
   if (shown === null) {
     return null;
   }
 
-  const husbandVM = familyMemberViewModel(tree, shown.husband);
-  const wifeVM = familyMemberViewModel(tree, shown.wife);
-  const titleHtml = `${husbandVM !== null ? husbandVM.fullNameHtml : UNKNOWN_NAME_HTML} + ${wifeVM !== null ? wifeVM.fullNameHtml : UNKNOWN_NAME_HTML}`;
+  const facts = extractVisibleFacts(displayableFamilyFacts(shown.facts), shown.defaultResnInfo, accessLevel);
 
-  return { titleHtml, url: `/tree/${tree.name}/family/${shown.family.xref}` };
+  return {
+    label,
+    url: `/tree/${tree.name}/family/${shown.family.xref}`,
+    husband: familyMemberViewModel(tree, shown.husband),
+    wife: familyMemberViewModel(tree, shown.wife),
+    children: shown.children.map((child) => familyMemberViewModel(tree, child)).filter((child) => child !== null),
+    facts,
+  };
 }
 
 /**
@@ -1451,6 +1534,172 @@ async function familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, rel
   }
 
   return facts;
+}
+
+/**
+ * @param {string[]} facts
+ * @param {{factResn: Map<string,string>, treeFactResn: Map<string,string>}} defaultResnInfo
+ * @param {number} accessLevel
+ * @returns {string[]}
+ */
+function showableRawFacts(facts, defaultResnInfo, accessLevel) {
+  return facts.filter((fact) => {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    return factCanShow(fact, accessLevel, resolvedDefaultResn);
+  });
+}
+
+/**
+ * The common base pool the Sources/Notes/Media/Album tabs all scan:
+ * this individual's own facts PLUS every showable spouse family's own
+ * facts (SourcesTabModule::getFactsWithSources(), NotesTabModule's
+ * equivalent, and MediaTabModule::getFactsWithMedia() - app/Module/
+ * *TabModule.php - all three start from this exact same "own + spouse
+ * family" pool before applying their own tag-specific regex). Reuses
+ * resolveShownFamily() a fourth time (see that function's own doc
+ * comment on the accepted per-section redundancy). Each fact keeps a
+ * `fromFamily` flag so a tab that needs the family-level label (e.g.
+ * Sources/Notes showing which fact a citation/note came from) can
+ * pick the right one, same convention as the Facts-tab merge.
+ *
+ * @returns {Promise<{fact: string, fromFamily: boolean}[]>}
+ */
+async function ownAndSpouseFamilyShowableFacts(tree, treePrivacyPrefs, accessLevel, relPrefs, ownFacts, ownDefaultResnInfo, spouseFamilyXrefs) {
+  const showable = showableRawFacts(ownFacts, ownDefaultResnInfo, accessLevel).map((fact) => ({ fact, fromFamily: false }));
+
+  for (const familyXref of spouseFamilyXrefs) {
+    const shown = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
+
+    if (shown !== null) {
+      showable.push(...showableRawFacts(shown.facts, shown.defaultResnInfo, accessLevel).map((fact) => ({ fact, fromFamily: true })));
+    }
+  }
+
+  return showable;
+}
+
+/**
+ * Sources tab items (phase 5 step 14c) - every showable own/spouse-
+ * family fact with a SOUR citation anywhere in its own text (own
+ * top-level `1 SOUR @Sx@` or a nested `2 SOUR @Sx@` sub-citation),
+ * each resolved to its cited source(s)' real title + link. Mirrors
+ * SourcesTabModule's own detection regex (app/Module/SourcesTabModule.php:
+ * 114); simplified from real PHP's own rendering (no PAGE/DATA/QUAY
+ * citation details, no "show all sources" collapsible toggle) to a
+ * flat label + linked source title list. A cited source's own privacy
+ * uses sourceCanShowRecord() with an EMPTY repo-results array - the
+ * "does this source's own referenced repository ALSO have to be
+ * showable" cascade isn't replicated here (a narrow, documented
+ * simplification: the only way this could differ from full fidelity
+ * is a source hidden SOLELY because of an unshowable referenced
+ * repository still showing its title here - its own RESN chain is
+ * still fully enforced).
+ *
+ * @param {{fact: string, fromFamily: boolean}[]} factPairs
+ * @returns {Promise<{tag: string, fromFamily: boolean, sourceLinks: {url: string, nameHtml: string}[]}[]>}
+ */
+async function sourcesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs) {
+  const viewer = { accessLevel, isSelfRecord: false };
+  const items = [];
+
+  for (const { fact, fromFamily } of factPairs) {
+    if (!/(?:^1|\n\d) SOUR/.test(fact)) {
+      continue;
+    }
+
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const sourceXrefs = [...new Set([...fact.matchAll(/\d SOUR @([^@]+)@/g)].map((match) => match[1]))];
+    const sourceLinks = [];
+
+    for (const sourceXref of sourceXrefs) {
+      const source = await loadSource(pool, tree.gedcomId, sourceXref);
+
+      if (source === null) {
+        continue;
+      }
+
+      const sourceDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, source.xref);
+      const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: sourceDefaultResnInfo.individualResn };
+
+      if (!sourceCanShowRecord(treeForPrivacy, source.gedcom, viewer, sourceDefaultResnInfo.treeFactResn, [])) {
+        continue;
+      }
+
+      const titleName = extractNameFromFact(source.gedcom, 'TITL');
+      const nameHtml = titleName !== null ? titleName.full : `<span class="NAME" dir="auto" translate="no">${source.xref}</span>`;
+
+      sourceLinks.push({ url: `/tree/${tree.name}/source/${source.xref}`, nameHtml });
+    }
+
+    if (sourceLinks.length > 0) {
+      items.push({ tag, fromFamily, sourceLinks });
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Notes tab items (phase 5 step 14c) - every showable own/spouse-
+ * family fact with a NOTE anywhere in its own text, each resolved to
+ * its note text(s): a shared `@Nxref@` reference resolved to the real
+ * note's own text (subject to its own privacy via noteCanShowRecord()),
+ * or inline text shown as-is. Mirrors NotesTabModule's own detection
+ * (app/Module/NotesTabModule.php's `INDI:NOTE`/`FAM:NOTE` top-level
+ * check, or a nested NOTE sub-tag on another fact,
+ * resources/views/modules/notes/tab.phtml:35,58); simplified
+ * similarly to Sources (no "show all notes" toggle, no edit links, no
+ * SubmitterText markdown-ish formatting - plain escaped text).
+ *
+ * @param {{fact: string, fromFamily: boolean}[]} factPairs
+ * @returns {Promise<{tag: string, fromFamily: boolean, notes: {isShared: boolean, text: string}[]}[]>}
+ */
+async function notesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs) {
+  const viewer = { accessLevel, isSelfRecord: false };
+  const items = [];
+
+  for (const { fact, fromFamily } of factPairs) {
+    const noteMatches = [...`\n${fact}`.matchAll(/\n[1-9] NOTE ?(.*(?:\n\d CONT.*)*)/g)];
+
+    if (noteMatches.length === 0) {
+      continue;
+    }
+
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const notes = [];
+
+    for (const match of noteMatches) {
+      const text = match[1].replace(/\n\d CONT ?/g, '\n');
+      const xrefMatch = /^@([^@]+)@$/.exec(text.trim());
+
+      if (xrefMatch) {
+        const note = await loadNote(pool, tree.gedcomId, xrefMatch[1]);
+
+        if (note === null) {
+          continue;
+        }
+
+        const noteDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, note.xref);
+        const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: noteDefaultResnInfo.individualResn };
+
+        if (!noteCanShowRecord(treeForPrivacy, note.gedcom, viewer, noteDefaultResnInfo.treeFactResn)) {
+          continue;
+        }
+
+        notes.push({ isShared: true, text: noteText(note.gedcom) });
+      } else if (text.trim() !== '') {
+        notes.push({ isShared: false, text });
+      }
+    }
+
+    if (notes.length > 0) {
+      items.push({ tag, fromFamily, notes });
+    }
+  }
+
+  return items;
 }
 
 async function handleFamilyPage(req, res, treeName, xref) {

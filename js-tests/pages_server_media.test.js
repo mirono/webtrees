@@ -191,6 +191,24 @@ describe('loadFactsMedia', () => {
     expect(result[1].mediaXref).toBe('M2');
   });
 
+  // Regression-guarding test: MediaTabModule scans for OBJE at ANY
+  // nesting level, not just a top-level fact (app/Module/
+  // MediaTabModule.php:110 - `(?:^1|\n\d) OBJE`) - a photo attached to
+  // e.g. a BIRT event (`1 BIRT\n2 OBJE @M1@`) must still surface on
+  // the Media/Album tabs.
+  test('resolves a NESTED OBJE reference too (e.g. attached to a BIRT event), not just a top-level fact', async () => {
+    const pool = mockPool(async (sql, params) => {
+      const xref = params[0];
+      return { rows: [{ m_id: xref, m_gedcom: `0 @${xref}@ OBJE\n1 FILE ${xref}.jpg` }] };
+    });
+
+    const facts = ['1 BIRT\n2 DATE 1 JAN 1900\n2 OBJE @M1@'];
+    const result = await loadFactsMedia(pool, 1, facts);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].mediaXref).toBe('M1');
+  });
+
   test('a broken OBJE reference (media record does not exist) is silently skipped', async () => {
     const pool = mockPool(async () => ({ rows: [] }));
 

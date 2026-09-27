@@ -202,14 +202,17 @@ export function mediaThumbnailUrl({ xref, treeName, factId, width, height, fit, 
 
 /**
  * Mirrors the OBJE-fact resolution IndividualPage::handle() does inline
- * (app/Http/RequestHandlers/IndividualPage.php): for every `1 OBJE
- * @Mn@` fact in `facts`, load the referenced Media record and take its
+ * for the photo box (app/Http/RequestHandlers/IndividualPage.php -
+ * direct `1 OBJE @Mn@` facts only) AND MediaTabModule::getFactsWithMedia()'s
+ * broader scan for the Media/Album tabs (app/Module/MediaTabModule.php:
+ * 99-114 - `OBJE @Xref@` at ANY nesting level, e.g. `2 OBJE @M1@` under
+ * a BIRT fact, not just a top-level fact). Every `OBJE @Mn@` reference
+ * found in a fact's own text resolves to the referenced Media record's
  * firstImageFile() - a broken/missing reference or a media record with
  * no qualifying image file is silently skipped, same as real PHP's own
  * `instanceof` checks. Deliberately takes an already-`parseFacts()`'d
- * array rather than a raw gedcom blob so the SAME function can resolve
- * a family's spouse-facts too, not just an individual's own (needed by
- * the Media/Album tabs - phase 5 step 14c).
+ * array rather than a raw gedcom blob so the SAME function resolves a
+ * family's spouse-facts too, not just an individual's own.
  *
  * @param {import('pg').Pool} pool
  * @param {number} gedcomId
@@ -220,22 +223,24 @@ export async function loadFactsMedia(pool, gedcomId, facts) {
   const images = [];
 
   for (const fact of facts) {
-    const match = /^1 OBJE @([^@]+)@/.exec(fact);
+    // A leading "\n" lets the SAME pattern match the fact's own first
+    // line (no real preceding newline there) as well as any nested
+    // sub-line - mirrors MediaTabModule's own `(?:^1|\n\d) OBJE` shape,
+    // collapsed into one pattern.
+    const matches = `\n${fact}`.matchAll(/\n\d OBJE @([^@]+)@/g);
 
-    if (!match) {
-      continue;
-    }
+    for (const match of matches) {
+      const media = await loadMedia(pool, gedcomId, match[1]);
 
-    const media = await loadMedia(pool, gedcomId, match[1]);
+      if (media === null) {
+        continue;
+      }
 
-    if (media === null) {
-      continue;
-    }
+      const imageFile = firstImageFile(mediaFiles(media.gedcom));
 
-    const imageFile = firstImageFile(mediaFiles(media.gedcom));
-
-    if (imageFile !== null) {
-      images.push({ mediaXref: media.xref, ...imageFile });
+      if (imageFile !== null) {
+        images.push({ mediaXref: media.xref, ...imageFile });
+      }
     }
   }
 

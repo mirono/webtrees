@@ -1,6 +1,6 @@
 # Phase 5, step 14: IndividualPage full-page structure
 
-**Status: steps 14a and 14b done and verified live (2026-09-23/27), against a real user-imported GEDCOM tree.**
+**Status: steps 14a, 14b, and 14c done and verified live (2026-09-23/27), against a real user-imported GEDCOM tree. Places and Interactive tree remain permanently stubbed (confirmed with the user).**
 
 ## Why this step exists
 
@@ -289,3 +289,82 @@ the original reference screenshot. Extra information correctly shows
 his own `CHAN` (Last change, with date/time/author), and the main
 Facts tab no longer shows it (no duplicate "Last change" row anywhere
 on the page). Full JS suite: **4487 tests, green** (4462 + 25 new).
+
+## Step 14c: Families/Sources/Notes/Media/Album tab content
+
+Closes out step 14's plan: the last four stubbed tabs (plus a richer
+Families tab) now have real content, using a shared "own facts +
+every showable spouse family's own facts" base pool
+(`ownAndSpouseFamilyShowableFacts()`) that mirrors
+`SourcesTabModule`/`NotesTabModule`/`MediaTabModule`'s own identical
+starting point (`app/Module/*TabModule.php`), each then applying its
+own tag-specific regex on top.
+
+**Families tab**: upgraded from step 11's flat "husband + wife" link
+to real per-member cards (reusing `familyMemberViewModel()`, the exact
+shape already built for FamilyPage's own cards) plus the family's own
+displayable facts underneath - genuinely embedding a mini FamilyPage
+per related family, closer to real PHP's `modules/relatives/family.phtml`
+than the old flat list, though still without its edit affordances or
+step-family support.
+
+**Sources tab**: every showable fact (own or spouse-family) with a
+`SOUR` citation anywhere in its own text - own top-level
+`1 SOUR @Sx@` or a nested `2 SOUR @Sx@` sub-citation - resolved to its
+cited source(s)' real title, linked to the already-built SourcePage.
+Simplified from real PHP's own rendering (`modules/sources_tab/tab.phtml`):
+no PAGE/DATA/QUAY citation detail, no "show all sources" collapsible
+toggle. A cited source's privacy check omits the "is its own
+referenced repository also showable" cascade (an empty array passed
+to the already-built `sourceCanShowRecord()`) - a narrow, documented
+gap: a source hidden *solely* because of an unshowable repository
+would still show its title here, though its own RESN chain is still
+fully enforced.
+
+**Notes tab**: every showable fact with a `NOTE` anywhere in its own
+text, each note resolved to its real text - a shared `@Nxref@`
+reference resolved via a new `pages-server/note.mjs` (mirrors
+`source.mjs`'s own `loadRepository()`/`repositoryCanShowRecord()`
+shape exactly: no dedicated table, stored in `wt_other` with
+`o_type='NOTE'`; no `canShowByType()` override, same base-`GedcomRecord`
+privacy as Repository), or inline text shown as-is. Simplified from
+`modules/notes/tab.phtml`: no "show all notes" toggle, no
+`SubmitterText` markdown-ish formatting (plain escaped text with line
+breaks preserved).
+
+**Media/Album tabs**: reuse step 14a's exact thumbnail-signing
+mechanism (`media.mjs`'s `loadFactsMedia()`/`mediaThumbnailUrl()`), now
+scanning the full own+spouse-family pool instead of just the
+individual's own top-level `OBJE` facts. `loadFactsMedia()` was
+widened to detect `OBJE @Xref@` at **any** nesting level (e.g.
+`2 OBJE @M1@` under a `BIRT` event), matching `MediaTabModule`'s own
+detection regex (`app/Module/MediaTabModule.php:110`) - the step 14a
+photo box is unaffected, since it already pre-filters to only
+top-level-`OBJE`-tagged facts before calling the widened function.
+Album is a near-trivial wrapper reusing the exact same resolved images
+in a gallery-grid layout instead of a table (matching
+`AlbumModule extends MediaTabModule` in real PHP) - no lightbox
+click-to-enlarge popup, same cut already made for the photo box.
+
+**A real labeling bug found live, not by unit tests**: `FAM:EMIG` and
+`FAM:IMMI` (real migration events recorded on a family record in the
+imported tree - unusual but valid GEDCOM usage) have no element
+definition in `app/Gedcom.php` at all. An initial draft fell back to
+the bare tag ("EMIG") for any unrecognized family-level fact; real
+PHP's own `UnknownElement` fallback is the **full colon path**
+("FAM:EMIG"), matching the same convention already established for
+Extra information's `_UID` and SourcePage's own subtag fallbacks.
+Fixed in both `renderFact()`'s `fromFamily` branch and the new tabs'
+shared `tabItemLabel()` helper.
+
+Live-verified against two real individuals: Miron Ophir's own page
+(Sources tab shows his real birth-certificate-style citations linked
+to their real titles) and Arie Leib Gutgold's page (`I000005`, chosen
+for its unusually rich real data) - Notes tab shows his real family
+history note (a multi-paragraph Hebrew/English story about a rabbi and
+the Holocaust) plus PLAC-level "Latitude/Longitude/Gubernia" notes on
+several events; Media and Album tabs both correctly show his 8 real
+linked photos (across his own record and his first marriage's family
+record) with real signed thumbnail URLs; the `FAM:EMIG`/`FAM:IMMI`
+fix was confirmed directly against this same real data. Full JS
+suite: **4506 tests, green** (4487 + 19 new).

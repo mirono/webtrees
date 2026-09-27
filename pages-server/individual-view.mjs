@@ -15,20 +15,19 @@
 
 // Hand-rolled HTML for /tree/{tree}/individual/{xref} - a replica of
 // resources/views/individual-page*.phtml's real STRUCTURE (photo box,
-// Name/Gender accordion, full tabs bar), same convention as
-// tree-view.mjs (dir="ltr", escapeHtml(), CSRF meta tag only when
-// logged in). See docs/php-to-js-migration/phase5-individual-page-full.md
-// (phase 5, step 14a) for the full scope: every real section is
-// present - nothing silently missing - but not every tab has real
-// content yet. Facts and events (refined from the earlier flat-page
-// version) and Families (today's existing simplified family-links
-// list, relocated into its own tab) have real data; Sources/Notes/
-// Media/Album are stubbed pending step 14c; Places/Interactive tree
+// Name/Gender accordion, full tabs bar, right-hand sidebar), same
+// convention as tree-view.mjs (dir="ltr", escapeHtml(), CSRF meta tag
+// only when logged in). See docs/php-to-js-migration/
+// phase5-individual-page-full.md (phase 5, steps 14a-14c) for the full
+// scope: every real section is present - nothing silently missing.
+// Facts and events, Families, Sources, Notes, Media, and Album all
+// have real data (each simplified from real PHP's own richer
+// rendering - no edit affordances, no citation/PAGE/DATA/QUAY detail,
+// no collapsible "show all" toggles - see each tab's own render
+// function for its specific scope note); Places and Interactive tree
 // are permanently stubbed (each is its own disproportionately large
 // subsystem - a Leaflet map and an SVG pedigree-drawing widget - out
-// of scope for this migration for now, confirmed with the user). The
-// right-hand sidebar (Family navigator + Extra information) lands in
-// step 14b.
+// of scope for this migration for now, confirmed with the user).
 
 import { createHash } from 'node:crypto';
 
@@ -39,6 +38,11 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
 }
+
+// Matches family-view.mjs's own placeholder for a missing/unlinked
+// spouse - not shared/exported (this migration's convention is small
+// per-file duplicates over a shared registry).
+const UNKNOWN_NAME_HTML = '<span class="NAME" dir="auto" translate="no">…</span>';
 
 // Verified against app/Gedcom.php's real 'INDI:TAG' element
 // definitions (the I18N::translate() argument each entry passes), not
@@ -81,6 +85,12 @@ const FACT_LABELS = {
   NMR: 'Number of marriages',
   SSN: 'Social security number',
   CHAN: 'Last change',
+  // Not shown on the main Facts tab (SOUR/NOTE are excluded there,
+  // same as real PHP's own tab/sidebar routing) - needed here because
+  // the Sources/Notes tabs' OWN items can be a top-level `1 SOUR @Sx@`
+  // or `1 NOTE ...` fact, which uses this SAME label lookup.
+  SOUR: 'Source citation',
+  NOTE: 'Note',
 };
 
 // A family fact merged onto the individual's own Facts tab (see
@@ -109,6 +119,10 @@ const FAMILY_FACT_LABELS = {
   EVEN: 'Event',
   NCHI: 'Number of children',
   CHAN: 'Last change',
+  // See FACT_LABELS's own SOUR/NOTE entries - 'FAM:SOUR'/'FAM:NOTE'
+  // resolve to the same real translated label as 'INDI:SOUR'/'INDI:NOTE'.
+  SOUR: 'Source citation',
+  NOTE: 'Note',
 };
 
 // The "Extra information" sidebar's own tag set (IndividualMetadataModule
@@ -158,7 +172,13 @@ function renderFact({ tag, value, date, time, place, address, author, fromFamily
   let label;
 
   if (fromFamily) {
-    label = FAMILY_FACT_LABELS[tag] ?? tag;
+    // Confirmed live: a real family record can carry a tag app/Gedcom.php
+    // never defines for FAM (e.g. FAM:EMIG/FAM:IMMI - non-standard but
+    // real GEDCOM usage) - real PHP's own UnknownElement fallback is
+    // the FULL colon path (FAM:<TAG>), not the bare tag, same
+    // convention already established for Extra info's _UID and
+    // SourcePage's own subtag fallbacks.
+    label = FAMILY_FACT_LABELS[tag] ?? `FAM:${tag}`;
   } else if (isExtraInfo) {
     label = EXTRA_INFO_LABELS[tag] ?? `INDI:${tag}`;
   } else {
@@ -196,50 +216,84 @@ function renderFact({ tag, value, date, time, place, address, author, fromFamily
 }
 
 /**
- * Families TAB content (relocated here from what used to be its own
- * inline page section - see this file's top doc comment). Mirrors
- * RelativesTabModule's parent_families/spouse_families
- * (app/Module/RelativesTabModule.php), reduced to a flat list of links
- * rather than the full per-member chart-box + relationship-name
- * rendering `modules/relatives/family.phtml` does (that's effectively
- * re-embedding FamilyPage's own member cards inline - deferred to step
- * 14c, which upgrades this tab's content quality without changing
- * where it lives). Reuses the real `wt-facts-table`/`table table-sm`
- * wrapper classes rather than inventing new ones.
+ * One member's card within a Families-tab family - same real
+ * chart-box.phtml classes already verified for FamilyPage's own
+ * husband/wife/children cards (family-view.mjs's renderMemberCard(),
+ * not exported from there - this migration's convention is small
+ * per-file duplicates over a shared registry). A null member (missing/
+ * unlinked spouse) renders the same "unknown name" placeholder
+ * FamilyPage itself uses.
  *
- * @param {{titleHtml: string, url: string}[]} parentFamilies
- * @param {{titleHtml: string, url: string}[]} spouseFamilies
+ * @param {{fullNameHtml: string, sex: string, birthSummary: string, url: string}|null} member
  * @returns {string}
  */
-function renderFamiliesTabContent(parentFamilies, spouseFamilies) {
-  if (parentFamilies.length === 0 && spouseFamilies.length === 0) {
+function renderFamiliesTabMemberCard(member) {
+  if (member === null) {
+    return `
+        <div class="wt-chart-box">${UNKNOWN_NAME_HTML}</div>`;
+  }
+
+  const factsHtml = member.birthSummary
+    ? `
+            <div class="wt-chart-box-facts">
+                <div class="wt-chart-box-fact small">${escapeHtml(member.birthSummary)}</div>
+            </div>`
+    : '';
+
+  return `
+        <div class="wt-chart-box wt-chart-box-${escapeHtml(member.sex.toLowerCase())}">
+            <div class="wt-chart-box-name"><a href="${escapeHtml(member.url)}">${member.fullNameHtml}</a></div>${factsHtml}
+        </div>`;
+}
+
+/**
+ * One family's full entry within the Families tab - real per-member
+ * cards (husband/wife/children, reusing FamilyPage's own chart-box
+ * rendering) plus the family's own displayable facts (MARR/RESI/etc,
+ * the same extraction shared with FamilyPage and the Facts-tab merge -
+ * see index.mjs's resolveFamiliesTabFamily()), upgraded from step 11's
+ * flat "husband + wife" link. No step-families, no edit affordances
+ * (add/re-order) - modules/relatives/family.phtml's own `can_edit`
+ * block, same "no editing capability yet" cut as everywhere else.
+ *
+ * @param {{label: string, url: string, husband: object|null, wife: object|null, children: object[], facts: object[]}} family
+ * @returns {string}
+ */
+function renderFamiliesTabFamily({ label, url, husband, wife, children, facts }) {
+  const childrenHtml = children.map(renderFamiliesTabMemberCard).join('');
+  const factsHtml =
+    facts.length > 0
+      ? `
+        <table class="table table-sm wt-facts-table">
+            <tbody>${facts.map((fact) => renderFact({ ...fact, fromFamily: true })).join('')}
+            </tbody>
+        </table>`
+      : '';
+
+  return `
+    <div class="wt-family">
+        <h4>${escapeHtml(label)} — <a href="${escapeHtml(url)}">View this family</a></h4>
+        <div class="wt-chart-box-list d-flex flex-wrap">${renderFamiliesTabMemberCard(husband)}${renderFamiliesTabMemberCard(wife)}${childrenHtml}
+        </div>${factsHtml}
+    </div>`;
+}
+
+/**
+ * Families TAB content - real per-member cards for each parent/spouse
+ * family (see renderFamiliesTabFamily()), upgraded from step 11's flat
+ * link list (phase 5 step 14c).
+ *
+ * @param {{parentFamilies: object[], spouseFamilies: object[]}} familiesTab
+ * @returns {string}
+ */
+function renderFamiliesTabContent({ parentFamilies, spouseFamilies }) {
+  const families = [...parentFamilies, ...spouseFamilies];
+
+  if (families.length === 0) {
     return '<p>This feature has not been migrated yet.</p>';
   }
 
-  const parentRows = parentFamilies
-    .map(
-      (family) => `
-        <tr>
-            <th scope="row">Parents</th>
-            <td><a href="${escapeHtml(family.url)}">${family.titleHtml}</a></td>
-        </tr>`,
-    )
-    .join('');
-  const spouseRows = spouseFamilies
-    .map(
-      (family) => `
-        <tr>
-            <th scope="row">Spouse family</th>
-            <td><a href="${escapeHtml(family.url)}">${family.titleHtml}</a></td>
-        </tr>`,
-    )
-    .join('');
-
-  return `
-    <table class="table table-sm wt-facts-table">
-        <tbody>${parentRows}${spouseRows}
-        </tbody>
-    </table>`;
+  return families.map(renderFamiliesTabFamily).join('');
 }
 
 /**
@@ -409,6 +463,167 @@ function renderNameGenderAccordion({ names, sexId, sexValueLabel }) {
         </div>`;
 }
 
+/**
+ * A tab item's own label - matches whichever tag-label map its source
+ * fact actually belongs to (same fromFamily convention as renderFact()).
+ *
+ * @param {string} tag
+ * @param {boolean} fromFamily
+ * @returns {string}
+ */
+function tabItemLabel(tag, fromFamily) {
+  // See renderFact()'s own fromFamily branch for why the raw-path
+  // fallback differs by origin (FAM:<TAG> vs bare <TAG>).
+  return fromFamily ? (FAMILY_FACT_LABELS[tag] ?? `FAM:${tag}`) : (FACT_LABELS[tag] ?? tag);
+}
+
+/**
+ * Sources tab content (phase 5 step 14c) - matches
+ * modules/sources_tab/tab.phtml's real `wt-tab-sources`/`wt-facts-table`
+ * wrapper, simplified to a flat label + linked source title list (no
+ * PAGE/DATA/QUAY citation details, no "show all sources" toggle - see
+ * index.mjs's sourcesTabItems() for the full scope note).
+ *
+ * @param {{tag: string, fromFamily: boolean, sourceLinks: {url: string, nameHtml: string}[]}[]} items
+ * @returns {string}
+ */
+function renderSourcesTab(items) {
+  if (items.length === 0) {
+    return '<p>There are no source citations for this individual.</p>';
+  }
+
+  const rowsHtml = items
+    .map(({ tag, fromFamily, sourceLinks }) => {
+      const linksHtml = sourceLinks.map(({ url, nameHtml }) => `<div><a href="${escapeHtml(url)}">${nameHtml}</a></div>`).join('');
+
+      return `
+        <tr>
+            <th scope="row">${escapeHtml(tabItemLabel(tag, fromFamily))}</th>
+            <td>${linksHtml}</td>
+        </tr>`;
+    })
+    .join('');
+
+  return `
+    <div class="wt-tab-sources">
+        <table class="table wt-facts-table">
+            <tbody>${rowsHtml}
+            </tbody>
+        </table>
+    </div>`;
+}
+
+/**
+ * Notes tab content (phase 5 step 14c) - matches
+ * modules/notes/tab.phtml's real `wt-tab-notes`/`wt-facts-table`
+ * wrapper, simplified to a flat label + note-text list (shared notes
+ * marked with the real "Shared note" wording, plain escaped text - no
+ * "show all notes" toggle, no SubmitterText markdown-ish formatting).
+ *
+ * @param {{tag: string, fromFamily: boolean, notes: {isShared: boolean, text: string}[]}[]} items
+ * @returns {string}
+ */
+function renderNotesTab(items) {
+  if (items.length === 0) {
+    return '<p>There are no notes for this individual.</p>';
+  }
+
+  const rowsHtml = items
+    .map(({ tag, fromFamily, notes }) => {
+      const notesHtml = notes
+        .map(({ isShared, text }) => {
+          const body = escapeHtml(text).replaceAll('\n', '<br>');
+
+          return isShared ? `<div class="mb-2"><em>Shared note</em>: ${body}</div>` : `<div class="mb-2">${body}</div>`;
+        })
+        .join('');
+
+      return `
+        <tr>
+            <th scope="row">${escapeHtml(tabItemLabel(tag, fromFamily))}</th>
+            <td>${notesHtml}</td>
+        </tr>`;
+    })
+    .join('');
+
+  return `
+    <div class="wt-tab-notes">
+        <table class="table wt-facts-table">
+            <tbody>${rowsHtml}
+            </tbody>
+        </table>
+    </div>`;
+}
+
+/**
+ * One image, shared by the Media tab (a labeled row) and the Album
+ * tab (a bare gallery tile) - see the `gallery` flag.
+ *
+ * @param {{thumbnailUrl: string, srcset: string, alt: string}} image
+ * @param {boolean} gallery
+ * @returns {string}
+ */
+function renderMediaImage({ thumbnailUrl, srcset, alt }, gallery) {
+  const imgHtml = `<img dir="auto" src="${escapeHtml(thumbnailUrl)}" srcset="${escapeHtml(srcset)}" alt="${escapeHtml(alt)}" class="img-thumbnail img-fluid${gallery ? '' : ' w-100'}">`;
+
+  if (!gallery) {
+    return `
+        <tr>
+            <td>${imgHtml}</td>
+        </tr>`;
+  }
+
+  return `
+        <div class="wt-media-tile me-2 mb-2">${imgHtml}
+        </div>`;
+}
+
+/**
+ * Media tab content (phase 5 step 14c) - matches
+ * modules/media/tab.phtml's real `wt-tab-media`/`wt-facts-table`
+ * wrapper, simplified to a bare thumbnail list (no PAGE/TYPE citation
+ * details, no "show all media" toggle - reuses the exact same signed-
+ * thumbnail-URL images the photo box already builds, see media.mjs's
+ * own doc comment for why no Node-side image processing is needed).
+ *
+ * @param {{thumbnailUrl: string, srcset: string, alt: string}[]} images
+ * @returns {string}
+ */
+function renderMediaTab(images) {
+  if (images.length === 0) {
+    return '<p>There are no media objects for this individual.</p>';
+  }
+
+  return `
+    <div class="wt-tab-media">
+        <table class="table wt-facts-table">
+            <tbody>${images.map((image) => renderMediaImage(image, false)).join('')}
+            </tbody>
+        </table>
+    </div>`;
+}
+
+/**
+ * Album tab content (phase 5 step 14c) - AlbumModule extends
+ * MediaTabModule (app/Module/AlbumModule.php), reusing the SAME
+ * underlying image data as the Media tab, laid out as a gallery grid
+ * (resources/views/modules/lightbox/tab.phtml) instead of a table -
+ * simplified to a bare thumbnail grid, no lightbox click-to-enlarge
+ * popup (same "no lightbox" cut already made for the photo box).
+ *
+ * @param {{thumbnailUrl: string, srcset: string, alt: string}[]} images
+ * @returns {string}
+ */
+function renderAlbumTab(images) {
+  if (images.length === 0) {
+    return '<p>There are no media objects for this individual.</p>';
+  }
+
+  return `
+    <div class="wt-tab-album d-flex flex-wrap">${images.map((image) => renderMediaImage(image, true)).join('')}
+    </div>`;
+}
+
 // The 8 real ModuleTabInterface tabs (app/Module/*TabModule.php,
 // AlbumModule, InteractiveTreeModule, PlacesModule), in their real
 // defaultTabOrder() (confirmed by reading each module class directly -
@@ -419,10 +634,10 @@ function renderNameGenderAccordion({ names, sexId, sexValueLabel }) {
 const TAB_DEFINITIONS = [
   { id: 'tab-facts', title: 'Facts and events' },
   { id: 'tab-families', title: 'Families' },
-  { id: 'tab-sources', title: 'Sources', stub: true },
-  { id: 'tab-notes', title: 'Notes', stub: true },
-  { id: 'tab-media', title: 'Media', stub: true },
-  { id: 'tab-album', title: 'Album', stub: true },
+  { id: 'tab-sources', title: 'Sources' },
+  { id: 'tab-notes', title: 'Notes' },
+  { id: 'tab-media', title: 'Media' },
+  { id: 'tab-album', title: 'Album' },
   { id: 'tab-interactive-tree', title: 'Interactive tree', stub: true },
   { id: 'tab-places', title: 'Places', stub: true },
 ];
@@ -447,8 +662,15 @@ const TAB_DEFINITIONS = [
  *   the shared stub placeholder.
  * @returns {string}
  */
-function renderTabs({ factsHtml, familiesHtml }) {
-  const tabContent = { 'tab-facts': factsHtml, 'tab-families': familiesHtml };
+function renderTabs({ factsHtml, familiesHtml, sourcesHtml, notesHtml, mediaHtml, albumHtml }) {
+  const tabContent = {
+    'tab-facts': factsHtml,
+    'tab-families': familiesHtml,
+    'tab-sources': sourcesHtml,
+    'tab-notes': notesHtml,
+    'tab-media': mediaHtml,
+    'tab-album': albumHtml,
+  };
   const stubHtml = '<p>This feature has not been migrated yet.</p>';
 
   const navItemsHtml = TAB_DEFINITIONS.map(
@@ -622,8 +844,10 @@ function renderSidebar({ extraInformationHtml, familyNavigatorHtml }) {
  *   facts: {tag: string, date: string, time: string, place: string, address: string, author: string}[],
  *   extraInformationFacts: object[],
  *   familyNavigator: {parentFamilies: object[], spouseFamilies: object[]},
- *   parentFamilies: {titleHtml: string, url: string}[],
- *   spouseFamilies: {titleHtml: string, url: string}[],
+ *   familiesTab: {parentFamilies: object[], spouseFamilies: object[]},
+ *   sourcesTab: object[],
+ *   notesTab: object[],
+ *   mediaImages: {thumbnailUrl: string, srcset: string, alt: string}[],
  * }} params.individual `fullNameHtml` and each name's `full` are
  *   PRE-ESCAPED SAFE HTML (see pages-server/individual.mjs's addName())
  *   - inserted RAW, never passed through escapeHtml() again. `titleHtml`
@@ -659,7 +883,7 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
   const sexId = createHash('md5').update(`__sex__${individual.xref}`).digest('hex');
   const nameGenderHtml = renderNameGenderAccordion({ names: individual.names, sexId, sexValueLabel: individual.sexValueLabel });
 
-  const familiesHtml = renderFamiliesTabContent(individual.parentFamilies, individual.spouseFamilies);
+  const familiesHtml = renderFamiliesTabContent(individual.familiesTab);
   const factsHtml =
     individual.facts.length > 0
       ? `
@@ -668,7 +892,11 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
         </tbody>
     </table>`
       : '<p>This feature has not been migrated yet.</p>';
-  const tabsHtml = renderTabs({ factsHtml, familiesHtml });
+  const sourcesHtml = renderSourcesTab(individual.sourcesTab);
+  const notesHtml = renderNotesTab(individual.notesTab);
+  const mediaHtml = renderMediaTab(individual.mediaImages);
+  const albumHtml = renderAlbumTab(individual.mediaImages);
+  const tabsHtml = renderTabs({ factsHtml, familiesHtml, sourcesHtml, notesHtml, mediaHtml, albumHtml });
 
   const sidebarHtml = renderSidebar({
     extraInformationHtml: renderExtraInformation(individual.extraInformationFacts),
