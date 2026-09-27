@@ -1,6 +1,6 @@
 # Phase 5, step 14: IndividualPage full-page structure
 
-**Status: step 14a done and verified live (2026-09-23), against a real user-imported GEDCOM tree.**
+**Status: steps 14a and 14b done and verified live (2026-09-23/27), against a real user-imported GEDCOM tree.**
 
 ## Why this step exists
 
@@ -218,3 +218,74 @@ shows Birth (1963) → Marriage (1995) → Family residence with its real
 address (1996) → Last change (2018), in correct chronological order,
 with the family's own `CHAN` correctly excluded (no duplicate "Last
 change" row). Full JS suite: **4462 tests, green** (4460 + 2 new).
+
+## Step 14b: Family navigator + Extra information sidebars
+
+Ships the right-hand sidebar column: a two-item accordion (Extra
+information, collapsed by default; Family navigator, forced open,
+matching real PHP's own `individual-page-sidebars.phtml` exactly).
+
+**Family navigator** mirrors `modules/family_nav/sidebar-family.phtml`'s
+real per-family mini-table (captioned, linked to the family page; one
+row per spouse then per child; sex-colored rows; name+lifespan linked
+in the data cell; a "you are here" user icon for the page's own
+subject) - but with **deliberately simplified relationship labels**
+instead of porting `RelationshipService::getCloseRelationshipName()`'s
+full BFS + language-aware naming engine (a real, substantial subsystem
+of its own). A small hardcoded set in `individual.mjs`
+(`parentRelationshipLabel()`/`spouseRelationshipLabel()`/
+`childRelationshipLabel()`/`siblingRelationshipLabel()`/
+`selfRelationshipLabel()`) covers exactly the relationship shapes the
+navigator actually needs: father/mother/husband/wife/son/daughter,
+"himself"/"herself" for the self row, and - the one piece of real
+age-ordering this migration DOES replicate, since the reference
+screenshot showed it - an "elder"/"younger" prefix for siblings,
+computed via simple birth-year comparison rather than the full
+relationship-path engine. No step-families, no grandparent/in-law
+dropdowns (real PHP's `sidebar-family.phtml` nests a dropdown of a
+spouse's own parents, or a child's own spouse+children - out of scope
+here, a real but narrow feature).
+
+Reuses `resolveShownFamily()` (already shared by the Families tab and
+step 14a's family-facts merge) a THIRD time here - each parent/spouse
+family is independently re-resolved per sidebar section rather than
+sharing one resolution across the whole page request, a known,
+accepted minor inefficiency (consistent with how the Families tab and
+Facts-tab merge already each independently resolve the same families)
+rather than a premature cross-section cache.
+
+**Extra information** mirrors `IndividualMetadataModule`'s tag set
+(`AFN/ANCI/CHAN/DESI/IDNO/REFN/RESN/RFN/RIN/SSN/SUBM/_UID/_FSFTID/_WEBTAG`),
+reusing the exact same `extractVisibleFacts()`/`renderFact()`
+machinery as the Facts tab (a new `factPlainValue()` in `individual.mjs`
+- generalized from what used to be SourcePage's private
+`sourceFactValue()` - supplies the plain-text VALUE these mostly-bare-
+value facts need, which event-shaped facts like `BIRT` never needed
+before). Wrapped in the same `wt-facts-table` shape used everywhere
+else in this migration, rather than reproducing real PHP's bare
+`<hr>`-joined `<div>` layout - a deliberate, documented divergence.
+`CHAN`/`IDNO`/`SSN` are now excluded from `VITAL_FACT_TAGS` (the main
+Facts tab), since they're owned by this sidebar now - the exact
+exclusion mechanism real PHP itself uses
+(`IndividualFactsTabModule` excludes every tag any enabled sidebar's
+`supportedFacts()` claims).
+
+**A markup subtlety, found by reading real PHP directly, not guessed**:
+`ANCI`/`DESI`/`SUBM` are `XrefSubmitter`-typed elements (a cross-
+reference to a Submitter record) - this migration has no Submitter
+page, so their value renders as the raw `@Sxref@` text rather than a
+resolved link, a narrow, documented simplification. `_UID`/`_FSFTID`/
+`_WEBTAG` have no defined element in real PHP either (custom tags) -
+fall back to the raw `INDI:<TAG>` path, same `UnknownElement`-fallback
+convention already established for SourcePage's own subtag handling.
+
+Live-verified against Miron Ophir's real page: his Family navigator
+now shows his real parent family (father Raphael Ophir 1935–2006,
+mother Sara Granek 1938–2018, himself with the self icon, younger
+sister Dafna Ophir 1967–, younger brother Arie Ophir 1971–) and his
+real spouse family (himself, wife Yael Ryvka Koblinsky 1970–, three
+real sons each correctly labeled "son" and linked) - an exact match to
+the original reference screenshot. Extra information correctly shows
+his own `CHAN` (Last change, with date/time/author), and the main
+Facts tab no longer shows it (no duplicate "Last change" row anywhere
+on the page). Full JS suite: **4487 tests, green** (4462 + 25 new).

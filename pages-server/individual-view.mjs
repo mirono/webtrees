@@ -111,6 +111,31 @@ const FAMILY_FACT_LABELS = {
   CHAN: 'Last change',
 };
 
+// The "Extra information" sidebar's own tag set (IndividualMetadataModule
+// ::HANDLED_FACTS, app/Module/IndividualMetadataModule.php:38-53),
+// labels verified against app/Gedcom.php's real 'INDI:TAG' definitions.
+// _UID/_FSFTID/_WEBTAG have no defined element in real PHP either
+// (custom tags) - fall back to the raw "INDI:<TAG>" path, same
+// UnknownElement-fallback convention already used for SourcePage's own
+// otherFactAttributes(). ANCI/DESI/SUBM are really submitter
+// cross-references (XrefSubmitter); this migration has no Submitter
+// page, so their value renders as plain text (the raw "@Sxref@"
+// reference) rather than a link - a deliberate, narrow simplification.
+export const EXTRA_INFO_TAGS = ['AFN', 'ANCI', 'CHAN', 'DESI', 'IDNO', 'REFN', 'RESN', 'RFN', 'RIN', 'SSN', 'SUBM', '_UID', '_FSFTID', '_WEBTAG'];
+const EXTRA_INFO_LABELS = {
+  AFN: 'Ancestral file number',
+  ANCI: 'Ancestors interest',
+  CHAN: 'Last change',
+  DESI: 'Descendants interest',
+  IDNO: 'Identification number',
+  REFN: 'Reference number',
+  RESN: 'Restriction',
+  RFN: 'Record file number',
+  RIN: 'Record ID number',
+  SSN: 'Social security number',
+  SUBM: 'Submitter',
+};
+
 /**
  * Matches resources/views/fact.phtml's ACTUAL row shape (a 2-column
  * `<th scope="row">` label / `<td>` value table, not the 3-column
@@ -129,8 +154,18 @@ const FAMILY_FACT_LABELS = {
  * (`fact-date.phtml`'s two-separate-`<span class="date">` rendering,
  * `AbstractElement::labelValue()`'s bolded-label markup).
  */
-function renderFact({ tag, date, time, place, address, author, fromFamily }) {
-  const label = (fromFamily ? FAMILY_FACT_LABELS[tag] : FACT_LABELS[tag]) ?? tag;
+function renderFact({ tag, value, date, time, place, address, author, fromFamily, isExtraInfo }) {
+  let label;
+
+  if (fromFamily) {
+    label = FAMILY_FACT_LABELS[tag] ?? tag;
+  } else if (isExtraInfo) {
+    label = EXTRA_INFO_LABELS[tag] ?? `INDI:${tag}`;
+  } else {
+    label = FACT_LABELS[tag] ?? tag;
+  }
+
+  const valueHtml = value ? `<div class="wt-fact-value">${escapeHtml(value)}</div>` : '';
   const timeHtml = time ? ` – <span class="date">${escapeHtml(time)}</span>` : '';
   const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span>${timeHtml}</span>` : '';
   const placeHtml = place ? `<div class="wt-fact-place">${escapeHtml(place)}</div>` : '';
@@ -150,6 +185,7 @@ function renderFact({ tag, date, time, place, address, author, fromFamily }) {
             </th>
             <td>
                 <div class="wt-fact-main-attributes">
+                    ${valueHtml}
                     ${dateHtml}
                     ${placeHtml}
                     ${addressHtml}
@@ -440,6 +476,135 @@ function renderTabs({ factsHtml, familiesHtml }) {
 }
 
 /**
+ * One relationship row (a spouse or a child) within one family navigator
+ * table - matches modules/family_nav/sidebar-family.phtml's real
+ * per-row markup exactly (sex-colored row class, a "you are here" user
+ * icon for the self row in the label cell, name+lifespan always shown
+ * in the data cell since every member here already passed the family's
+ * own privacy gate before reaching this function).
+ *
+ * @param {{label: string, isSelf: boolean, fullNameHtml: string, lifespanText: string, url: string, sex: 'M'|'F'|'X'|'U', rowType: 'parent'|'child'}} row
+ * @returns {string}
+ */
+function renderFamilyNavigatorRow({ label, isSelf, fullNameHtml, lifespanText, url, sex: memberSex, rowType }) {
+  const rowClass = rowType === 'parent' ? 'wt-family-navigator-parent' : 'wt-family-navigator-child';
+  const selfIconHtml = isSelf ? ' <span class="icon-selected"><span class="wt-icon-user"><i class="fa-solid fa-user"></i></span></span>' : '';
+
+  return `
+        <tr class="text-center ${rowClass} wt-sex-${escapeHtml(memberSex.toLowerCase())}">
+            <th class="align-middle wt-family-navigator-label" scope="row">
+                ${escapeHtml(label)}${selfIconHtml}
+            </th>
+            <td class="wt-family-navigator-name">
+                <a href="${escapeHtml(url)}">${fullNameHtml}</a>
+                <div class="small">${escapeHtml(lifespanText)}</div>
+            </td>
+        </tr>`;
+}
+
+/**
+ * One family's table within the Family navigator sidebar - matches
+ * modules/family_nav/sidebar-family.phtml's real outer structure (a
+ * captioned mini facts-table, not a full chart-box).
+ *
+ * @param {{titleHtml: string, url: string, rows: object[]}} family
+ * @returns {string}
+ */
+function renderFamilyNavigatorFamily({ titleHtml, url, rows }) {
+  return `
+    <table class="table table-sm wt-facts-table wt-family-navigator-family">
+        <caption class="text-center wt-family-navigator-family-heading">
+            <a href="${escapeHtml(url)}">${titleHtml}</a>
+        </caption>
+        <tbody>${rows.map(renderFamilyNavigatorRow).join('')}
+        </tbody>
+    </table>`;
+}
+
+/**
+ * The "Family navigator" sidebar accordion item's content - matches
+ * modules/family_nav/sidebar.phtml's real structure: parent families
+ * first, then spouse families (no step-families - see this file's top
+ * doc comment for the deliberate scope cut).
+ *
+ * @param {{parentFamilies: object[], spouseFamilies: object[]}} familyNavigator
+ * @returns {string}
+ */
+function renderFamilyNavigator({ parentFamilies, spouseFamilies }) {
+  return `
+    <div class="wt-sidebar-content wt-sidebar-family-navigator">${[...parentFamilies, ...spouseFamilies].map(renderFamilyNavigatorFamily).join('')}
+    </div>`;
+}
+
+/**
+ * The "Extra information" sidebar accordion item's content - matches
+ * IndividualMetadataModule::getSidebarContent()'s tag set
+ * (AFN/ANCI/CHAN/DESI/IDNO/REFN/RESN/RFN/RIN/SSN/SUBM/_UID/_FSFTID/
+ * _WEBTAG), reusing the same renderFact() row shape as the Facts tab
+ * (real PHP joins bare `<hr>`-separated fact partials instead - this
+ * migration wraps them in the same wt-facts-table shape used
+ * everywhere else, a deliberate, documented divergence rather than
+ * reproducing the bare-div layout).
+ *
+ * @param {object[]} facts
+ * @returns {string}
+ */
+function renderExtraInformation(facts) {
+  if (facts.length === 0) {
+    return '<p>This feature has not been migrated yet.</p>';
+  }
+
+  return `
+    <table class="table wt-facts-table">
+        <tbody>${facts.map((fact) => renderFact({ ...fact, isExtraInfo: true })).join('')}
+        </tbody>
+    </table>`;
+}
+
+// Real names/order: individual-page-sidebars.phtml iterates enabled
+// ModuleSidebarInterface modules - "family_nav" (FamilyNavigatorModule)
+// is forced open by name, everything else (just "extra_info" here)
+// starts collapsed, regardless of any configured order.
+const SIDEBAR_DEFINITIONS = [
+  { name: 'extra_info', title: 'Extra information', open: false },
+  { name: 'family_nav', title: 'Family navigator', open: true },
+];
+
+/**
+ * Matches individual-page-sidebars.phtml's real accordion structure
+ * (`accordion wt-sidebar`/`#sidebar`, real expand/collapse caret icons
+ * matching the Name/Gender accordion's own convention) exactly.
+ *
+ * @param {{extraInformationHtml: string, familyNavigatorHtml: string}} content
+ * @returns {string}
+ */
+function renderSidebar({ extraInformationHtml, familyNavigatorHtml }) {
+  const contentByName = { extra_info: extraInformationHtml, family_nav: familyNavigatorHtml };
+
+  const itemsHtml = SIDEBAR_DEFINITIONS.map(({ name, title, open }) => {
+    const buttonClass = open ? 'accordion-button gap-1' : 'accordion-button gap-1 collapsed';
+    const collapseClass = open ? 'accordion-collapse collapse show' : 'accordion-collapse collapse';
+
+    return `
+        <div class="accordion-item">
+            <div class="accordion-header" id="sidebar-header-${name}">
+                <button class="${buttonClass}" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-content-${name}" aria-expanded="${open}" aria-controls="sidebar-content-${name}">
+                    <span class="wt-icon-expand"><i class="fa-solid fa-caret-down"></i></span><span class="wt-icon-collapse"><i class="fa-solid fa-caret-up"></i></span>
+                    ${title}
+                </button>
+            </div>
+            <div id="sidebar-content-${name}" class="${collapseClass}" data-bs-parent="#sidebar" aria-labelledby="sidebar-header-${name}">
+                <div class="accordion-body">${contentByName[name]}</div>
+            </div>
+        </div>`;
+  }).join('');
+
+  return `
+    <div class="accordion wt-sidebar" id="sidebar">${itemsHtml}
+    </div>`;
+}
+
+/**
  * @param {object} params
  * @param {{title: string}} params.tree
  * @param {{realName: string}|null} params.user
@@ -455,6 +620,8 @@ function renderTabs({ factsHtml, familiesHtml }) {
  *   useSilhouette: boolean,
  *   names: {full: string, rawValue: string, gedcom: string, subAttributes: {label: string, value: string}[]}[],
  *   facts: {tag: string, date: string, time: string, place: string, address: string, author: string}[],
+ *   extraInformationFacts: object[],
+ *   familyNavigator: {parentFamilies: object[], spouseFamilies: object[]},
  *   parentFamilies: {titleHtml: string, url: string}[],
  *   spouseFamilies: {titleHtml: string, url: string}[],
  * }} params.individual `fullNameHtml` and each name's `full` are
@@ -503,6 +670,11 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
       : '<p>This feature has not been migrated yet.</p>';
   const tabsHtml = renderTabs({ factsHtml, familiesHtml });
 
+  const sidebarHtml = renderSidebar({
+    extraInformationHtml: renderExtraInformation(individual.extraInformationFacts),
+    familyNavigatorHtml: renderFamilyNavigator(individual.familyNavigator),
+  });
+
   // dir="ltr" is required, not decorative - see account-view.mjs's own
   // doc comment for the [dir]-selector CSS finding this fix addresses.
   return `<!DOCTYPE html>
@@ -530,11 +702,13 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
 
     <main id="content" class="wt-main-wrapper">
         <div class="container-lg wt-main-container">
+            <h2 class="wt-page-title mx-auto">${individual.fullNameHtml} <span class="wt-lifespan">${escapeHtml(individual.lifespan)}</span> ${escapeHtml(individual.age)}</h2>
             <div class="row">
-                <div class="col-md-12">
-                    <h2 class="wt-page-title">${individual.fullNameHtml} <span class="wt-lifespan">${escapeHtml(individual.lifespan)}</span> ${escapeHtml(individual.age)}</h2>
+                <div class="col-sm-8">
                     <div class="row mb-4">${photoBoxHtml}${nameGenderHtml}
                     </div>${tabsHtml}
+                </div>
+                <div class="col-sm-4">${sidebarHtml}
                 </div>
             </div>
         </div>

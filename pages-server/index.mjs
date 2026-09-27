@@ -78,7 +78,7 @@ import { renderNoTreeAccessPage } from './home-view.mjs';
 import { renderTreePage } from './tree-view.mjs';
 import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel } from './trees.mjs';
 import { significantIndividualXref, findVisibleWelcomeBlockId } from './welcome-block.mjs';
-import { renderIndividualPage } from './individual-view.mjs';
+import { renderIndividualPage, EXTRA_INFO_TAGS } from './individual-view.mjs';
 import {
   loadIndividual,
   loadTreePrivacyPrefs,
@@ -99,6 +99,12 @@ import {
   factCanShow,
   displayDate,
   extractNameFromFact,
+  factPlainValue,
+  parentRelationshipLabel,
+  spouseRelationshipLabel,
+  childRelationshipLabel,
+  siblingRelationshipLabel,
+  selfRelationshipLabel,
 } from './individual.mjs';
 import { loadFactsMedia, mediaThumbnailUrl, loadGlideKey, needsWatermark } from './media.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
@@ -776,11 +782,15 @@ const VITAL_FACT_TAGS = [
   'RELI',
   'TITL',
   'CAST',
-  'IDNO',
   'NMR',
-  'SSN',
-  'CHAN',
 ];
+// IDNO/SSN/CHAN moved to the "Extra information" sidebar (phase 5 step
+// 14b) - matches real PHP's own exclusion mechanism exactly:
+// IndividualFactsTabModule excludes every tag any enabled sidebar's
+// own supportedFacts() claims (app/Module/IndividualFactsTabModule.php:
+// 84-98), and IndividualMetadataModule's supportedFacts() includes all
+// three (app/Module/IndividualMetadataModule.php:38-53,97-100) - so
+// real PHP never shows them on the main Facts tab either.
 
 async function handleIndividualPage(req, res, treeName, xref) {
   if (req.method !== 'GET') {
@@ -891,11 +901,13 @@ async function handleIndividualPage(req, res, treeName, xref) {
   // already made for FamilyPage's own member cards).
   let parentFamilies;
   let spouseFamilies;
+  let parentFamilyXrefs;
   let spouseFamilyXrefs;
 
   try {
     const relatedFamilyXrefs = await loadRelatedFamilyXrefs(pool, tree.gedcomId, individual.xref);
 
+    parentFamilyXrefs = relatedFamilyXrefs.parentFamilies;
     spouseFamilyXrefs = relatedFamilyXrefs.spouseFamilies;
     parentFamilies = [];
     for (const familyXref of relatedFamilyXrefs.parentFamilies) {
@@ -1008,6 +1020,72 @@ async function handleIndividualPage(req, res, treeName, xref) {
     return;
   }
 
+  // "Extra information" sidebar (phase 5 step 14b) - mirrors
+  // IndividualMetadataModule's own tag set, reusing the SAME extraction
+  // used for the main Facts tab (now that these tags are excluded from
+  // VITAL_FACT_TAGS - see that const's own doc comment).
+  const extraInfoOwnFacts = facts.filter((fact) => EXTRA_INFO_TAGS.includes(/^1 (\S+)/.exec(fact)?.[1]));
+  const extraInformationFacts = extractVisibleFacts(extraInfoOwnFacts, defaultResnInfo, accessLevel).map((fact) => ({
+    ...fact,
+    isExtraInfo: true,
+  }));
+
+  // "Family navigator" sidebar (phase 5 step 14b) - father/mother/
+  // himself/siblings for each parent family, husband/wife/himself/
+  // children for each spouse family, reusing the exact same family
+  // load/privacy chain as the Families tab and the family-facts merge
+  // above (resolveShownFamily()), just with per-member relationship
+  // rows instead of a flat link or extracted facts.
+  const individualBirthYear = birthDate && birthDate.date.isOK() ? birthDate.date.minimumDate().yearValue() : null;
+  let familyNavigator;
+
+  try {
+    const navigatorParentFamilies = [];
+
+    for (const familyXref of parentFamilyXrefs) {
+      const family = await resolveFamilyNavigatorFamily(
+        tree,
+        treePrivacyPrefs,
+        accessLevel,
+        relPrefs,
+        familyXref,
+        'parent',
+        individual.xref,
+        individualBirthYear,
+      );
+
+      if (family !== null) {
+        navigatorParentFamilies.push(family);
+      }
+    }
+
+    const navigatorSpouseFamilies = [];
+
+    for (const familyXref of spouseFamilyXrefs) {
+      const family = await resolveFamilyNavigatorFamily(
+        tree,
+        treePrivacyPrefs,
+        accessLevel,
+        relPrefs,
+        familyXref,
+        'spouse',
+        individual.xref,
+        individualBirthYear,
+      );
+
+      if (family !== null) {
+        navigatorSpouseFamilies.push(family);
+      }
+    }
+
+    familyNavigator = { parentFamilies: navigatorParentFamilies, spouseFamilies: navigatorSpouseFamilies };
+  } catch (error) {
+    console.error('Failed to resolve family navigator:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
   const individualViewModel = {
     xref: individual.xref,
     fullNameHtml,
@@ -1019,6 +1097,8 @@ async function handleIndividualPage(req, res, treeName, xref) {
     useSilhouette: treePrivacyPrefs.useSilhouette,
     names,
     facts: visibleFacts,
+    extraInformationFacts,
+    familyNavigator,
     parentFamilies,
     spouseFamilies,
   };
@@ -1171,6 +1251,97 @@ async function resolveFamilySummary(tree, treePrivacyPrefs, accessLevel, relPref
 }
 
 /**
+ * @param {{individual: {xref: string, gedcom: string}, facts: string[], dead: boolean}|null} member
+ * @returns {number|null}
+ */
+function memberBirthYear(member) {
+  if (member === null) {
+    return null;
+  }
+
+  const birthDate = getBirthDate(member.facts);
+
+  return birthDate && birthDate.date.isOK() ? birthDate.date.minimumDate().yearValue() : null;
+}
+
+/**
+ * One row of the Family navigator sidebar (phase 5 step 14b - see
+ * docs/php-to-js-migration/phase5-individual-page-full.md) - a single
+ * resolved family member, with a relationship label chosen from the
+ * small hardcoded set in individual.mjs (father/mother/husband/wife/
+ * son/daughter/sibling, "you are here" for the page's own subject).
+ *
+ * @param {object} tree
+ * @param {{individual: {xref: string, gedcom: string}, facts: string[], dead: boolean}|null} member
+ * @param {string} individualXref the page's own subject - marks the "you are here" row
+ * @param {number|null} individualBirthYear needed only for sibling rows' elder/younger prefix
+ * @param {'parent'|'spouse'} kind which family type this member belongs to
+ * @param {'parent'|'child'} cssRowType matches wt-family-navigator-parent/child
+ * @returns {object|null}
+ */
+function familyNavigatorRow(tree, member, individualXref, individualBirthYear, kind, cssRowType) {
+  if (member === null) {
+    return null;
+  }
+
+  const memberSex = sex(member.individual.gedcom);
+  const isSelf = member.individual.xref === individualXref;
+
+  let label;
+
+  if (isSelf) {
+    label = selfRelationshipLabel(memberSex);
+  } else if (cssRowType === 'parent') {
+    label = kind === 'parent' ? parentRelationshipLabel(memberSex) : spouseRelationshipLabel(memberSex);
+  } else {
+    label = kind === 'parent' ? siblingRelationshipLabel(memberSex, individualBirthYear, memberBirthYear(member)) : childRelationshipLabel(memberSex);
+  }
+
+  const primaryName = extractPrimaryName(member.individual.gedcom);
+  const fullNameHtml =
+    primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${member.individual.xref}</span>`;
+  const birthDate = getBirthDate(member.facts);
+  const deathDate = getDeathDate(member.facts);
+
+  return {
+    label,
+    isSelf,
+    fullNameHtml,
+    lifespanText: lifespan({ birthDate, deathDate, isDead: member.dead }),
+    url: `/tree/${tree.name}/individual/${member.individual.xref}`,
+    sex: memberSex,
+    rowType: cssRowType,
+  };
+}
+
+/**
+ * One family's full Family navigator entry - reuses resolveShownFamily()
+ * (the same single family load/member-resolution/privacy computation
+ * shared with resolveFamilySummary() and familyFactsForIndividual()).
+ *
+ * @returns {Promise<{titleHtml: string, url: string, rows: object[]}|null>}
+ */
+async function resolveFamilyNavigatorFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, kind, individualXref, individualBirthYear) {
+  const shown = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
+
+  if (shown === null) {
+    return null;
+  }
+
+  const husbandVM = familyMemberViewModel(tree, shown.husband);
+  const wifeVM = familyMemberViewModel(tree, shown.wife);
+  const titleHtml = `${husbandVM !== null ? husbandVM.fullNameHtml : UNKNOWN_NAME_HTML} + ${wifeVM !== null ? wifeVM.fullNameHtml : UNKNOWN_NAME_HTML}`;
+
+  const rows = [
+    familyNavigatorRow(tree, shown.husband, individualXref, individualBirthYear, kind, 'parent'),
+    familyNavigatorRow(tree, shown.wife, individualXref, individualBirthYear, kind, 'parent'),
+    ...shown.children.map((child) => familyNavigatorRow(tree, child, individualXref, individualBirthYear, kind, 'child')),
+  ].filter((row) => row !== null);
+
+  return { titleHtml, url: `/tree/${tree.name}/family/${shown.family.xref}`, rows };
+}
+
+/**
  * Mirrors Fact::canShow()-filtered, date/time/place/address/author-
  * extracted fact rows - the exact shape renderFact() (individual-view.mjs/
  * family-view.mjs) already expects. Shared so handleFamilyPage()'s own
@@ -1208,6 +1379,13 @@ function extractVisibleFacts(facts, defaultResnInfo, accessLevel) {
 
     visibleFacts.push({
       tag,
+      // Most date/place-shaped events (BIRT, RESI, CHAN, ...) have no
+      // meaningful text on their own "1 TAG" line - factPlainValue()
+      // correctly returns '' for those (renderFact() already treats an
+      // empty value as "nothing to render"). Populated unconditionally
+      // so the SAME extraction serves both event-shaped facts and
+      // plain-value ones (Extra information's AFN/REFN/RIN/SSN/...).
+      value: factPlainValue(fact),
       date: gedcomDate ? displayDate(gedcomDate) : '',
       time: timeMatch ? timeMatch[1] : '',
       place: placeMatch ? placeMatch[1] : '',
@@ -1392,26 +1570,6 @@ async function handleFamilyPage(req, res, treeName, xref) {
 // like TEXT transcriptions) into one multi-line string - source.mjs's
 // SOURCE_FACT_TAGS (AUTH/PUBL/ABBR/TEXT) are all bare-value tags, none
 // DATE/PLAC-structured like Individual/Family's vital events.
-function sourceFactValue(factGedcom) {
-  const lines = factGedcom.split('\n');
-  const firstLine = lines[0] ?? '';
-  const valueMatch = /^1 \S+ ?(.*)$/.exec(firstLine);
-  const parts = [valueMatch ? valueMatch[1] : ''];
-
-  for (const line of lines.slice(1)) {
-    const contMatch = /^2 CONT ?(.*)$/.exec(line);
-    const concMatch = /^2 CONC ?(.*)$/.exec(line);
-
-    if (contMatch) {
-      parts.push(contMatch[1]);
-    } else if (concMatch) {
-      parts[parts.length - 1] += concMatch[1];
-    }
-  }
-
-  return parts.join('\n');
-}
-
 async function handleSourcePage(req, res, treeName, xref) {
   if (req.method !== 'GET') {
     res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
@@ -1542,7 +1700,7 @@ async function handleSourcePage(req, res, treeName, xref) {
 
     visibleFacts.push({
       tag,
-      value: tag === 'CHAN' || tag === 'REPO' ? '' : sourceFactValue(fact),
+      value: tag === 'CHAN' || tag === 'REPO' ? '' : factPlainValue(fact),
       date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
       time: timeMatch ? timeMatch[1] : '',
       author: authorMatch ? authorMatch[1] : '',

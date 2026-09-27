@@ -32,6 +32,8 @@ function baseParams(overrides = {}) {
       useSilhouette: false,
       names: [],
       facts: [],
+      extraInformationFacts: [],
+      familyNavigator: { parentFamilies: [], spouseFamilies: [] },
       parentFamilies: [],
       spouseFamilies: [],
     },
@@ -263,9 +265,10 @@ describe('renderIndividualPage', () => {
       const stubCount = html.split('This feature has not been migrated yet.').length - 1;
 
       // 6 permanently-stubbed tabs + Facts (empty facts list) + Families
-      // (no related families) both also falling back to the same
-      // placeholder in this default (empty) fixture.
-      expect(stubCount).toBe(8);
+      // (no related families) + Extra information (no matching facts)
+      // all also falling back to the same placeholder in this default
+      // (empty) fixture.
+      expect(stubCount).toBe(9);
     });
   });
 
@@ -453,6 +456,171 @@ describe('renderIndividualPage', () => {
 
       expect(html).toContain('wt-fact-label">Residence');
       expect(html).not.toContain('Family residence');
+    });
+  });
+
+  describe('the sidebar accordion', () => {
+    test('shows both "Extra information" (collapsed) and "Family navigator" (open) items, in that order', () => {
+      const html = renderIndividualPage(baseParams());
+
+      expect(html).toContain('id="sidebar"');
+      const extraIndex = html.indexOf('sidebar-header-extra_info');
+      const navIndex = html.indexOf('sidebar-header-family_nav');
+      expect(extraIndex).toBeGreaterThan(-1);
+      expect(navIndex).toBeGreaterThan(extraIndex);
+
+      // Extra information starts collapsed...
+      expect(html).toContain('accordion-button gap-1 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-content-extra_info"');
+      // ...Family navigator is forced open regardless of any order setting.
+      expect(html).toContain('accordion-button gap-1" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-content-family_nav"');
+      expect(html).toContain('id="sidebar-content-family_nav" class="accordion-collapse collapse show"');
+    });
+  });
+
+  describe('the Extra information sidebar', () => {
+    test('shows the stub placeholder when there are no matching facts', () => {
+      const html = renderIndividualPage(baseParams());
+
+      const bodyStart = html.indexOf('id="sidebar-content-extra_info"');
+      const bodyEnd = html.indexOf('id="sidebar-content-family_nav"');
+      expect(html.slice(bodyStart, bodyEnd)).toContain('This feature has not been migrated yet.');
+    });
+
+    test('renders a fact with its real Extra-information label and plain value', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            extraInformationFacts: [
+              { tag: 'SSN', value: '123-45-6789', date: '', time: '', place: '', address: '', author: '', isExtraInfo: true },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('Social security number');
+      expect(html).toContain('<div class="wt-fact-value">123-45-6789</div>');
+    });
+
+    // Regression-guarding test: an unknown Extra-information tag (e.g.
+    // a custom _UID) falls back to the raw "INDI:<TAG>" path, not the
+    // bare tag - matches UnknownElement's real fallback shape, distinct
+    // from the plain-tag fallback used for the main Facts tab.
+    test('an unrecognized tag falls back to the raw INDI:<TAG> path', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            extraInformationFacts: [
+              { tag: '_UID', value: 'GUID-1234', date: '', time: '', place: '', address: '', author: '', isExtraInfo: true },
+            ],
+          },
+        }),
+      );
+
+      expect(html).toContain('INDI:_UID');
+    });
+  });
+
+  describe('the Family navigator sidebar', () => {
+    function navigatorRow(overrides = {}) {
+      return {
+        label: 'father',
+        isSelf: false,
+        fullNameHtml: '<span class="NAME">Raphael Ophir</span>',
+        lifespanText: '1935–2006',
+        url: '/tree/ophir/individual/I2',
+        sex: 'M',
+        rowType: 'parent',
+        ...overrides,
+      };
+    }
+
+    // Unlike Sources/Notes/Media/etc (genuinely unmigrated features),
+    // an individual simply having no related families is a real, valid
+    // empty state - real PHP's FamilyNavigatorModule always has
+    // sidebar content, it's just empty here. No "not yet migrated" stub.
+    test('renders an empty (but present) navigator when there are no families', () => {
+      const html = renderIndividualPage(baseParams());
+
+      expect(html).toContain('wt-sidebar-family-navigator');
+      expect(html).not.toContain('wt-family-navigator-family');
+    });
+
+    test('renders a family table with a linked caption and one row per member', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            familyNavigator: {
+              parentFamilies: [
+                {
+                  titleHtml: '<span class="NAME">Raphael Ophir</span> + <span class="NAME">Sara Granek</span>',
+                  url: '/tree/ophir/family/F2',
+                  rows: [navigatorRow(), navigatorRow({ label: 'mother', sex: 'F', fullNameHtml: '<span class="NAME">Sara Granek</span>' })],
+                },
+              ],
+              spouseFamilies: [],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('wt-family-navigator-family');
+      expect(html).toContain('<a href="/tree/ophir/family/F2">');
+      expect(html).toContain('Raphael Ophir</span> + <span class="NAME">Sara Granek');
+      expect(html).toContain('wt-family-navigator-parent wt-sex-m');
+      expect(html).toContain('wt-family-navigator-parent wt-sex-f');
+      expect(html).toMatch(/wt-family-navigator-label" scope="row">\s*father/);
+      expect(html).toMatch(/wt-family-navigator-label" scope="row">\s*mother/);
+      expect(html).toContain('<a href="/tree/ophir/individual/I2">');
+      expect(html).toContain('<div class="small">1935–2006</div>');
+    });
+
+    test('the "you are here" row shows a self icon in the label cell', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            familyNavigator: {
+              parentFamilies: [
+                {
+                  titleHtml: 'Family',
+                  url: '/tree/ophir/family/F2',
+                  rows: [navigatorRow({ label: 'himself', isSelf: true })],
+                },
+              ],
+              spouseFamilies: [],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('icon-selected');
+      expect(html).toContain('wt-icon-user');
+    });
+
+    test('a child row uses the wt-family-navigator-child class', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            familyNavigator: {
+              parentFamilies: [],
+              spouseFamilies: [
+                {
+                  titleHtml: 'Family',
+                  url: '/tree/ophir/family/F1',
+                  rows: [navigatorRow({ label: 'son', rowType: 'child', sex: 'M' })],
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('wt-family-navigator-child wt-sex-m');
+      expect(html).toMatch(/wt-family-navigator-label" scope="row">\s*son/);
     });
   });
 

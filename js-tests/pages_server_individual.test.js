@@ -18,6 +18,11 @@ import {
   parseFacts,
   sex,
   sexLabel,
+  parentRelationshipLabel,
+  spouseRelationshipLabel,
+  childRelationshipLabel,
+  siblingRelationshipLabel,
+  selfRelationshipLabel,
   nameSubTagAttributes,
   extractPrimaryName,
   extractAllNameFacts,
@@ -89,6 +94,63 @@ describe('sexLabel', () => {
 
   test("'X' is not a controlled value - falls back to the raw character", () => {
     expect(sexLabel('X')).toBe('X');
+  });
+});
+
+describe('family navigator relationship labels', () => {
+  test.each([
+    ['M', 'father'],
+    ['F', 'mother'],
+    ['U', 'parent'],
+    ['X', 'parent'],
+  ])('parentRelationshipLabel(%s) -> %s', (memberSex, expected) => {
+    expect(parentRelationshipLabel(memberSex)).toBe(expected);
+  });
+
+  test.each([
+    ['M', 'husband'],
+    ['F', 'wife'],
+    ['U', 'spouse'],
+  ])('spouseRelationshipLabel(%s) -> %s', (memberSex, expected) => {
+    expect(spouseRelationshipLabel(memberSex)).toBe(expected);
+  });
+
+  test.each([
+    ['M', 'son'],
+    ['F', 'daughter'],
+    ['U', 'child'],
+  ])('childRelationshipLabel(%s) -> %s', (memberSex, expected) => {
+    expect(childRelationshipLabel(memberSex)).toBe(expected);
+  });
+
+  test.each([
+    ['M', 'himself'],
+    ['F', 'herself'],
+    ['U', 'self'],
+  ])('selfRelationshipLabel(%s) -> %s', (memberSex, expected) => {
+    expect(selfRelationshipLabel(memberSex)).toBe(expected);
+  });
+
+  describe('siblingRelationshipLabel', () => {
+    test('an elder sibling (born before the viewer) gets the "elder" prefix', () => {
+      expect(siblingRelationshipLabel('M', 1963, 1958)).toBe('elder brother');
+      expect(siblingRelationshipLabel('F', 1963, 1958)).toBe('elder sister');
+    });
+
+    test('a younger sibling (born after the viewer) gets the "younger" prefix', () => {
+      expect(siblingRelationshipLabel('M', 1963, 1967)).toBe('younger brother');
+      expect(siblingRelationshipLabel('F', 1963, 1967)).toBe('younger sister');
+    });
+
+    test('an unknown sex falls back to "sibling"', () => {
+      expect(siblingRelationshipLabel('U', 1963, 1958)).toBe('elder sibling');
+    });
+
+    test('a missing birth year on either side (or a tied year) omits the elder/younger prefix', () => {
+      expect(siblingRelationshipLabel('M', null, 1958)).toBe('brother');
+      expect(siblingRelationshipLabel('M', 1963, null)).toBe('brother');
+      expect(siblingRelationshipLabel('M', 1963, 1963)).toBe('brother');
+    });
   });
 });
 

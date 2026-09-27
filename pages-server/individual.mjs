@@ -108,6 +108,67 @@ export function sexLabel(sexValue) {
   return SEX_LABELS[sexValue] ?? sexValue;
 }
 
+// Family navigator relationship labels (phase 5 step 14b - see
+// docs/php-to-js-migration/phase5-individual-page-full.md). A
+// deliberately small, hardcoded substitute for
+// RelationshipService::getCloseRelationshipName()'s full BFS +
+// language-aware naming engine (a real, substantial subsystem this
+// migration doesn't port) - sufficient for the ONLY relationship
+// shapes the navigator's sidebar-family.phtml actually needs: a
+// parent-family's spouses (father/mother) and children (siblings), and
+// a spouse-family's spouse (husband/wife) and children (son/daughter),
+// each row's own sex-appropriate word, lowercase (matches the real
+// page's own lowercase relationship labels).
+export function parentRelationshipLabel(memberSex) {
+  if (memberSex === 'M') return 'father';
+  if (memberSex === 'F') return 'mother';
+  return 'parent';
+}
+
+export function spouseRelationshipLabel(memberSex) {
+  if (memberSex === 'M') return 'husband';
+  if (memberSex === 'F') return 'wife';
+  return 'spouse';
+}
+
+export function childRelationshipLabel(memberSex) {
+  if (memberSex === 'M') return 'son';
+  if (memberSex === 'F') return 'daughter';
+  return 'child';
+}
+
+/**
+ * A sibling's relationship label, with an "elder"/"younger" prefix
+ * when both birth years are known and differ - the one piece of
+ * RelationshipService's real age-ordering this migration does
+ * replicate (confirmed real: the reference screenshot shows "younger
+ * sister"/"younger brother"), via simple birth-year comparison rather
+ * than the full relationship-path engine.
+ *
+ * @param {'M'|'F'|'X'|'U'} memberSex
+ * @param {number|null} viewerBirthYear
+ * @param {number|null} memberBirthYear
+ * @returns {string}
+ */
+export function siblingRelationshipLabel(memberSex, viewerBirthYear, memberBirthYear) {
+  const base = memberSex === 'M' ? 'brother' : memberSex === 'F' ? 'sister' : 'sibling';
+
+  if (viewerBirthYear === null || memberBirthYear === null || viewerBirthYear === memberBirthYear) {
+    return base;
+  }
+
+  return memberBirthYear < viewerBirthYear ? `elder ${base}` : `younger ${base}`;
+}
+
+// The "you are here" row - real PHP shows the relationship name PLUS a
+// "selected" user icon for the page's own subject within each family
+// table; this label covers the text half.
+export function selfRelationshipLabel(memberSex) {
+  if (memberSex === 'M') return 'himself';
+  if (memberSex === 'F') return 'herself';
+  return 'self';
+}
+
 // Mirrors the small set of real INDI:NAME:<TAG> element labels this
 // migration knows for certain (verified against app/Gedcom.php) - any
 // other subtag (e.g. a custom "_HEB" transliteration) falls back to
@@ -781,6 +842,37 @@ export function factCanShow(factGedcom, accessLevel, defaultResn) {
   }
 
   return true;
+}
+
+/**
+ * A fact's own level-1 VALUE text (e.g. "1 REFN abc123" -> "abc123"),
+ * with CONT/CONC continuation lines merged - mirrors Fact::value()'s
+ * own regex (app/Fact.php:91-100). Originally built for SourcePage's
+ * plain-text facts (AUTH/PUBL/ABBR/TEXT); reused for IndividualPage's
+ * "Extra information" sidebar facts (AFN/REFN/RIN/SSN/...), which are
+ * the same shape - a bare value, no DATE/PLAC structure.
+ *
+ * @param {string} factGedcom
+ * @returns {string}
+ */
+export function factPlainValue(factGedcom) {
+  const lines = factGedcom.split('\n');
+  const firstLine = lines[0] ?? '';
+  const valueMatch = /^1 \S+ ?(.*)$/.exec(firstLine);
+  const parts = [valueMatch ? valueMatch[1] : ''];
+
+  for (const line of lines.slice(1)) {
+    const contMatch = /^2 CONT ?(.*)$/.exec(line);
+    const concMatch = /^2 CONC ?(.*)$/.exec(line);
+
+    if (contMatch) {
+      parts.push(contMatch[1]);
+    } else if (concMatch) {
+      parts[parts.length - 1] += concMatch[1];
+    }
+  }
+
+  return parts.join('\n');
 }
 
 // Denylist mirrors fact.phtml's real "wt-fact-other-attributes" loop
