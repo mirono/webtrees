@@ -361,12 +361,18 @@ function factTagOnly(factGedcom) {
   return /^1 (\S+)/.exec(factGedcom)?.[1] ?? '';
 }
 
+// ALSO excludes parseFacts()'s own leading "0 @xref@ OBJE" pseudo-fact
+// block (facts[0] always, since the split is purely "\n1"-boundary
+// based, with no level-0-vs-1 awareness) - a real bug, found live,
+// fixed retroactively: rendered as an extra "undefined"-labeled row on
+// every media object. See submitter.mjs's displayableSubmitterFacts()
+// for the same fix applied there.
 /**
  * @param {string[]} facts
  * @returns {string[]}
  */
 export function displayableMediaFacts(facts) {
-  return facts.filter((fact) => factTagOnly(fact) !== 'FILE');
+  return facts.filter((fact) => fact.startsWith('1 ') && factTagOnly(fact) !== 'FILE');
 }
 
 // CHAN's _WT_USER already gets its own dedicated "Author of last

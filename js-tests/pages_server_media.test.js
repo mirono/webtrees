@@ -298,6 +298,15 @@ describe('displayableMediaFacts', () => {
 
     expect(displayableMediaFacts(facts)).toEqual(['1 CHAN\n2 DATE 1 JAN 2020']);
   });
+
+  // Regression test: parseFacts()'s own leading "0 @xref@ OBJE" pseudo-
+  // fact block used to leak through, rendering as an extra "undefined"-
+  // labeled row on every real media object - found live.
+  test('excludes the leading "0 @xref@ OBJE" pseudo-fact block', () => {
+    const facts = ['0 @M1@ OBJE', '1 CHAN\n2 DATE 1 JAN 2020'];
+
+    expect(displayableMediaFacts(facts)).toEqual(['1 CHAN\n2 DATE 1 JAN 2020']);
+  });
 });
 
 describe('mediaFactOtherAttributes', () => {

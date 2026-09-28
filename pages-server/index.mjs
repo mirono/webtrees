@@ -69,6 +69,7 @@ import {
   matchNotePagePath,
   matchMediaPagePath,
   matchSubmitterPagePath,
+  matchHeaderPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -127,6 +128,8 @@ import {
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
+import { loadHeader, headerCanShowRecord, displayableHeaderFacts, headerFactOtherAttributes } from './header.mjs';
+import { renderHeaderPage } from './header-view.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
 import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
@@ -2716,6 +2719,163 @@ async function handleSubmitterPage(req, res, treeName, xref) {
   res.end(html);
 }
 
+async function handleHeaderPage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let header;
+  let facts;
+  let shown;
+  let accessLevel;
+  let defaultResnInfo;
+  let submInfo;
+
+  try {
+    header = await loadHeader(pool, tree.gedcomId, xref);
+
+    if (header === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(header.gedcom);
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, header.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+    const headerViewer = { accessLevel, isSelfRecord: false };
+
+    shown = headerCanShowRecord(treeForPrivacy, header.gedcom, headerViewer, defaultResnInfo.treeFactResn);
+
+    // HEAD:SUBM (XrefSubmitter) links to the real submitter who created
+    // this export - resolved here the same way handleSourcePage()
+    // resolves a SOUR fact's own REPO citation, subject to the SAME
+    // canShow() gate real PHP applies to every cross-referenced record.
+    submInfo = null;
+    const submMatch = /^1 SUBM @([^@]+)@/m.exec(header.gedcom);
+
+    if (submMatch !== null) {
+      const submitter = await loadSubmitter(pool, tree.gedcomId, submMatch[1]);
+
+      if (submitter !== null) {
+        const submDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, submitter.xref);
+        const submTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: submDefaultResnInfo.individualResn };
+
+        if (submitterCanShowRecord(submTreeForPrivacy, submitter.gedcom, headerViewer, submDefaultResnInfo.treeFactResn)) {
+          const submName = extractNameFromFact(submitter.gedcom, 'NAME');
+
+          submInfo = {
+            url: phpRouteUrl(`/tree/${tree.name}/submitter/${submitter.xref}`, siteUrlConfig),
+            nameHtml: submName !== null ? submName.full : `<span class="NAME" dir="auto" translate="no">${submitter.xref}</span>`,
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to resolve header privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const visibleFacts = [];
+
+  for (const fact of displayableHeaderFacts(facts)) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    // HEAD:DATE is unique among every record type ported so far: DATE
+    // is the fact's OWN top-level tag (`1 DATE ...`), not a subordinate
+    // line under some other event fact - TIME is still nested one level
+    // beneath it, same shape as CHAN's own date/time.
+    const dateMatch = tag === 'DATE' ? /^1 DATE (.+)/.exec(fact) : /\n2 DATE (.+)/.exec(fact);
+    const timeMatch = tag === 'DATE' ? /\n2 TIME (.+)/.exec(fact) : /\n3 TIME (.+)/.exec(fact);
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+    const submUrlInfo = tag === 'SUBM' ? submInfo : null;
+
+    visibleFacts.push({
+      tag,
+      value: tag === 'CHAN' || tag === 'DATE' || tag === 'SUBM' ? '' : factPlainValue(fact),
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      time: timeMatch ? timeMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+      submUrl: submUrlInfo?.url,
+      submNameHtml: submUrlInfo?.nameHtml,
+      otherAttributes: headerFactOtherAttributes(fact, tag),
+    });
+  }
+
+  // Header::extractNames() (app/Header.php:33-40) always uses the
+  // single literal translated string "Header", regardless of content -
+  // not derived from any fact.
+  const fullNameHtml = 'Header';
+
+  const headerViewModel = {
+    xref: header.xref,
+    fullNameHtml,
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderHeaderPage({ tree, user, csrfToken, header: headerViewModel });
+
+  const responseHeaders = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    responseHeaders['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, responseHeaders);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -2816,6 +2976,13 @@ const server = createServer(async (req, res) => {
 
   if (submitterMatch !== null) {
     await handleSubmitterPage(req, res, submitterMatch.tree, submitterMatch.xref);
+    return;
+  }
+
+  const headerMatch = matchHeaderPagePath(url.pathname);
+
+  if (headerMatch !== null) {
+    await handleHeaderPage(req, res, headerMatch.tree, headerMatch.xref);
     return;
   }
 

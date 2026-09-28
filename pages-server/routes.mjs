@@ -249,3 +249,20 @@ export function matchSubmitterPagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Same shape as matchSourcePagePath() above, for PHP's
+ * `/tree/{tree}/header/{xref}{/slug}` route
+ * (app/Http/Routes/WebRoutes.php:660). `xref` is always the literal
+ * pseudo-xref "HEAD" in practice (a GEDCOM header has no real `@xref@`
+ * of its own), but this matcher doesn't special-case that - same as
+ * every other record-page matcher, the handler itself validates.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchHeaderPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/header\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}

@@ -79,6 +79,16 @@ describe('displayableNoteFacts', () => {
 
     expect(displayableNoteFacts(facts)).toEqual(['1 CHAN\n2 DATE 1 JAN 2020']);
   });
+
+  // Regression test: parseFacts()'s own leading "0 @xref@ NOTE ..."
+  // pseudo-fact block (facts[0], from a pure "\n1"-boundary split with
+  // no level-0-vs-1 awareness) used to leak through, rendering as an
+  // extra "undefined"-labeled row on every real note - found live.
+  test('excludes the leading "0 @xref@ NOTE ..." pseudo-fact block', () => {
+    const facts = ['0 @N3@ NOTE Some text', '1 CHAN\n2 DATE 1 JAN 2020'];
+
+    expect(displayableNoteFacts(facts)).toEqual(['1 CHAN\n2 DATE 1 JAN 2020']);
+  });
 });
 
 describe('noteText', () => {

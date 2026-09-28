@@ -114,6 +114,13 @@ export function isSubmitterPagePath(pathname) {
   return /^\/tree\/[^/]+\/submitter\/[^/]+(?:\/.*)?$/.test(pathname);
 }
 
+// /tree/{tree}/header/{xref}{/slug}: HeaderPage, the eighth real-GEDCOM-record
+// route (see docs/php-to-js-migration/phase5-header-page.md). Same
+// reasoning as isSourcePagePath() above.
+export function isHeaderPagePath(pathname) {
+  return /^\/tree\/[^/]+\/header\/[^/]+(?:\/.*)?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -134,7 +141,8 @@ export function isNodeRoute(pathname, searchParams) {
     isRepositoryPagePath(pathname) ||
     isNotePagePath(pathname) ||
     isMediaPagePath(pathname) ||
-    isSubmitterPagePath(pathname)
+    isSubmitterPagePath(pathname) ||
+    isHeaderPagePath(pathname)
   ) {
     return true;
   }
@@ -154,7 +162,8 @@ export function isNodeRoute(pathname, searchParams) {
     isRepositoryPagePath(route) ||
     isNotePagePath(route) ||
     isMediaPagePath(route) ||
-    isSubmitterPagePath(route)
+    isSubmitterPagePath(route) ||
+    isHeaderPagePath(route)
   );
 }
 

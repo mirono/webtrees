@@ -97,12 +97,19 @@ export function noteCanShowRecord(tree, gedcom, viewer, treeFactResn, linkedReco
 // mirroring note-page-details.phtml's own `$fact->tag() !== 'NOTE:CONT'`
 // guard - parseFacts() only ever returns level-1 tags in practice, so
 // this is a safety net, not a real-world-reachable case.
+//
+// ALSO excludes parseFacts()'s own leading "0 @xref@ NOTE ..." pseudo-
+// fact block (facts[0] always, since the split is purely "\n1"-boundary
+// based, with no level-0-vs-1 awareness) - a real bug, found live,
+// fixed retroactively: rendered as an extra "undefined"-labeled row on
+// every note. See submitter.mjs's displayableSubmitterFacts() for the
+// same fix applied there.
 /**
  * @param {string[]} facts
  * @returns {string[]}
  */
 export function displayableNoteFacts(facts) {
-  return facts.filter((fact) => !['CONT', 'CONC'].includes(factTag(fact)));
+  return facts.filter((fact) => fact.startsWith('1 ') && !['CONT', 'CONC'].includes(factTag(fact)));
 }
 
 /**

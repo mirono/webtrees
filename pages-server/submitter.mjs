@@ -86,14 +86,25 @@ export function submitterCanShowRecord(tree, gedcom, viewer, treeFactResn) {
 // already confirmed for Source/Repository/Note/Media
 // (app/GedcomRecord.php:552-570): every level-1 fact is shown,
 // privacy-filtered only. Unlike Repository's route, this one has no
-// exclusion at all - real record-page-details.phtml's own loop
+// tag exclusion at all - real record-page-details.phtml's own loop
 // (`$record->facts([], true)`) has zero filtering beyond privacy.
+//
+// One exclusion IS still needed, structurally: parseFacts() (mirroring
+// GedcomRecord::parseFacts()'s own preg_split) always yields the
+// record's own leading "0 @xref@ SUBM" line as facts[0], since the
+// split happens purely on "\n1" boundaries with no knowledge of level
+// 0 vs 1. Every OTHER route's displayableXFacts() uses a tag
+// ALLOWLIST, which harmlessly drops this non-fact block for free
+// (its "tag" doesn't match "1 " at all) - but this route's own
+// allowlist-free design doesn't get that for free, so it must filter
+// it explicitly. Found live: an earlier version of this function
+// rendered an extra "undefined"-labeled row for every submitter.
 /**
  * @param {string[]} facts
  * @returns {string[]}
  */
 export function displayableSubmitterFacts(facts) {
-  return facts;
+  return facts.filter((fact) => fact.startsWith('1 '));
 }
 
 // CHAN's _WT_USER already gets its own dedicated "Author of last

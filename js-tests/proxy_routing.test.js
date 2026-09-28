@@ -9,6 +9,7 @@ import {
   isNotePagePath,
   isMediaPagePath,
   isSubmitterPagePath,
+  isHeaderPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -246,6 +247,21 @@ describe('isNodeRoute', () => {
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
+  test('/tree/{tree}/header/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/header/HEAD');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/header/{xref}/{slug} is a Node route', () => {
+    const url = urlFor('/tree/ophir/header/HEAD/some-slug');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/header/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fheader%2FHEAD');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
   test('plain /language/{value}', () => {
     const url = urlFor('/language/en-US');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
@@ -436,6 +452,26 @@ describe('isSubmitterPagePath', () => {
   test('does not match the bare prefix', () => {
     expect(isSubmitterPagePath('/tree/ophir/submitter')).toBe(false);
     expect(isSubmitterPagePath('/tree/ophir/submitter/')).toBe(false);
+  });
+});
+
+describe('isHeaderPagePath', () => {
+  test('matches the bare path', () => {
+    expect(isHeaderPagePath('/tree/ophir/header/HEAD')).toBe(true);
+  });
+
+  test('a trailing slug is tolerated', () => {
+    expect(isHeaderPagePath('/tree/ophir/header/HEAD/some-slug')).toBe(true);
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(isHeaderPagePath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isHeaderPagePath('/tree/ophir/submitter/S1')).toBe(false);
+  });
+
+  test('does not match the bare prefix', () => {
+    expect(isHeaderPagePath('/tree/ophir/header')).toBe(false);
+    expect(isHeaderPagePath('/tree/ophir/header/')).toBe(false);
   });
 });
 

@@ -74,10 +74,19 @@ describe('submitterCanShowRecord', () => {
 });
 
 describe('displayableSubmitterFacts', () => {
-  test('has no tag allowlist at all - every fact passes through unchanged', () => {
+  test('has no tag allowlist - every real level-1 fact passes through unchanged', () => {
     const facts = ['1 NAME Miron Ophir', '1 NOTE Some note', '1 CHAN\n2 DATE 1 JAN 2020'];
 
     expect(displayableSubmitterFacts(facts)).toEqual(facts);
+  });
+
+  // Regression test: parseFacts()'s own leading "0 @xref@ SUBM" pseudo-
+  // fact block used to leak through, rendering as an extra "undefined"-
+  // labeled row on every real submitter - found live.
+  test('excludes the leading "0 @xref@ SUBM" pseudo-fact block', () => {
+    const facts = ['0 @S1@ SUBM', '1 NAME Miron Ophir'];
+
+    expect(displayableSubmitterFacts(facts)).toEqual(['1 NAME Miron Ophir']);
   });
 });
 

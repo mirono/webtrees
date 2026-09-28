@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-28 (step 18: `/tree/{tree}/submitter/{xref}` (SubmitterPage) served entirely by Node — the seventh and last of the currently-planned real-GEDCOM-record routes, the simplest yet: no linked-record privacy override, no tag allowlist at all). This is the entry point for "where are we" —
+**Last updated: 2026-09-28 (step 19: `/tree/{tree}/header/{xref}` (HeaderPage) served entirely by Node — the eighth real-GEDCOM-record route. Also fixed a real "undefined"-labeled row bug found live, affecting every already-shipped "no tag allowlist" route: Note, Media, and Submitter). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4643 tests, all green.
+# Expect: 4682 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -118,6 +118,7 @@ just adding latency.
 | 5.16 | `/tree/{tree}/note/{xref}` (NotePage) served entirely by Node — the fifth real-GEDCOM-record route; the first to port Note::canShowByType()'s real "hidden if any linking record is private" override (individual/family/source/repository fully checked, media/submitter deliberately out of scope); Markdown/autolink rendering intentionally not ported (plain escaped text instead) | **Done (2026-09-28)** — [phase5-note-page.md](phase5-note-page.md) |
 | 5.17 | `/tree/{tree}/media/{xref}` (MediaPage) served entirely by Node — the sixth real-GEDCOM-record route; ports Media::canShowByType()'s identical "hidden if any linking record is private" override; per-file Title/Media type/Format rows, real signed image thumbnails (reusing step 14a's mechanism unchanged) and mime-icon fallback for non-image files (PDFs, real in this tree) | **Done (2026-09-28)** — [phase5-media-page.md](phase5-media-page.md) |
 | 5.18 | `/tree/{tree}/submitter/{xref}` (SubmitterPage) served entirely by Node — the seventh real-GEDCOM-record route, rendered via real PHP's generic record-page/record-page-details shared views (no dedicated template); no canShowByType() override at all (same shape as Repository); no tag allowlist (NOTE facts render inline, unlike Source/Repository's own deliberate NOTE exclusion) | **Done (2026-09-28)** — [phase5-submitter-page.md](phase5-submitter-page.md) |
+| 5.19 | `/tree/{tree}/header/{xref}` (HeaderPage) served entirely by Node — the eighth real-GEDCOM-record route (xref is the literal pseudo-xref "HEAD"); a real HEAD:SUBM fact resolves to a genuine submitter link. Also fixed a real "undefined"-labeled facts-table row bug, found live and affecting every already-shipped no-tag-allowlist route (Note/Media/Submitter): parseFacts()'s own leading "0 @xref@ TYPE" pseudo-fact block was leaking through wherever a route has no tag allowlist to drop it for free | **Done (2026-09-28)** — [phase5-header-page.md](phase5-header-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
@@ -441,6 +442,25 @@ separate decision — see "Open decisions" below.
   migration regressions — see next section) are still open.
 
 ## Fixed bugs (found during manual testing)
+
+- **Every "no tag allowlist" record page rendered an extra "undefined"-labeled
+  row** (2026-09-28, found live while building HeaderPage): `parseFacts()`
+  splits a record's raw gedcom purely on `\n(?=1)` boundaries
+  (mirroring `GedcomRecord::parseFacts()`'s own `preg_split`), so
+  `facts[0]` is always the record's own leading `"0 @xref@ TYPE ..."`
+  line, not a real fact. Every route with a tag ALLOWLIST
+  (Source/Repository) drops this for free, since its empty/non-matching
+  tag never appears in the allowlist array — but the three routes with
+  NO allowlist at all (Note, Media, Submitter, all shipped in earlier
+  steps) had no such filter, so this pseudo-block rendered as a real,
+  extra table row with `undefined` for both its label and icon class.
+  Fixed retroactively in `note.mjs`/`media.mjs`/`submitter.mjs`'s own
+  `displayableXFacts()` (each now filters `fact.startsWith('1 ')`
+  first), and built correctly from the start in the same step's new
+  `header.mjs`. A live screenshot/grep comparison across all four
+  affected routes (re-running each one's own established live-test
+  script) confirmed the extra row is gone and every real fact still
+  renders. **Needs `docker compose restart pages`** to take effect live.
 
 - **Dates on both record pages were shown as raw GEDCOM strings, not
   formatted** (2026-09-21): reported live as "all the dates in the
