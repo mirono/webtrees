@@ -20,6 +20,8 @@ import {
   repoXrefs,
   displayableSourceFacts,
   sourceFactOtherAttributes,
+  displayableRepositoryFacts,
+  repositoryFactOtherAttributes,
   repositoryCanShowRecord,
   sourceCanShowRecord,
 } from '../pages-server/source.mjs';
@@ -137,6 +139,48 @@ describe('sourceFactOtherAttributes', () => {
 
   test('a fact with no other subtags returns an empty array', () => {
     expect(sourceFactOtherAttributes('1 AUTH J. Smith', 'AUTH')).toEqual([]);
+  });
+});
+
+describe('displayableRepositoryFacts', () => {
+  test('keeps NAME/ADDR/PHON/EMAIL/FAX/WWW/REFN/RIN/CHAN, drops NOTE', () => {
+    const facts = parseFacts(
+      '0 @R1@ REPO\n1 NAME Israel State Archives\n1 ADDR 14 Hartom St.\n1 PHON 02-5680680\n1 EMAIL info@example.com\n1 FAX 02-1234567\n1 WWW https://example.com\n1 REFN abc\n1 RIN xyz\n1 NOTE A note\n1 CHAN\n2 DATE 1 JAN 2020',
+    );
+
+    const displayable = displayableRepositoryFacts(facts);
+    expect(displayable).toHaveLength(9);
+    expect(displayable.map((fact) => /^1 (\S+)/.exec(fact)[1])).toEqual([
+      'NAME',
+      'ADDR',
+      'PHON',
+      'EMAIL',
+      'FAX',
+      'WWW',
+      'REFN',
+      'RIN',
+      'CHAN',
+    ]);
+  });
+
+  test('a repository with only NOTE returns an empty array', () => {
+    expect(displayableRepositoryFacts(parseFacts('1 NOTE A note'))).toEqual([]);
+  });
+});
+
+describe('repositoryFactOtherAttributes', () => {
+  test('an unknown subtag falls back to the raw REPO:TAG:subtag path', () => {
+    expect(repositoryFactOtherAttributes('1 NAME Israel State Archives\n2 _HEB ארכיון המדינה', 'NAME')).toEqual([
+      { label: 'REPO:NAME:_HEB', value: 'ארכיון המדינה' },
+    ]);
+  });
+
+  test("CHAN's _WT_USER is excluded - already rendered as the dedicated author line", () => {
+    expect(repositoryFactOtherAttributes('1 CHAN\n2 DATE 1 JAN 2020\n2 _WT_USER miron', 'CHAN')).toEqual([]);
+  });
+
+  test('a fact with no other subtags returns an empty array', () => {
+    expect(repositoryFactOtherAttributes('1 PHON 02-5680680', 'PHON')).toEqual([]);
   });
 });
 

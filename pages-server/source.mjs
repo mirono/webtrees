@@ -29,6 +29,12 @@
 // linked-individuals/families/media reverse-lookup section (a separate,
 // real PHP feature - deferred, same "narrow slice" cut as every prior
 // step), no slug canonicalization.
+//
+// This file also owns Repository's own data/logic (loadRepository()/
+// repositoryCanShowRecord() were needed for Source's own privacy
+// cascade above already; displayableRepositoryFacts()/
+// repositoryFactOtherAttributes() extend that to RepositoryPage's own
+// route - see docs/php-to-js-migration/phase5-repository-page.md).
 
 import { canShowViaResnChain, otherFactAttributes } from './individual.mjs';
 
@@ -175,6 +181,46 @@ export function sourceFactOtherAttributes(factGedcom, tag) {
     label: SOURCE_SUBTAG_LABELS[tag]?.[subtag] ?? `SOUR:${tag}:${subtag}`,
     value,
   }));
+}
+
+// Repository's own facts table (phase 5, RepositoryPage) - same
+// "record-page-details.phtml has no tag allowlist at all" reasoning
+// already confirmed for Source (app/GedcomRecord.php:552-570), applied
+// to REPO's own real element set (app/Gedcom.php: NAME/ADDR/PHON/
+// EMAIL/FAX/WWW/REFN/RIN/CHAN). NOTE is the one deliberate exclusion,
+// same reasoning as Source's own NOTE cut (needs its own shared-note
+// handling this simple renderer doesn't have yet).
+const REPOSITORY_FACT_TAGS = ['NAME', 'ADDR', 'PHON', 'EMAIL', 'FAX', 'WWW', 'REFN', 'RIN', 'CHAN'];
+
+/**
+ * @param {string[]} facts
+ * @returns {string[]}
+ */
+export function displayableRepositoryFacts(facts) {
+  return facts.filter((fact) => REPOSITORY_FACT_TAGS.includes(factTag(fact)));
+}
+
+// CHAN's _WT_USER already gets its own dedicated "Author of last
+// change" rendering, same as Source's own CHAN handling - skip it here
+// so it isn't shown twice.
+const REPOSITORY_SUBTAG_EXTRA_SKIP = {
+  CHAN: ['_WT_USER'],
+};
+
+/**
+ * One fact's "other attributes" - see sourceFactOtherAttributes()'s own
+ * doc comment for the shared mechanism. No known REPO-specific subtag
+ * label overrides yet (unlike Source's REPO:CALN) - falls back to the
+ * raw "REPO:<TAG>:<subtag>" path for anything encountered.
+ *
+ * @param {string} factGedcom
+ * @param {string} tag this fact's own top-level tag, e.g. 'ADDR'
+ * @returns {{label: string, value: string}[]}
+ */
+export function repositoryFactOtherAttributes(factGedcom, tag) {
+  const attributes = otherFactAttributes(factGedcom, REPOSITORY_SUBTAG_EXTRA_SKIP[tag] ?? []);
+
+  return attributes.map(({ subtag, value }) => ({ label: `REPO:${tag}:${subtag}`, value }));
 }
 
 /**

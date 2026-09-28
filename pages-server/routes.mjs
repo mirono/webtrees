@@ -191,3 +191,17 @@ export function matchSourcePagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Same shape as matchSourcePagePath() above, for PHP's
+ * `/tree/{tree}/repository/{xref}{/slug}` route
+ * (app/Http/Routes/WebRoutes.php:669).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchRepositoryPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/repository\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}

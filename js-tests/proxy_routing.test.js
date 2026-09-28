@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'vitest';
-import { isNodeRoute, isTreePagePath, isIndividualPagePath, isFamilyPagePath, isSourcePagePath, rewriteForPages } from '../proxy/routing.mjs';
+import {
+  isNodeRoute,
+  isTreePagePath,
+  isIndividualPagePath,
+  isFamilyPagePath,
+  isSourcePagePath,
+  isRepositoryPagePath,
+  rewriteForPages,
+} from '../proxy/routing.mjs';
 
 function urlFor(pathAndQuery) {
   return new URL(pathAndQuery, 'http://localhost');
@@ -165,6 +173,21 @@ describe('isNodeRoute', () => {
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
+  test('/tree/{tree}/repository/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/repository/R1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/repository/{xref}/{slug} is a Node route', () => {
+    const url = urlFor('/tree/ophir/repository/R1/Israel-State-Archives');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/repository/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Frepository%2FR1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
   test('plain /language/{value}', () => {
     const url = urlFor('/language/en-US');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
@@ -264,6 +287,27 @@ describe('isSourcePagePath', () => {
   test('does not match the bare prefix', () => {
     expect(isSourcePagePath('/tree/ophir/source')).toBe(false);
     expect(isSourcePagePath('/tree/ophir/source/')).toBe(false);
+  });
+});
+
+describe('isRepositoryPagePath', () => {
+  test('matches the bare path', () => {
+    expect(isRepositoryPagePath('/tree/ophir/repository/R1')).toBe(true);
+  });
+
+  test('a trailing slug is tolerated', () => {
+    expect(isRepositoryPagePath('/tree/ophir/repository/R1/Israel-State-Archives')).toBe(true);
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(isRepositoryPagePath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isRepositoryPagePath('/tree/ophir/family/F1')).toBe(false);
+    expect(isRepositoryPagePath('/tree/ophir/source/S1')).toBe(false);
+  });
+
+  test('does not match the bare prefix', () => {
+    expect(isRepositoryPagePath('/tree/ophir/repository')).toBe(false);
+    expect(isRepositoryPagePath('/tree/ophir/repository/')).toBe(false);
   });
 });
 

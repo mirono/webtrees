@@ -65,6 +65,7 @@ import {
   matchIndividualPagePath,
   matchFamilyPagePath,
   matchSourcePagePath,
+  matchRepositoryPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -111,12 +112,15 @@ import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
 import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
 import { renderSourcePage } from './source-view.mjs';
+import { renderRepositoryPage } from './repository-view.mjs';
 import {
   loadSource,
   loadRepository,
   repoXrefs,
   displayableSourceFacts,
   sourceFactOtherAttributes,
+  displayableRepositoryFacts,
+  repositoryFactOtherAttributes,
   repositoryCanShowRecord,
   sourceCanShowRecord,
 } from './source.mjs';
@@ -1982,6 +1986,129 @@ async function handleSourcePage(req, res, treeName, xref) {
   res.end(html);
 }
 
+async function handleRepositoryPage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let repository;
+  let facts;
+  let shown;
+  let accessLevel;
+  let defaultResnInfo;
+
+  try {
+    repository = await loadRepository(pool, tree.gedcomId, xref);
+
+    if (repository === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(repository.gedcom);
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, repository.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+    const repositoryViewer = { accessLevel, isSelfRecord: false };
+
+    shown = repositoryCanShowRecord(treeForPrivacy, repository.gedcom, repositoryViewer, defaultResnInfo.treeFactResn);
+  } catch (error) {
+    console.error('Failed to resolve repository privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const visibleFacts = [];
+
+  for (const fact of displayableRepositoryFacts(facts)) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+
+    visibleFacts.push({
+      tag,
+      value: tag === 'CHAN' ? '' : factPlainValue(fact),
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      time: timeMatch ? timeMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+      otherAttributes: repositoryFactOtherAttributes(fact, tag),
+    });
+  }
+
+  const titleName = extractNameFromFact(repository.gedcom, 'NAME');
+  const fullNameHtml =
+    titleName !== null ? titleName.full : `<span class="NAME" dir="auto" translate="no">${repository.xref}</span>`;
+
+  const repositoryViewModel = {
+    xref: repository.xref,
+    fullNameHtml,
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderRepositoryPage({ tree, user, csrfToken, repository: repositoryViewModel });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -2054,6 +2181,13 @@ const server = createServer(async (req, res) => {
 
   if (sourceMatch !== null) {
     await handleSourcePage(req, res, sourceMatch.tree, sourceMatch.xref);
+    return;
+  }
+
+  const repositoryMatch = matchRepositoryPagePath(url.pathname);
+
+  if (repositoryMatch !== null) {
+    await handleRepositoryPage(req, res, repositoryMatch.tree, repositoryMatch.xref);
     return;
   }
 

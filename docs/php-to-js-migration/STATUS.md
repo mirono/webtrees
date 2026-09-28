@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-27 (step 14c: real content for IndividualPage's Families/Sources/Notes/Media/Album tabs — closes out phase 5 step 14; only Places and Interactive tree remain permanently stubbed). This is the entry point for "where are we" —
+**Last updated: 2026-09-27 (step 15: `/tree/{tree}/repository/{xref}` (RepositoryPage) served entirely by Node — the fourth real-GEDCOM-record route, mostly reusing infrastructure already built for SourcePage). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4506 tests, all green.
+# Expect: 4538 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -114,6 +114,7 @@ just adding latency.
 | 5.14a | IndividualPage full page structure: photo box (real signed thumbnail URLs, no Node-side image processing), Name/Gender accordion, and the complete 8-tab bar (Facts and events + Families real, Sources/Notes/Media/Album/Interactive tree/Places stubbed for now) | **Done (2026-09-23)** — [phase5-individual-page-full.md](phase5-individual-page-full.md) |
 | 5.14b | IndividualPage's right-hand sidebar: Family navigator (real father/mother/husband/wife/son/daughter/sibling rows with elder/younger ordering, "you are here" marker) + Extra information (AFN/CHAN/REFN/SSN/etc, moved out of the main Facts tab) | **Done (2026-09-27)** — [phase5-individual-page-full.md](phase5-individual-page-full.md) |
 | 5.14c | Real content for IndividualPage's Families (per-member cards), Sources, Notes (new note.mjs for shared notes), Media, and Album tabs — closes out step 14 except Places/Interactive tree (permanently stubbed) | **Done (2026-09-27)** — [phase5-individual-page-full.md](phase5-individual-page-full.md) |
+| 5.15 | `/tree/{tree}/repository/{xref}` (RepositoryPage) served entirely by Node — the fourth real-GEDCOM-record route, mostly reusing loadRepository()/repositoryCanShowRecord() already built for SourcePage's own citation cascade | **Done (2026-09-27)** — [phase5-repository-page.md](phase5-repository-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
