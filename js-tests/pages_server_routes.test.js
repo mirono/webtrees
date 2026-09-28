@@ -12,6 +12,7 @@ import {
   matchFamilyPagePath,
   matchSourcePagePath,
   matchRepositoryPagePath,
+  matchNotePagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -293,5 +294,34 @@ describe('matchRepositoryPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchRepositoryPagePath('/tree/ophir')).toBeNull();
     expect(matchRepositoryPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchNotePagePath', () => {
+  test('extracts the tree and xref from the bare path', () => {
+    expect(matchNotePagePath('/tree/ophir/note/N3')).toEqual({ tree: 'ophir', xref: 'N3' });
+  });
+
+  test('a trailing slug is accepted and ignored', () => {
+    expect(matchNotePagePath('/tree/ophir/note/N3/some-slug')).toEqual({ tree: 'ophir', xref: 'N3' });
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(matchNotePagePath('/tree/ophir/individual/I1')).toBeNull();
+    expect(matchNotePagePath('/tree/ophir/repository/R1')).toBeNull();
+  });
+
+  test('the shared-note (SNOTE) variant does not match - real data has no SNOTE records', () => {
+    expect(matchNotePagePath('/tree/ophir/shared-note/N3')).toBeNull();
+  });
+
+  test('the bare prefix with no xref does not match', () => {
+    expect(matchNotePagePath('/tree/ophir/note/')).toBeNull();
+    expect(matchNotePagePath('/tree/ophir/note')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchNotePagePath('/tree/ophir')).toBeNull();
+    expect(matchNotePagePath('/')).toBeNull();
   });
 });

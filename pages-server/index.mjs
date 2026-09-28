@@ -66,6 +66,7 @@ import {
   matchFamilyPagePath,
   matchSourcePagePath,
   matchRepositoryPagePath,
+  matchNotePagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -106,6 +107,7 @@ import {
   childRelationshipLabel,
   siblingRelationshipLabel,
   selfRelationshipLabel,
+  otherFactAttributes,
 } from './individual.mjs';
 import { loadFactsMedia, mediaThumbnailUrl, loadGlideKey, needsWatermark } from './media.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
@@ -124,7 +126,8 @@ import {
   repositoryCanShowRecord,
   sourceCanShowRecord,
 } from './source.mjs';
-import { loadNote, noteCanShowRecord, noteText } from './note.mjs';
+import { loadNote, noteCanShowRecord, noteText, displayableNoteFacts } from './note.mjs';
+import { renderNotePage } from './note-view.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -1131,7 +1134,7 @@ async function handleIndividualPage(req, res, treeName, xref) {
     );
 
     sourcesTab = await sourcesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs);
-    notesTab = await notesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs);
+    notesTab = await notesTabItems(tree, treePrivacyPrefs, accessLevel, relPrefs, factPairs);
 
     const mediaFiles = await loadFactsMedia(
       pool,
@@ -1300,6 +1303,119 @@ async function resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs,
   }
 
   return { family, facts, husband, wife, children, defaultResnInfo };
+}
+
+/**
+ * Resolves one linked source's own showability, including its own REPO
+ * citation cascade - the same logic handleSourcePage() applies to the
+ * page's own subject source, factored out so NotePage's/the Notes tab's
+ * linked-record check can reuse it for a SOUR-type link without
+ * duplicating the repo cascade.
+ */
+async function linkedSourceCanShow(tree, treePrivacyPrefs, accessLevel, xref) {
+  const source = await loadSource(pool, tree.gedcomId, xref);
+
+  if (source === null) {
+    return true;
+  }
+
+  const facts = parseFacts(source.gedcom);
+  const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, source.xref);
+  const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+  const sourceViewer = { accessLevel, isSelfRecord: false };
+  const repoCanShowResults = [];
+
+  for (const repoXref of repoXrefs(facts)) {
+    const repository = await loadRepository(pool, tree.gedcomId, repoXref);
+
+    if (repository === null) {
+      continue;
+    }
+
+    const repoDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, repository.xref);
+    const repoTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: repoDefaultResnInfo.individualResn };
+
+    repoCanShowResults.push(repositoryCanShowRecord(repoTreeForPrivacy, repository.gedcom, sourceViewer, repoDefaultResnInfo.treeFactResn));
+  }
+
+  return sourceCanShowRecord(treeForPrivacy, source.gedcom, sourceViewer, defaultResnInfo.treeFactResn, repoCanShowResults);
+}
+
+/**
+ * Whether ONE record linking to a note/media object (a wt_link row's
+ * `l_from`) is itself showable to this viewer - the real check behind
+ * Note::canShowByType()/Media::canShowByType()'s own "hide if attached
+ * to a private record" loop (app/Note.php:58-75, app/Media.php:41-58).
+ * Dispatches by the linked record's OWN type (determined by which table
+ * actually holds it, not by the wt_link row's l_type - that column is
+ * the type of the LINK, e.g. always 'NOTE' for links pointing at a
+ * note, not the linking record's own type).
+ *
+ * Individual/Family/Source/Repository get the real, full privacy check
+ * (reusing the exact same machinery already built for their own pages).
+ * Media/Submitter/anything else/a since-deleted record fall back to
+ * "showable" - real PHP's own `$linked_record instanceof GedcomRecord`
+ * guard already does this for a missing record, and this migration
+ * hasn't ported Media's own (recursive) canShowByType() or Submitter's
+ * privacy chain yet - a deliberate, narrow scope cut, not an oversight.
+ */
+async function linkedRecordCanShow(tree, treePrivacyPrefs, accessLevel, relPrefs, xref) {
+  const typeResult = await pool.query(
+    `SELECT 'INDI' AS rtype FROM wt_individuals WHERE i_id = $1 AND i_file = $2
+     UNION ALL SELECT 'FAM' AS rtype FROM wt_families WHERE f_id = $1 AND f_file = $2
+     UNION ALL SELECT o_type AS rtype FROM wt_other WHERE o_id = $1 AND o_file = $2
+     LIMIT 1`,
+    [xref, tree.gedcomId],
+  );
+  const rtype = typeResult.rows[0]?.rtype ?? null;
+
+  if (rtype === 'INDI') {
+    const member = await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, xref);
+    return member === null || member.canShow;
+  }
+
+  if (rtype === 'FAM') {
+    return (await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, xref)) !== null;
+  }
+
+  if (rtype === 'SOUR') {
+    return linkedSourceCanShow(tree, treePrivacyPrefs, accessLevel, xref);
+  }
+
+  if (rtype === 'REPO') {
+    const repository = await loadRepository(pool, tree.gedcomId, xref);
+
+    if (repository === null) {
+      return true;
+    }
+
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, repository.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+
+    return repositoryCanShowRecord(treeForPrivacy, repository.gedcom, { accessLevel, isSelfRecord: false }, defaultResnInfo.treeFactResn);
+  }
+
+  return true;
+}
+
+/**
+ * Every record linking to a note (via wt_link, l_type='NOTE') must
+ * itself be showable for the note to be showable - see
+ * linkedRecordCanShow()'s own doc comment.
+ */
+async function noteLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, noteXref) {
+  const linkResult = await pool.query("SELECT l_from FROM wt_link WHERE l_to = $1 AND l_file = $2 AND l_type = 'NOTE'", [
+    noteXref,
+    tree.gedcomId,
+  ]);
+
+  for (const row of linkResult.rows) {
+    if (!(await linkedRecordCanShow(tree, treePrivacyPrefs, accessLevel, relPrefs, row.l_from))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -1660,7 +1776,7 @@ async function sourcesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs) {
  * @param {{fact: string, fromFamily: boolean}[]} factPairs
  * @returns {Promise<{tag: string, fromFamily: boolean, notes: {isShared: boolean, text: string}[]}[]>}
  */
-async function notesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs) {
+async function notesTabItems(tree, treePrivacyPrefs, accessLevel, relPrefs, factPairs) {
   const viewer = { accessLevel, isSelfRecord: false };
   const items = [];
 
@@ -1687,8 +1803,9 @@ async function notesTabItems(tree, treePrivacyPrefs, accessLevel, factPairs) {
 
         const noteDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, note.xref);
         const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: noteDefaultResnInfo.individualResn };
+        const linkedRecordsShowable = await noteLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, note.xref);
 
-        if (!noteCanShowRecord(treeForPrivacy, note.gedcom, viewer, noteDefaultResnInfo.treeFactResn)) {
+        if (!noteCanShowRecord(treeForPrivacy, note.gedcom, viewer, noteDefaultResnInfo.treeFactResn, linkedRecordsShowable)) {
           continue;
         }
 
@@ -2109,6 +2226,152 @@ async function handleRepositoryPage(req, res, treeName, xref) {
   res.end(html);
 }
 
+/**
+ * Str::limit() (Laravel) - truncates to `limit` characters, appending
+ * `end` only when actually truncated. Mirrors Note::extractNames()'s own
+ * use of it for a note's derived title.
+ */
+function limitText(value, limit, end) {
+  return value.length > limit ? value.slice(0, limit) + end : value;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+async function handleNotePage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let note;
+  let facts;
+  let shown;
+  let accessLevel;
+  let defaultResnInfo;
+
+  try {
+    note = await loadNote(pool, tree.gedcomId, xref);
+
+    if (note === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(note.gedcom);
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, note.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+    const noteViewer = { accessLevel, isSelfRecord: false };
+    const linkedRecordsShowable = await noteLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, note.xref);
+
+    shown = noteCanShowRecord(treeForPrivacy, note.gedcom, noteViewer, defaultResnInfo.treeFactResn, linkedRecordsShowable);
+  } catch (error) {
+    console.error('Failed to resolve note privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const visibleFacts = [];
+
+  for (const fact of displayableNoteFacts(facts)) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+
+    visibleFacts.push({
+      tag,
+      value: tag === 'CHAN' ? '' : factPlainValue(fact),
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      time: timeMatch ? timeMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+      otherAttributes: otherFactAttributes(fact, tag === 'CHAN' ? ['_WT_USER'] : []).map(({ subtag, value }) => ({
+        label: `NOTE:${tag}:${subtag}`,
+        value,
+      })),
+    });
+  }
+
+  const text = noteText(note.gedcom);
+  const firstLine = limitText(text.split('\n')[0] ?? '', 100, '…');
+  const fullNameHtml = firstLine !== '' ? `<bdi>${escapeHtml(firstLine)}</bdi>` : `<bdi>${escapeHtml(note.xref)}</bdi>`;
+
+  const noteViewModel = {
+    xref: note.xref,
+    fullNameHtml,
+    text,
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderNotePage({ tree, user, csrfToken, note: noteViewModel });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -2188,6 +2451,13 @@ const server = createServer(async (req, res) => {
 
   if (repositoryMatch !== null) {
     await handleRepositoryPage(req, res, repositoryMatch.tree, repositoryMatch.xref);
+    return;
+  }
+
+  const noteMatch = matchNotePagePath(url.pathname);
+
+  if (noteMatch !== null) {
+    await handleNotePage(req, res, noteMatch.tree, noteMatch.xref);
     return;
   }
 

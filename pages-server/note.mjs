@@ -13,16 +13,29 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Shared-Note data/logic - used by IndividualPage's Notes tab (phase 5
-// step 14c - docs/php-to-js-migration/phase5-individual-page-full.md).
+// Shared-Note data/logic - originally built for IndividualPage's Notes
+// tab (phase 5 step 14c), now also backing the standalone NotePage
+// route (phase 5 step 16 - docs/php-to-js-migration/phase5-note-page.md).
 // Notes have no dedicated table (same as Repository, source.mjs's own
 // loadRepository()) - stored in the generic wt_other table,
-// discriminated by o_type = 'NOTE'. Note extends GedcomRecord and
-// shares its canShowRecord() verbatim, with NO canShowByType()
-// override (same as Repository) - base GedcomRecord::canShowByType()
-// applies unmodified.
+// discriminated by o_type = 'NOTE'.
+//
+// UNLIKE Repository, Note::canShowByType() (app/Note.php:58-75) DOES
+// have a real override: a note is hidden whenever ANY record linking
+// to it (via wt_link) is itself unshowable - "hide notes attached to
+// private records". noteCanShowRecord() below takes this as a
+// precomputed `linkedRecordsShowable` boolean rather than querying
+// wt_link itself, matching this migration's established pattern of
+// keeping DB access in pages-server/index.mjs's handlers and privacy
+// *decisions* in these per-record-type modules (see
+// sourceCanShowRecord()'s own repoCanShowResults parameter for the
+// same shape).
 
 import { canShowViaResnChain } from './individual.mjs';
+
+function factTag(factGedcom) {
+  return /^1 (\S+)/.exec(factGedcom)?.[1] ?? '';
+}
 
 /**
  * @param {import('pg').Pool} pool
@@ -59,9 +72,9 @@ function defaultRecordCanShow(treeFactResn, viewer) {
 }
 
 /**
- * Mirrors Note's privacy (no canShowByType() override - base
- * GedcomRecord::canShowByType() only), same shared RESN chain already
- * built for Individual/Family/Source/Repository.
+ * Mirrors Note::canShowByType() (app/Note.php:58-75) via the shared RESN
+ * chain: hidden whenever any record linking to this note is itself
+ * unshowable, otherwise base GedcomRecord::canShowByType() applies.
  *
  * @param {{hideLivePeople: boolean, defaultResn: string|null}} tree individual-scoped
  *   default-resn info for THIS note's own xref (loadDefaultResn(), reused as-is)
@@ -69,10 +82,27 @@ function defaultRecordCanShow(treeFactResn, viewer) {
  * @param {{accessLevel: 0|1|2, isSelfRecord: boolean}} viewer isSelfRecord
  *   always false (the self-record exception is individual-only)
  * @param {Map<string,string>} treeFactResn from the SAME loadDefaultResn() call
+ * @param {boolean} linkedRecordsShowable false if ANY record linking to
+ *   this note (via wt_link) is itself unshowable to this viewer
  * @returns {boolean}
  */
-export function noteCanShowRecord(tree, gedcom, viewer, treeFactResn) {
-  return canShowViaResnChain(tree, gedcom, viewer, () => defaultRecordCanShow(treeFactResn, viewer));
+export function noteCanShowRecord(tree, gedcom, viewer, treeFactResn, linkedRecordsShowable) {
+  return canShowViaResnChain(tree, gedcom, viewer, () => linkedRecordsShowable && defaultRecordCanShow(treeFactResn, viewer));
+}
+
+// Note's own facts table (phase 5 step 16, NotePage) - same "no tag
+// allowlist" reasoning already confirmed for Source/Repository
+// (app/GedcomRecord.php:552-570): every level-1 fact is shown,
+// privacy-filtered only. NOTE:CONT/CONC are excluded defensively,
+// mirroring note-page-details.phtml's own `$fact->tag() !== 'NOTE:CONT'`
+// guard - parseFacts() only ever returns level-1 tags in practice, so
+// this is a safety net, not a real-world-reachable case.
+/**
+ * @param {string[]} facts
+ * @returns {string[]}
+ */
+export function displayableNoteFacts(facts) {
+  return facts.filter((fact) => !['CONT', 'CONC'].includes(factTag(fact)));
 }
 
 /**

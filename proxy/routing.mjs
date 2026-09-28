@@ -88,6 +88,15 @@ export function isRepositoryPagePath(pathname) {
   return /^\/tree\/[^/]+\/repository\/[^/]+(?:\/.*)?$/.test(pathname);
 }
 
+// /tree/{tree}/note/{xref}{/slug}: NotePage, the fifth real-GEDCOM-record
+// route (see docs/php-to-js-migration/phase5-note-page.md). Same
+// reasoning as isSourcePagePath() above. Deliberately NOT matching
+// /tree/{tree}/shared-note/{xref} - see pages-server/routes.mjs's
+// matchNotePagePath() doc comment.
+export function isNotePagePath(pathname) {
+  return /^\/tree\/[^/]+\/note\/[^/]+(?:\/.*)?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -105,7 +114,8 @@ export function isNodeRoute(pathname, searchParams) {
     isIndividualPagePath(pathname) ||
     isFamilyPagePath(pathname) ||
     isSourcePagePath(pathname) ||
-    isRepositoryPagePath(pathname)
+    isRepositoryPagePath(pathname) ||
+    isNotePagePath(pathname)
   ) {
     return true;
   }
@@ -122,7 +132,8 @@ export function isNodeRoute(pathname, searchParams) {
     isIndividualPagePath(route) ||
     isFamilyPagePath(route) ||
     isSourcePagePath(route) ||
-    isRepositoryPagePath(route)
+    isRepositoryPagePath(route) ||
+    isNotePagePath(route)
   );
 }
 

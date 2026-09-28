@@ -6,6 +6,7 @@ import {
   isFamilyPagePath,
   isSourcePagePath,
   isRepositoryPagePath,
+  isNotePagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -188,6 +189,21 @@ describe('isNodeRoute', () => {
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
+  test('/tree/{tree}/note/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/note/N3');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/note/{xref}/{slug} is a Node route', () => {
+    const url = urlFor('/tree/ophir/note/N3/some-slug');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/note/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fnote%2FN3');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
   test('plain /language/{value}', () => {
     const url = urlFor('/language/en-US');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
@@ -308,6 +324,30 @@ describe('isRepositoryPagePath', () => {
   test('does not match the bare prefix', () => {
     expect(isRepositoryPagePath('/tree/ophir/repository')).toBe(false);
     expect(isRepositoryPagePath('/tree/ophir/repository/')).toBe(false);
+  });
+});
+
+describe('isNotePagePath', () => {
+  test('matches the bare path', () => {
+    expect(isNotePagePath('/tree/ophir/note/N3')).toBe(true);
+  });
+
+  test('a trailing slug is tolerated', () => {
+    expect(isNotePagePath('/tree/ophir/note/N3/some-slug')).toBe(true);
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(isNotePagePath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isNotePagePath('/tree/ophir/repository/R1')).toBe(false);
+  });
+
+  test('the shared-note (SNOTE) variant does not match', () => {
+    expect(isNotePagePath('/tree/ophir/shared-note/N3')).toBe(false);
+  });
+
+  test('does not match the bare prefix', () => {
+    expect(isNotePagePath('/tree/ophir/note')).toBe(false);
+    expect(isNotePagePath('/tree/ophir/note/')).toBe(false);
   });
 });
 

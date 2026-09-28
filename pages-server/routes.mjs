@@ -205,3 +205,19 @@ export function matchRepositoryPagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Same shape as matchSourcePagePath() above, for PHP's
+ * `/tree/{tree}/note/{xref}{/slug}` route
+ * (app/Http/Routes/WebRoutes.php:666). Deliberately NOT matching
+ * `/tree/{tree}/shared-note/{xref}{/slug}` (the SNOTE variant) - the
+ * real imported data has zero SNOTE records, only legacy NOTE ones.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchNotePagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/note\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}

@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-27 (step 15: `/tree/{tree}/repository/{xref}` (RepositoryPage) served entirely by Node — the fourth real-GEDCOM-record route, mostly reusing infrastructure already built for SourcePage). This is the entry point for "where are we" —
+**Last updated: 2026-09-28 (step 16: `/tree/{tree}/note/{xref}` (NotePage) served entirely by Node — the fifth real-GEDCOM-record route, and the first to port Note::canShowByType()'s real linked-record privacy override). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4538 tests, all green.
+# Expect: 4564 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -115,6 +115,7 @@ just adding latency.
 | 5.14b | IndividualPage's right-hand sidebar: Family navigator (real father/mother/husband/wife/son/daughter/sibling rows with elder/younger ordering, "you are here" marker) + Extra information (AFN/CHAN/REFN/SSN/etc, moved out of the main Facts tab) | **Done (2026-09-27)** — [phase5-individual-page-full.md](phase5-individual-page-full.md) |
 | 5.14c | Real content for IndividualPage's Families (per-member cards), Sources, Notes (new note.mjs for shared notes), Media, and Album tabs — closes out step 14 except Places/Interactive tree (permanently stubbed) | **Done (2026-09-27)** — [phase5-individual-page-full.md](phase5-individual-page-full.md) |
 | 5.15 | `/tree/{tree}/repository/{xref}` (RepositoryPage) served entirely by Node — the fourth real-GEDCOM-record route, mostly reusing loadRepository()/repositoryCanShowRecord() already built for SourcePage's own citation cascade | **Done (2026-09-27)** — [phase5-repository-page.md](phase5-repository-page.md) |
+| 5.16 | `/tree/{tree}/note/{xref}` (NotePage) served entirely by Node — the fifth real-GEDCOM-record route; the first to port Note::canShowByType()'s real "hidden if any linking record is private" override (individual/family/source/repository fully checked, media/submitter deliberately out of scope); Markdown/autolink rendering intentionally not ported (plain escaped text instead) | **Done (2026-09-28)** — [phase5-note-page.md](phase5-note-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 

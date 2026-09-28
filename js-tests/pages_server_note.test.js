@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import { loadNote, noteCanShowRecord, noteText } from '../pages-server/note.mjs';
+import { loadNote, noteCanShowRecord, noteText, displayableNoteFacts } from '../pages-server/note.mjs';
 
 function mockPool(queryImpl) {
   return { query: vi.fn(queryImpl) };
@@ -43,26 +43,41 @@ describe('noteCanShowRecord', () => {
   const baseTree = { hideLivePeople: true, defaultResn: null };
   const baseViewer = { accessLevel: 2, isSelfRecord: false };
 
-  test('HIDE_LIVE_PEOPLE off -> always shown', () => {
-    expect(noteCanShowRecord({ ...baseTree, hideLivePeople: false }, '', { ...baseViewer, accessLevel: 0 }, new Map())).toBe(true);
+  test('HIDE_LIVE_PEOPLE off -> always shown (even if a linked record is unshowable)', () => {
+    expect(noteCanShowRecord({ ...baseTree, hideLivePeople: false }, '', { ...baseViewer, accessLevel: 0 }, new Map(), false)).toBe(
+      true,
+    );
   });
 
   test('no tree-wide NOTE default-resn row -> public by default (base GedcomRecord::canShowByType())', () => {
-    expect(noteCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 0 }, new Map())).toBe(true);
+    expect(noteCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 0 }, new Map(), true)).toBe(true);
   });
 
   test('a tree-wide NOTE default-resn row gates by access level', () => {
     const treeFactResn = new Map([['NOTE', 'confidential']]);
 
-    expect(noteCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 0 }, treeFactResn)).toBe(true);
-    expect(noteCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 1 }, treeFactResn)).toBe(false);
+    expect(noteCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 0 }, treeFactResn, true)).toBe(true);
+    expect(noteCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 1 }, treeFactResn, true)).toBe(false);
   });
 
   test('an inline RESN on the note record itself still applies (shared RESN chain)', () => {
     const gedcom = '0 @N1@ NOTE Text\n1 RESN confidential';
 
-    expect(noteCanShowRecord(baseTree, gedcom, { ...baseViewer, accessLevel: 2 }, new Map())).toBe(false);
-    expect(noteCanShowRecord(baseTree, gedcom, { ...baseViewer, accessLevel: 0 }, new Map())).toBe(true);
+    expect(noteCanShowRecord(baseTree, gedcom, { ...baseViewer, accessLevel: 2 }, new Map(), true)).toBe(false);
+    expect(noteCanShowRecord(baseTree, gedcom, { ...baseViewer, accessLevel: 0 }, new Map(), true)).toBe(true);
+  });
+
+  test('hidden whenever a linked record is unshowable, matching Note::canShowByType() (app/Note.php:58-75)', () => {
+    expect(noteCanShowRecord(baseTree, '', baseViewer, new Map(), false)).toBe(false);
+    expect(noteCanShowRecord(baseTree, '', baseViewer, new Map(), true)).toBe(true);
+  });
+});
+
+describe('displayableNoteFacts', () => {
+  test('keeps ordinary facts like CHAN, drops CONT/CONC continuation lines', () => {
+    const facts = ['1 CHAN\n2 DATE 1 JAN 2020', '1 CONT line two', '1 CONC -continued'];
+
+    expect(displayableNoteFacts(facts)).toEqual(['1 CHAN\n2 DATE 1 JAN 2020']);
   });
 });
 
