@@ -13,6 +13,7 @@ import {
   matchSourcePagePath,
   matchRepositoryPagePath,
   matchNotePagePath,
+  matchMediaPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -323,5 +324,30 @@ describe('matchNotePagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchNotePagePath('/tree/ophir')).toBeNull();
     expect(matchNotePagePath('/')).toBeNull();
+  });
+});
+
+describe('matchMediaPagePath', () => {
+  test('extracts the tree and xref from the bare path', () => {
+    expect(matchMediaPagePath('/tree/ophir/media/M1')).toEqual({ tree: 'ophir', xref: 'M1' });
+  });
+
+  test('a trailing slug is accepted and ignored', () => {
+    expect(matchMediaPagePath('/tree/ophir/media/M1/some-slug')).toEqual({ tree: 'ophir', xref: 'M1' });
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(matchMediaPagePath('/tree/ophir/individual/I1')).toBeNull();
+    expect(matchMediaPagePath('/tree/ophir/note/N3')).toBeNull();
+  });
+
+  test('the bare prefix with no xref does not match (ManageMediaPage)', () => {
+    expect(matchMediaPagePath('/tree/ophir/media/')).toBeNull();
+    expect(matchMediaPagePath('/tree/ophir/media')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchMediaPagePath('/tree/ophir')).toBeNull();
+    expect(matchMediaPagePath('/')).toBeNull();
   });
 });

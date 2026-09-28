@@ -7,6 +7,7 @@ import {
   isSourcePagePath,
   isRepositoryPagePath,
   isNotePagePath,
+  isMediaPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -114,11 +115,11 @@ describe('isNodeRoute', () => {
 
   // A sibling route under the same /tree/{tree} attach block (PHP
   // registers TreePage at '' - an exact match, not a prefix) must NOT
-  // be wrongly forwarded to Node - EXCEPT /tree/{tree}/individual/{xref}
-  // and /tree/{tree}/family/{xref}, which became their own Node routes
-  // in later steps (below).
-  test('a sibling route under /tree/{tree} that is not individual/{xref} or family/{xref} is not a Node route', () => {
-    const url = urlFor('/tree/ophir/media/M1');
+  // be wrongly forwarded to Node - EXCEPT the record types that became
+  // their own Node routes in later steps (below). Submitter has no
+  // Node route yet, so it's still a safe "not a Node route" example.
+  test('a sibling route under /tree/{tree} with no Node route yet is not a Node route', () => {
+    const url = urlFor('/tree/ophir/submitter/U1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -139,8 +140,8 @@ describe('isNodeRoute', () => {
 
   // A different record type under the same /tree/{tree}/individual/
   // prefix shape must not accidentally match.
-  test('a sibling record type (not individual, not family) is not a Node route', () => {
-    const url = urlFor('/tree/ophir/media/M1');
+  test('a sibling record type with no Node route yet is not a Node route', () => {
+    const url = urlFor('/tree/ophir/submitter/U1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -197,6 +198,31 @@ describe('isNodeRoute', () => {
   test('/tree/{tree}/note/{xref}/{slug} is a Node route', () => {
     const url = urlFor('/tree/ophir/note/N3/some-slug');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/media/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/media/M1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/media/{xref}/{slug} is a Node route', () => {
+    const url = urlFor('/tree/ophir/media/M1/some-slug');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/media/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fmedia%2FM1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/media (ManageMediaPage, no xref) stays on PHP', () => {
+    const url = urlFor('/tree/ophir/media');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
+  });
+
+  test('/tree/{tree}/media-upload stays on PHP', () => {
+    const url = urlFor('/tree/ophir/media-upload');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
   test('ugly-URL form ?route=/tree/{tree}/note/{xref}', () => {
@@ -348,6 +374,32 @@ describe('isNotePagePath', () => {
   test('does not match the bare prefix', () => {
     expect(isNotePagePath('/tree/ophir/note')).toBe(false);
     expect(isNotePagePath('/tree/ophir/note/')).toBe(false);
+  });
+});
+
+describe('isMediaPagePath', () => {
+  test('matches the bare path', () => {
+    expect(isMediaPagePath('/tree/ophir/media/M1')).toBe(true);
+  });
+
+  test('a trailing slug is tolerated', () => {
+    expect(isMediaPagePath('/tree/ophir/media/M1/some-slug')).toBe(true);
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(isMediaPagePath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isMediaPagePath('/tree/ophir/note/N3')).toBe(false);
+  });
+
+  test('does not match the bare prefix (ManageMediaPage) or media-upload', () => {
+    expect(isMediaPagePath('/tree/ophir/media')).toBe(false);
+    expect(isMediaPagePath('/tree/ophir/media/')).toBe(false);
+    expect(isMediaPagePath('/tree/ophir/media-upload')).toBe(false);
+  });
+
+  test('does not match the media-thumbnail/media-download PHP routes', () => {
+    expect(isMediaPagePath('/tree/ophir/media-thumbnail')).toBe(false);
+    expect(isMediaPagePath('/tree/ophir/media-download')).toBe(false);
   });
 });
 

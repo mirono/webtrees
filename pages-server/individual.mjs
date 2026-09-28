@@ -982,7 +982,7 @@ export function otherFactAttributes(factGedcom, extraSkipTags = []) {
  */
 export async function loadTreePrivacyPrefs(pool, gedcomId) {
   const result = await pool.query(
-    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('HIDE_LIVE_PEOPLE', 'SHOW_DEAD_PEOPLE', 'MAX_ALIVE_AGE', 'KEEP_ALIVE_YEARS_BIRTH', 'KEEP_ALIVE_YEARS_DEATH', 'SHOW_LIVING_NAMES', 'USE_SILHOUETTE', 'SHOW_NO_WATERMARK')",
+    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('HIDE_LIVE_PEOPLE', 'SHOW_DEAD_PEOPLE', 'MAX_ALIVE_AGE', 'KEEP_ALIVE_YEARS_BIRTH', 'KEEP_ALIVE_YEARS_DEATH', 'SHOW_LIVING_NAMES', 'USE_SILHOUETTE', 'SHOW_NO_WATERMARK', 'SHOW_MEDIA_DOWNLOAD')",
     [gedcomId],
   );
   const byName = Object.fromEntries(result.rows.map((row) => [row.setting_name, row.setting_value]));
@@ -1006,6 +1006,11 @@ export async function loadTreePrivacyPrefs(pool, gedcomId) {
     // boolean - kept numeric here rather than pre-resolved, since the
     // comparison needs the caller's own accessLevel.
     showNoWatermark: Number(byName.SHOW_NO_WATERMARK ?? '1'),
+    // Same "raw number, compared against the viewer's own accessLevel
+    // by the caller" shape as showNoWatermark above (Media::displayImage()'s
+    // own "download file" link gate - app/Tree.php default '0', i.e.
+    // admin-only by default).
+    showMediaDownload: Number(byName.SHOW_MEDIA_DOWNLOAD ?? '0'),
   };
 }
 

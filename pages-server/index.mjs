@@ -67,6 +67,7 @@ import {
   matchSourcePagePath,
   matchRepositoryPagePath,
   matchNotePagePath,
+  matchMediaPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -109,7 +110,20 @@ import {
   selfRelationshipLabel,
   otherFactAttributes,
 } from './individual.mjs';
-import { loadFactsMedia, mediaThumbnailUrl, loadGlideKey, needsWatermark } from './media.mjs';
+import {
+  loadFactsMedia,
+  mediaThumbnailUrl,
+  mediaDownloadUrl,
+  loadGlideKey,
+  needsWatermark,
+  loadMedia,
+  mediaFileDetails,
+  firstImageFile,
+  displayableMediaFacts,
+  mediaFactOtherAttributes,
+  mediaCanShowRecord,
+} from './media.mjs';
+import { renderMediaPage } from './media-view.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
 import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
@@ -1353,17 +1367,25 @@ async function linkedSourceCanShow(tree, treePrivacyPrefs, accessLevel, xref) {
  *
  * Individual/Family/Source/Repository get the real, full privacy check
  * (reusing the exact same machinery already built for their own pages).
- * Media/Submitter/anything else/a since-deleted record fall back to
- * "showable" - real PHP's own `$linked_record instanceof GedcomRecord`
- * guard already does this for a missing record, and this migration
- * hasn't ported Media's own (recursive) canShowByType() or Submitter's
- * privacy chain yet - a deliberate, narrow scope cut, not an oversight.
+ * Media gets its OWN base default privacy only (loadDefaultResn's
+ * tree-wide OBJE resn, via mediaCanShowRecord() with
+ * linkedRecordsShowable hardcoded true) - NOT its own further recursive
+ * linked-record check, to avoid unbounded mutual-reference recursion
+ * (a media object CAN itself carry a NOTE that references back to
+ * something referencing the original media - not reachable in the real
+ * tree's data, but not provably impossible either). Submitter/anything
+ * else/a since-deleted record fall back to "showable" - real PHP's own
+ * `$linked_record instanceof GedcomRecord` guard already does this for
+ * a missing record, and this migration hasn't ported Submitter's
+ * privacy chain at all - a deliberate, narrow scope cut, not an
+ * oversight.
  */
 async function linkedRecordCanShow(tree, treePrivacyPrefs, accessLevel, relPrefs, xref) {
   const typeResult = await pool.query(
     `SELECT 'INDI' AS rtype FROM wt_individuals WHERE i_id = $1 AND i_file = $2
      UNION ALL SELECT 'FAM' AS rtype FROM wt_families WHERE f_id = $1 AND f_file = $2
      UNION ALL SELECT o_type AS rtype FROM wt_other WHERE o_id = $1 AND o_file = $2
+     UNION ALL SELECT 'OBJE' AS rtype FROM wt_media WHERE m_id = $1 AND m_file = $2
      LIMIT 1`,
     [xref, tree.gedcomId],
   );
@@ -1393,6 +1415,42 @@ async function linkedRecordCanShow(tree, treePrivacyPrefs, accessLevel, relPrefs
     const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
 
     return repositoryCanShowRecord(treeForPrivacy, repository.gedcom, { accessLevel, isSelfRecord: false }, defaultResnInfo.treeFactResn);
+  }
+
+  if (rtype === 'OBJE') {
+    const media = await loadMedia(pool, tree.gedcomId, xref);
+
+    if (media === null) {
+      return true;
+    }
+
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, media.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+
+    return mediaCanShowRecord(treeForPrivacy, media.gedcom, { accessLevel, isSelfRecord: false }, defaultResnInfo.treeFactResn, true);
+  }
+
+  return true;
+}
+
+/**
+ * Every record linking to a media object (via wt_link, l_type='OBJE')
+ * must itself be showable for the media object to be showable - see
+ * linkedRecordCanShow()'s own doc comment. Used by handleMediaPage()
+ * itself (the full, real check for the media object's OWN privacy gate
+ * - unlike linkedRecordCanShow()'s OBJE branch above, which
+ * deliberately does NOT recurse into this).
+ */
+async function mediaLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, mediaXref) {
+  const linkResult = await pool.query("SELECT l_from FROM wt_link WHERE l_to = $1 AND l_file = $2 AND l_type = 'OBJE'", [
+    mediaXref,
+    tree.gedcomId,
+  ]);
+
+  for (const row of linkResult.rows) {
+    if (!(await linkedRecordCanShow(tree, treePrivacyPrefs, accessLevel, relPrefs, row.l_from))) {
+      return false;
+    }
   }
 
   return true;
@@ -2372,6 +2430,157 @@ async function handleNotePage(req, res, treeName, xref) {
   res.end(html);
 }
 
+async function handleMediaPage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let media;
+  let facts;
+  let shown;
+  let accessLevel;
+  let defaultResnInfo;
+  let treePrivacyPrefs;
+
+  try {
+    media = await loadMedia(pool, tree.gedcomId, xref);
+
+    if (media === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(media.gedcom);
+
+    treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, media.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+    const mediaViewer = { accessLevel, isSelfRecord: false };
+    const linkedRecordsShowable = await mediaLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, media.xref);
+
+    shown = mediaCanShowRecord(treeForPrivacy, media.gedcom, mediaViewer, defaultResnInfo.treeFactResn, linkedRecordsShowable);
+  } catch (error) {
+    console.error('Failed to resolve media privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const watermark = needsWatermark(accessLevel, treePrivacyPrefs.showNoWatermark);
+  const showDownloadLink = treePrivacyPrefs.showMediaDownload >= accessLevel;
+  const rawFiles = mediaFileDetails(media.gedcom);
+  const glideKey = rawFiles.some((file) => !file.isExternal) ? await loadGlideKey(pool) : null;
+
+  const files = rawFiles.map((file) => {
+    const isDisplayableImage = !file.isExternal && file.mimeType !== null;
+    const urlParams = { xref: media.xref, treeName: tree.name, factId: file.factId, needsWatermark: watermark };
+
+    return {
+      ...file,
+      imageUrl: isDisplayableImage ? mediaThumbnailUrl({ ...urlParams, width: 200, height: 150, fit: 'contain' }, glideKey, siteUrlConfig) : null,
+      downloadUrl: !file.isExternal ? mediaDownloadUrl({ ...urlParams, disposition: 'inline' }, siteUrlConfig) : '',
+      attachmentUrl: !file.isExternal ? mediaDownloadUrl({ ...urlParams, disposition: 'attachment' }, siteUrlConfig) : '',
+      showDownloadLink: !file.isExternal && showDownloadLink,
+    };
+  });
+
+  const visibleFacts = [];
+
+  for (const fact of displayableMediaFacts(facts)) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+
+    visibleFacts.push({
+      tag,
+      value: tag === 'CHAN' ? '' : factPlainValue(fact),
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      time: timeMatch ? timeMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+      otherAttributes: mediaFactOtherAttributes(fact, tag),
+    });
+  }
+
+  // Media::extractNames() (app/Media.php:104-128), simplified: the
+  // first non-empty file title (getPrimaryName() picks the first name
+  // in the general case, the same simplification already applied
+  // elsewhere in this migration), else the first non-empty filename,
+  // else the record's own xref (GedcomRecord::getFallBackName()).
+  const titles = files.map((file) => file.title).filter((title) => title !== '');
+  const filenames = files.map((file) => file.filename).filter((filename) => filename !== '');
+  const chosenName = titles[0] ?? filenames[0] ?? media.xref;
+  const fullNameHtml = `<bdi>${escapeHtml(chosenName)}</bdi>`;
+
+  const mediaViewModel = {
+    xref: media.xref,
+    fullNameHtml,
+    files,
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderMediaPage({ tree, user, csrfToken, media: mediaViewModel });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -2458,6 +2667,13 @@ const server = createServer(async (req, res) => {
 
   if (noteMatch !== null) {
     await handleNotePage(req, res, noteMatch.tree, noteMatch.xref);
+    return;
+  }
+
+  const mediaMatch = matchMediaPagePath(url.pathname);
+
+  if (mediaMatch !== null) {
+    await handleMediaPage(req, res, mediaMatch.tree, mediaMatch.xref);
     return;
   }
 

@@ -630,6 +630,7 @@ describe('loadTreePrivacyPrefs', () => {
       showLivingNames: 1,
       useSilhouette: true,
       showNoWatermark: 1,
+      showMediaDownload: 0,
     });
   });
 

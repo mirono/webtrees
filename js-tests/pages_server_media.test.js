@@ -17,12 +17,17 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   loadMedia,
   mediaFiles,
+  mediaFileDetails,
   firstImageFile,
   needsWatermark,
   mediaThumbnailSignature,
   mediaThumbnailUrl,
+  mediaDownloadUrl,
   loadFactsMedia,
   loadGlideKey,
+  displayableMediaFacts,
+  mediaFactOtherAttributes,
+  mediaCanShowRecord,
 } from '../pages-server/media.mjs';
 
 function mockPool(queryImpl) {
@@ -226,6 +231,113 @@ describe('loadFactsMedia', () => {
 
     expect(await loadFactsMedia(pool, 1, ['1 SEX M', '1 BIRT'])).toEqual([]);
     expect(pool.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('mediaFileDetails', () => {
+  test('extracts filename/title/type/format alongside the same factId/isExternal/mimeType as mediaFiles()', () => {
+    const fact = '1 FILE weiss-yael.jpg\n2 FORM jpeg\n3 TYPE photo\n2 TITL Yael Weiss';
+    const details = mediaFileDetails(`0 @M1@ OBJE\n${fact}`);
+
+    expect(details).toHaveLength(1);
+    expect(details[0]).toMatchObject({
+      filename: 'weiss-yael.jpg',
+      isExternal: false,
+      mimeType: 'image/jpeg',
+      fullMimeType: 'image/jpeg',
+      format: 'jpeg',
+      type: 'photo',
+      title: 'Yael Weiss',
+    });
+  });
+
+  test('a non-image extension (e.g. PDF) gets a null mimeType but a real fullMimeType for the mime icon', () => {
+    const details = mediaFileDetails('1 FILE document.pdf\n2 FORM pdf');
+
+    expect(details[0].mimeType).toBeNull();
+    expect(details[0].fullMimeType).toBe('application/pdf');
+  });
+
+  test('an unrecognized extension falls back to the default mime type', () => {
+    expect(mediaFileDetails('1 FILE archive.zip')[0].fullMimeType).toBe('application/octet-stream');
+  });
+
+  test('a file with no TITL/TYPE/FORM sub-facts has empty strings, not undefined', () => {
+    const details = mediaFileDetails('1 FILE bare.jpg');
+
+    expect(details[0].title).toBe('');
+    expect(details[0].type).toBe('');
+    expect(details[0].format).toBe('');
+  });
+});
+
+describe('mediaDownloadUrl', () => {
+  test('builds an UNSIGNED URL (MediaFileDownload re-checks canShow(), not a signature)', () => {
+    const url = mediaDownloadUrl(
+      { xref: 'M1', treeName: 'ophir', factId: 'abc123', disposition: 'inline', needsWatermark: false },
+      { baseUrl: '', rewriteUrls: false },
+    );
+
+    expect(url).toContain('route=%2Ftree%2Fophir%2Fmedia-download');
+    expect(url).toContain('xref=M1');
+    expect(url).toContain('fact_id=abc123');
+    expect(url).toContain('disposition=inline');
+    expect(url).not.toMatch(/[?&]s=/);
+  });
+
+  test('needsWatermark true -> mark=1, false -> mark absent/empty', () => {
+    const base = { xref: 'M1', treeName: 't', factId: 'f', disposition: 'attachment' };
+
+    expect(mediaDownloadUrl({ ...base, needsWatermark: true }, { baseUrl: '', rewriteUrls: false })).toContain('mark=1');
+  });
+});
+
+describe('displayableMediaFacts', () => {
+  test('keeps ordinary facts like CHAN, drops FILE facts (rendered in their own dedicated block)', () => {
+    const facts = ['1 FILE photo.jpg\n2 FORM jpg', '1 CHAN\n2 DATE 1 JAN 2020'];
+
+    expect(displayableMediaFacts(facts)).toEqual(['1 CHAN\n2 DATE 1 JAN 2020']);
+  });
+});
+
+describe('mediaFactOtherAttributes', () => {
+  test('falls back to the raw OBJE:<TAG>:<subtag> path', () => {
+    const fact = '1 SOUR @S1@\n2 _CUSTOM some value';
+
+    expect(mediaFactOtherAttributes(fact, 'SOUR')).toEqual([{ label: 'OBJE:SOUR:_CUSTOM', value: 'some value' }]);
+  });
+
+  test("CHAN's _WT_USER is excluded (already shown as \"Author of last change\")", () => {
+    const fact = '1 CHAN\n2 DATE 1 JAN 2020\n2 _WT_USER miron';
+
+    expect(mediaFactOtherAttributes(fact, 'CHAN')).toEqual([]);
+  });
+});
+
+describe('mediaCanShowRecord', () => {
+  const baseTree = { hideLivePeople: true, defaultResn: null };
+  const baseViewer = { accessLevel: 2, isSelfRecord: false };
+
+  test('HIDE_LIVE_PEOPLE off -> always shown (even if a linked record is unshowable)', () => {
+    expect(mediaCanShowRecord({ ...baseTree, hideLivePeople: false }, '', { ...baseViewer, accessLevel: 0 }, new Map(), false)).toBe(
+      true,
+    );
+  });
+
+  test('no tree-wide OBJE default-resn row -> public by default (base GedcomRecord::canShowByType())', () => {
+    expect(mediaCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 0 }, new Map(), true)).toBe(true);
+  });
+
+  test('a tree-wide OBJE default-resn row gates by access level', () => {
+    const treeFactResn = new Map([['OBJE', 'confidential']]);
+
+    expect(mediaCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 0 }, treeFactResn, true)).toBe(true);
+    expect(mediaCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 1 }, treeFactResn, true)).toBe(false);
+  });
+
+  test('hidden whenever a linked record is unshowable, matching Media::canShowByType() (app/Media.php:41-58)', () => {
+    expect(mediaCanShowRecord(baseTree, '', baseViewer, new Map(), false)).toBe(false);
+    expect(mediaCanShowRecord(baseTree, '', baseViewer, new Map(), true)).toBe(true);
   });
 });
 

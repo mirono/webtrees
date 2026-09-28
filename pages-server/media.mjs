@@ -25,7 +25,7 @@
 // needed in Node at all.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { parseFacts } from './individual.mjs';
+import { parseFacts, canShowViaResnChain, otherFactAttributes } from './individual.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 
 function factTag(factGedcom) {
@@ -63,6 +63,18 @@ const IMAGE_MIME_TYPES = {
   WEBP: 'image/webp',
 };
 
+// Widened from IMAGE_MIME_TYPES above for MediaPage's own "wt-mime-<type>"
+// icon on a non-image file (resources/views/icons/mime.phtml) - reduced
+// from app/Mime.php's full ~40-entry TYPES map to the extensions the
+// real imported tree actually has (BMP/PDF, plus every IMAGE_MIME_TYPES
+// entry), falling back to Mime::DEFAULT_TYPE for anything else.
+const EXTENDED_MIME_TYPES = {
+  ...IMAGE_MIME_TYPES,
+  BMP: 'image/bmp',
+  PDF: 'application/pdf',
+};
+const DEFAULT_MIME_TYPE = 'application/octet-stream';
+
 /**
  * Mirrors Media::mediaFiles() (app/Media.php:65-69): every `1 FILE`
  * fact on the record, each mapped to a MediaFile-shaped object.
@@ -90,6 +102,44 @@ export function mediaFiles(mediaGedcom) {
         // MediaFile::isExternal() (app/MediaFile.php:199-202).
         isExternal: filename.includes('://'),
         mimeType: IMAGE_MIME_TYPES[extension] ?? null,
+      };
+    });
+}
+
+/**
+ * MediaPage's own facts-table scope (phase 5 step 17) - the same FILE
+ * facts as mediaFiles() above, but with the sub-attributes
+ * media-page-details.phtml actually displays per file (filename/title/
+ * type/format - app/Gedcom.php's real 'OBJE:FILE:TITL'/'OBJE:FILE:FORM'/
+ * 'OBJE:FILE:FORM:TYPE' elements). Kept as a SEPARATE function rather
+ * than widening mediaFiles() itself - that function's existing callers
+ * (the IndividualPage photo box / Media / Album tabs) only ever need
+ * the 4 fields it already returns, and widening it would be a
+ * needless, unrequested shape change to already-shipped code.
+ *
+ * @param {string} mediaGedcom
+ * @returns {{factId: string, filename: string, isExternal: boolean, mimeType: string|null, title: string, type: string, format: string}[]}
+ */
+export function mediaFileDetails(mediaGedcom) {
+  return parseFacts(mediaGedcom)
+    .filter((fact) => factTag(fact) === 'FILE')
+    .map((fact) => {
+      const filenameMatch = /^1 FILE (.+)/.exec(fact);
+      const filename = filenameMatch ? filenameMatch[1] : '';
+      const extension = filename.includes('.') ? filename.slice(filename.lastIndexOf('.') + 1).toUpperCase() : '';
+      const formMatch = /\n2 FORM (\S+)/.exec(fact);
+      const typeMatch = /\n3 TYPE (.+)/.exec(fact);
+      const titleMatch = /\n2 TITL (.+)/.exec(fact);
+
+      return {
+        factId: createHash('md5').update(fact).digest('hex'),
+        filename,
+        isExternal: filename.includes('://'),
+        mimeType: IMAGE_MIME_TYPES[extension] ?? null,
+        fullMimeType: EXTENDED_MIME_TYPES[extension] ?? DEFAULT_MIME_TYPE,
+        format: formMatch ? formMatch[1] : '',
+        type: typeMatch ? typeMatch[1] : '',
+        title: titleMatch ? titleMatch[1] : '',
       };
     });
 }
@@ -201,6 +251,35 @@ export function mediaThumbnailUrl({ xref, treeName, factId, width, height, fit, 
 }
 
 /**
+ * Mirrors MediaFile::downloadUrl() (app/MediaFile.php:261-271) - unlike
+ * imageUrl(), this route is NOT signed (MediaFileDownload.php re-checks
+ * the media record's own canShow() before serving, rather than trusting
+ * a URL signature - confirmed by reading the handler directly, no `s`
+ * param anywhere). `mark` is real PHP's own "ignored but needed for
+ * cache-busting" query param (still computed the same way as the
+ * thumbnail route's, for consistency, though MediaFileDownload.php
+ * itself re-derives whether to actually apply a watermark server-side
+ * regardless of this value).
+ *
+ * @param {object} params
+ * @param {string} params.xref the MEDIA record's own xref
+ * @param {string} params.treeName
+ * @param {string} params.factId
+ * @param {'inline'|'attachment'} params.disposition
+ * @param {boolean} params.needsWatermark
+ * @param {{baseUrl: string, rewriteUrls: boolean}} siteUrlConfig
+ * @returns {string}
+ */
+export function mediaDownloadUrl({ xref, treeName, factId, disposition, needsWatermark: mark }, siteUrlConfig) {
+  return phpRouteUrl(`/tree/${treeName}/media-download`, siteUrlConfig, {
+    xref,
+    fact_id: factId,
+    disposition,
+    mark: mark ? '1' : '',
+  });
+}
+
+/**
  * Mirrors the OBJE-fact resolution IndividualPage::handle() does inline
  * for the photo box (app/Http/RequestHandlers/IndividualPage.php -
  * direct `1 OBJE @Mn@` facts only) AND MediaTabModule::getFactsWithMedia()'s
@@ -269,4 +348,80 @@ export async function loadGlideKey(pool) {
   );
 
   return result.rows[0].setting_value;
+}
+
+// MediaPage's own facts table (phase 5 step 17) - same "no tag
+// allowlist" reasoning already confirmed for Source/Repository/Note
+// (app/GedcomRecord.php:552-570): every level-1 fact is shown,
+// privacy-filtered only, EXCEPT `FILE` - media-page-details.phtml
+// renders FILE facts in their own dedicated block above the generic
+// facts table (`$record->facts()->filter(fn ($fact) => $fact->tag()
+// !== 'OBJE:FILE')`), not through the generic per-fact renderer.
+function factTagOnly(factGedcom) {
+  return /^1 (\S+)/.exec(factGedcom)?.[1] ?? '';
+}
+
+/**
+ * @param {string[]} facts
+ * @returns {string[]}
+ */
+export function displayableMediaFacts(facts) {
+  return facts.filter((fact) => factTagOnly(fact) !== 'FILE');
+}
+
+// CHAN's _WT_USER already gets its own dedicated "Author of last
+// change" rendering, same as every other record type's CHAN handling -
+// skip it here so it isn't shown twice.
+const MEDIA_SUBTAG_EXTRA_SKIP = {
+  CHAN: ['_WT_USER'],
+};
+
+/**
+ * One fact's "other attributes" - see source.mjs's sourceFactOtherAttributes()
+ * own doc comment for the shared mechanism. No known OBJE-specific
+ * subtag label overrides yet - falls back to the raw "OBJE:<TAG>:<subtag>"
+ * path for anything encountered.
+ *
+ * @param {string} factGedcom
+ * @param {string} tag this fact's own top-level tag, e.g. 'SOUR'
+ * @returns {{label: string, value: string}[]}
+ */
+export function mediaFactOtherAttributes(factGedcom, tag) {
+  const attributes = otherFactAttributes(factGedcom, MEDIA_SUBTAG_EXTRA_SKIP[tag] ?? []);
+
+  return attributes.map(({ subtag, value }) => ({ label: `OBJE:${tag}:${subtag}`, value }));
+}
+
+// Base GedcomRecord::canShowByType() (app/GedcomRecord.php:841-852)'s
+// own record-type-level default: PUBLIC unless a tree-wide
+// wt_default_resn row exists for this record type (tag_type = 'OBJE',
+// xref IS NULL) - same shape already confirmed for NOTE/REPO/SOUR.
+function defaultRecordCanShow(treeFactResn, viewer) {
+  const resn = treeFactResn.get('OBJE') ?? null;
+
+  if (resn === null) {
+    return true;
+  }
+
+  return { none: 2, privacy: 1, confidential: 0, hidden: -1 }[resn] >= viewer.accessLevel;
+}
+
+/**
+ * Mirrors Media::canShowByType() (app/Media.php:41-58) via the shared
+ * RESN chain: hidden whenever any record linking to this media object
+ * is itself unshowable, otherwise base GedcomRecord::canShowByType()
+ * applies - the EXACT same shape as Note::canShowByType()
+ * (note.mjs's own noteCanShowRecord()), since both real PHP methods
+ * are near-identical "hide if attached to a private record" loops.
+ *
+ * @param {{hideLivePeople: boolean, defaultResn: string|null}} tree
+ * @param {string} gedcom the media record's raw text
+ * @param {{accessLevel: 0|1|2, isSelfRecord: boolean}} viewer
+ * @param {Map<string,string>} treeFactResn from loadDefaultResn()
+ * @param {boolean} linkedRecordsShowable false if ANY record linking to
+ *   this media object (via wt_link) is itself unshowable to this viewer
+ * @returns {boolean}
+ */
+export function mediaCanShowRecord(tree, gedcom, viewer, treeFactResn, linkedRecordsShowable) {
+  return canShowViaResnChain(tree, gedcom, viewer, () => linkedRecordsShowable && defaultRecordCanShow(treeFactResn, viewer));
 }

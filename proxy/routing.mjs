@@ -97,6 +97,16 @@ export function isNotePagePath(pathname) {
   return /^\/tree\/[^/]+\/note\/[^/]+(?:\/.*)?$/.test(pathname);
 }
 
+// /tree/{tree}/media/{xref}{/slug}: MediaPage, the sixth real-GEDCOM-record
+// route (see docs/php-to-js-migration/phase5-media-page.md). Same
+// reasoning as isSourcePagePath() above. The required trailing "/media/"
+// (not just "/media") also correctly excludes the bare /tree/{tree}/media
+// (ManageMediaPage) and /tree/{tree}/media-upload routes, both of which
+// stay on PHP.
+export function isMediaPagePath(pathname) {
+  return /^\/tree\/[^/]+\/media\/[^/]+(?:\/.*)?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -115,7 +125,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFamilyPagePath(pathname) ||
     isSourcePagePath(pathname) ||
     isRepositoryPagePath(pathname) ||
-    isNotePagePath(pathname)
+    isNotePagePath(pathname) ||
+    isMediaPagePath(pathname)
   ) {
     return true;
   }
@@ -133,7 +144,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFamilyPagePath(route) ||
     isSourcePagePath(route) ||
     isRepositoryPagePath(route) ||
-    isNotePagePath(route)
+    isNotePagePath(route) ||
+    isMediaPagePath(route)
   );
 }
 

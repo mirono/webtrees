@@ -221,3 +221,17 @@ export function matchNotePagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Same shape as matchSourcePagePath() above, for PHP's
+ * `/tree/{tree}/media/{xref}{/slug}` route
+ * (app/Http/Routes/WebRoutes.php:665).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchMediaPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/media\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
