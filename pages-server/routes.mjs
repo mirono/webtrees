@@ -235,3 +235,17 @@ export function matchMediaPagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Same shape as matchSourcePagePath() above, for PHP's
+ * `/tree/{tree}/submitter/{xref}{/slug}` route
+ * (app/Http/Routes/WebRoutes.php:672).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchSubmitterPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/submitter\/([^/]+)(?:\/.*)?$/.exec(pathname);
+
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}

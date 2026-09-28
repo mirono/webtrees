@@ -107,6 +107,13 @@ export function isMediaPagePath(pathname) {
   return /^\/tree\/[^/]+\/media\/[^/]+(?:\/.*)?$/.test(pathname);
 }
 
+// /tree/{tree}/submitter/{xref}{/slug}: SubmitterPage, the seventh
+// real-GEDCOM-record route (see docs/php-to-js-migration/
+// phase5-submitter-page.md). Same reasoning as isSourcePagePath() above.
+export function isSubmitterPagePath(pathname) {
+  return /^\/tree\/[^/]+\/submitter\/[^/]+(?:\/.*)?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -126,7 +133,8 @@ export function isNodeRoute(pathname, searchParams) {
     isSourcePagePath(pathname) ||
     isRepositoryPagePath(pathname) ||
     isNotePagePath(pathname) ||
-    isMediaPagePath(pathname)
+    isMediaPagePath(pathname) ||
+    isSubmitterPagePath(pathname)
   ) {
     return true;
   }
@@ -145,7 +153,8 @@ export function isNodeRoute(pathname, searchParams) {
     isSourcePagePath(route) ||
     isRepositoryPagePath(route) ||
     isNotePagePath(route) ||
-    isMediaPagePath(route)
+    isMediaPagePath(route) ||
+    isSubmitterPagePath(route)
   );
 }
 

@@ -68,6 +68,7 @@ import {
   matchRepositoryPagePath,
   matchNotePagePath,
   matchMediaPagePath,
+  matchSubmitterPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -124,6 +125,8 @@ import {
   mediaCanShowRecord,
 } from './media.mjs';
 import { renderMediaPage } from './media-view.mjs';
+import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
+import { renderSubmitterPage } from './submitter-view.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
 import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
@@ -2581,6 +2584,138 @@ async function handleMediaPage(req, res, treeName, xref) {
   res.end(html);
 }
 
+async function handleSubmitterPage(req, res, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let submitter;
+  let facts;
+  let shown;
+  let accessLevel;
+  let defaultResnInfo;
+
+  try {
+    submitter = await loadSubmitter(pool, tree.gedcomId, xref);
+
+    if (submitter === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    facts = parseFacts(submitter.gedcom);
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+
+    defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, submitter.xref);
+    const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+    const submitterViewer = { accessLevel, isSelfRecord: false };
+
+    shown = submitterCanShowRecord(treeForPrivacy, submitter.gedcom, submitterViewer, defaultResnInfo.treeFactResn);
+  } catch (error) {
+    console.error('Failed to resolve submitter privacy:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (!shown) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const visibleFacts = [];
+
+  for (const fact of displayableSubmitterFacts(facts)) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const resolvedDefaultResn = defaultResnInfo.factResn.get(tag) ?? defaultResnInfo.treeFactResn.get(tag) ?? null;
+
+    if (!factCanShow(fact, accessLevel, resolvedDefaultResn)) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    const timeMatch = /\n3 TIME (.+)/.exec(fact);
+    const authorMatch = /\n2 _WT_USER (.+)/.exec(fact);
+
+    visibleFacts.push({
+      tag,
+      value: tag === 'CHAN' ? '' : factPlainValue(fact),
+      date: dateMatch ? displayDate(new GedcomDate(dateMatch[1])) : '',
+      time: timeMatch ? timeMatch[1] : '',
+      author: authorMatch ? authorMatch[1] : '',
+      otherAttributes: submitterFactOtherAttributes(fact, tag),
+    });
+  }
+
+  // Submitter::extractNames() (app/Submitter.php:33-36) uses the real
+  // NAME-fact extraction machinery (extractNamesFromFacts, the SAME
+  // <span class="NAME"> shape Individual/Repository use) - NOT the
+  // <bdi> addName() fallback Note/Media use, since Submitter really
+  // does carry a proper `1 NAME` fact when one exists. A submitter with
+  // no NAME fact at all (real in this tree - "U1" has only a RIN) falls
+  // back to the record's own xref - a deliberate, simpler substitute
+  // for real PHP's own edge case here (GedcomRecord::fullName()
+  // indexing an empty getAllNames() array), not a faithful port of
+  // whatever PHP actually does in that corner case.
+  const titleName = extractNameFromFact(submitter.gedcom, 'NAME');
+  const fullNameHtml = titleName !== null ? titleName.full : `<span class="NAME" dir="auto" translate="no">${submitter.xref}</span>`;
+
+  const submitterViewModel = {
+    xref: submitter.xref,
+    fullNameHtml,
+    facts: visibleFacts,
+  };
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderSubmitterPage({ tree, user, csrfToken, submitter: submitterViewModel });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -2674,6 +2809,13 @@ const server = createServer(async (req, res) => {
 
   if (mediaMatch !== null) {
     await handleMediaPage(req, res, mediaMatch.tree, mediaMatch.xref);
+    return;
+  }
+
+  const submitterMatch = matchSubmitterPagePath(url.pathname);
+
+  if (submitterMatch !== null) {
+    await handleSubmitterPage(req, res, submitterMatch.tree, submitterMatch.xref);
     return;
   }
 

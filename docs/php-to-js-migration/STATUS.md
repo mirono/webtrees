@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-28 (step 17: `/tree/{tree}/media/{xref}` (MediaPage) served entirely by Node — the sixth real-GEDCOM-record route, reusing and extending step 16's linked-record privacy machinery for Media::canShowByType()). This is the entry point for "where are we" —
+**Last updated: 2026-09-28 (step 18: `/tree/{tree}/submitter/{xref}` (SubmitterPage) served entirely by Node — the seventh and last of the currently-planned real-GEDCOM-record routes, the simplest yet: no linked-record privacy override, no tag allowlist at all). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4607 tests, all green.
+# Expect: 4643 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -117,6 +117,7 @@ just adding latency.
 | 5.15 | `/tree/{tree}/repository/{xref}` (RepositoryPage) served entirely by Node — the fourth real-GEDCOM-record route, mostly reusing loadRepository()/repositoryCanShowRecord() already built for SourcePage's own citation cascade | **Done (2026-09-27)** — [phase5-repository-page.md](phase5-repository-page.md) |
 | 5.16 | `/tree/{tree}/note/{xref}` (NotePage) served entirely by Node — the fifth real-GEDCOM-record route; the first to port Note::canShowByType()'s real "hidden if any linking record is private" override (individual/family/source/repository fully checked, media/submitter deliberately out of scope); Markdown/autolink rendering intentionally not ported (plain escaped text instead) | **Done (2026-09-28)** — [phase5-note-page.md](phase5-note-page.md) |
 | 5.17 | `/tree/{tree}/media/{xref}` (MediaPage) served entirely by Node — the sixth real-GEDCOM-record route; ports Media::canShowByType()'s identical "hidden if any linking record is private" override; per-file Title/Media type/Format rows, real signed image thumbnails (reusing step 14a's mechanism unchanged) and mime-icon fallback for non-image files (PDFs, real in this tree) | **Done (2026-09-28)** — [phase5-media-page.md](phase5-media-page.md) |
+| 5.18 | `/tree/{tree}/submitter/{xref}` (SubmitterPage) served entirely by Node — the seventh real-GEDCOM-record route, rendered via real PHP's generic record-page/record-page-details shared views (no dedicated template); no canShowByType() override at all (same shape as Repository); no tag allowlist (NOTE facts render inline, unlike Source/Repository's own deliberate NOTE exclusion) | **Done (2026-09-28)** — [phase5-submitter-page.md](phase5-submitter-page.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 

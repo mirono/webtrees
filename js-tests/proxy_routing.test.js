@@ -8,6 +8,7 @@ import {
   isRepositoryPagePath,
   isNotePagePath,
   isMediaPagePath,
+  isSubmitterPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -116,10 +117,10 @@ describe('isNodeRoute', () => {
   // A sibling route under the same /tree/{tree} attach block (PHP
   // registers TreePage at '' - an exact match, not a prefix) must NOT
   // be wrongly forwarded to Node - EXCEPT the record types that became
-  // their own Node routes in later steps (below). Submitter has no
-  // Node route yet, so it's still a safe "not a Node route" example.
+  // their own Node routes in later steps (below). Location has no Node
+  // route yet, so it's still a safe "not a Node route" example.
   test('a sibling route under /tree/{tree} with no Node route yet is not a Node route', () => {
-    const url = urlFor('/tree/ophir/submitter/U1');
+    const url = urlFor('/tree/ophir/location/L1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -141,7 +142,7 @@ describe('isNodeRoute', () => {
   // A different record type under the same /tree/{tree}/individual/
   // prefix shape must not accidentally match.
   test('a sibling record type with no Node route yet is not a Node route', () => {
-    const url = urlFor('/tree/ophir/submitter/U1');
+    const url = urlFor('/tree/ophir/location/L1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(false);
   });
 
@@ -227,6 +228,21 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/tree/{tree}/note/{xref}', () => {
     const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fnote%2FN3');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/submitter/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/submitter/S1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/submitter/{xref}/{slug} is a Node route', () => {
+    const url = urlFor('/tree/ophir/submitter/S1/some-slug');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/submitter/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fsubmitter%2FS1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
@@ -400,6 +416,26 @@ describe('isMediaPagePath', () => {
   test('does not match the media-thumbnail/media-download PHP routes', () => {
     expect(isMediaPagePath('/tree/ophir/media-thumbnail')).toBe(false);
     expect(isMediaPagePath('/tree/ophir/media-download')).toBe(false);
+  });
+});
+
+describe('isSubmitterPagePath', () => {
+  test('matches the bare path', () => {
+    expect(isSubmitterPagePath('/tree/ophir/submitter/S1')).toBe(true);
+  });
+
+  test('a trailing slug is tolerated', () => {
+    expect(isSubmitterPagePath('/tree/ophir/submitter/S1/some-slug')).toBe(true);
+  });
+
+  test('a sibling record type under the same /tree/{tree} group does not match', () => {
+    expect(isSubmitterPagePath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isSubmitterPagePath('/tree/ophir/media/M1')).toBe(false);
+  });
+
+  test('does not match the bare prefix', () => {
+    expect(isSubmitterPagePath('/tree/ophir/submitter')).toBe(false);
+    expect(isSubmitterPagePath('/tree/ophir/submitter/')).toBe(false);
   });
 });
 
