@@ -121,6 +121,14 @@ export function isHeaderPagePath(pathname) {
   return /^\/tree\/[^/]+\/header\/[^/]+(?:\/.*)?$/.test(pathname);
 }
 
+// /tree/{tree}/repository-list: RepositoryListModule, the first "list"
+// route this migration has ported (see docs/php-to-js-migration/
+// phase5-repository-list.md). An EXACT match, not a prefix - same
+// shape as isTreePagePath() above.
+export function isRepositoryListPagePath(pathname) {
+  return /^\/tree\/[^/]+\/repository-list\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -142,7 +150,8 @@ export function isNodeRoute(pathname, searchParams) {
     isNotePagePath(pathname) ||
     isMediaPagePath(pathname) ||
     isSubmitterPagePath(pathname) ||
-    isHeaderPagePath(pathname)
+    isHeaderPagePath(pathname) ||
+    isRepositoryListPagePath(pathname)
   ) {
     return true;
   }
@@ -163,7 +172,8 @@ export function isNodeRoute(pathname, searchParams) {
     isNotePagePath(route) ||
     isMediaPagePath(route) ||
     isSubmitterPagePath(route) ||
-    isHeaderPagePath(route)
+    isHeaderPagePath(route) ||
+    isRepositoryListPagePath(route)
   );
 }
 

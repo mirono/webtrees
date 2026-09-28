@@ -101,6 +101,66 @@ export async function loadRepository(pool, gedcomId, xref) {
 }
 
 /**
+ * Every repository in the tree (RepositoryListModule::handle(),
+ * app/Module/RepositoryListModule.php:97-104 - `DB::table('other')
+ * ->where('o_type', '=', Repository::RECORD_TYPE)->get()`), ordered by
+ * xref - real PHP applies no explicit ORDER BY either (the DataTables
+ * JS this migration doesn't reproduce sorts client-side), so ordering
+ * by xref is this migration's own deterministic substitute, not a
+ * faithful copy of an unspecified SQL row order.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<{xref: string, gedcom: string}[]>}
+ */
+export async function loadRepositoryList(pool, gedcomId) {
+  const result = await pool.query("SELECT o_id, o_gedcom FROM wt_other WHERE o_file = $1 AND o_type = 'REPO' ORDER BY o_id", [gedcomId]);
+
+  return result.rows.map((row) => ({ xref: row.o_id, gedcom: row.o_gedcom }));
+}
+
+/**
+ * Mirrors resources/views/lists/repositories-table.phtml's own
+ * `$count_sources` query - a single grouped count of every SOUR-citing
+ * `wt_link` row per repository, deliberately NOT privacy-filtered
+ * (the real template's own comment: "It is not good to bypass privacy,
+ * but many servers do not have the resources to process privacy for
+ * every record in the tree" - reproduced as-is, not improved on).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function repositorySourceCounts(pool, gedcomId) {
+  const result = await pool.query("SELECT l_to, COUNT(*) AS total FROM wt_link WHERE l_type = 'REPO' AND l_file = $1 GROUP BY l_to", [
+    gedcomId,
+  ]);
+
+  return new Map(result.rows.map((row) => [row.l_to, Number(row.total)]));
+}
+
+/**
+ * Mirrors GedcomRecord::lastChangeTimestamp()'s own CHAN extraction -
+ * the record's own `1 CHAN` fact's DATE/TIME, or null if it has none
+ * (real PHP falls back to a zero Unix timestamp, rendered as "Never" -
+ * see repository-list-view.mjs's own renderLastChange()).
+ *
+ * @param {string} gedcom
+ * @returns {{date: string, time: string}|null}
+ */
+export function recordLastChange(gedcom) {
+  const dateMatch = /\n1 CHAN\n2 DATE (.+)/.exec(gedcom);
+
+  if (dateMatch === null) {
+    return null;
+  }
+
+  const timeMatch = /\n1 CHAN\n2 DATE .+\n3 TIME (.+)/.exec(gedcom);
+
+  return { date: dateMatch[1], time: timeMatch ? timeMatch[1] : '' };
+}
+
+/**
  * Mirrors Source::canShowByType()'s own REPO scan
  * (app/Source.php:36-49): every `1 REPO @Rn@` xref referenced.
  *

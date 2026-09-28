@@ -10,6 +10,7 @@ import {
   isMediaPagePath,
   isSubmitterPagePath,
   isHeaderPagePath,
+  isRepositoryListPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -262,6 +263,16 @@ describe('isNodeRoute', () => {
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
+  test('/tree/{tree}/repository-list is a Node route', () => {
+    const url = urlFor('/tree/ophir/repository-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/repository-list', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Frepository-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
   test('plain /language/{value}', () => {
     const url = urlFor('/language/en-US');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
@@ -472,6 +483,24 @@ describe('isHeaderPagePath', () => {
   test('does not match the bare prefix', () => {
     expect(isHeaderPagePath('/tree/ophir/header')).toBe(false);
     expect(isHeaderPagePath('/tree/ophir/header/')).toBe(false);
+  });
+});
+
+describe('isRepositoryListPagePath', () => {
+  test('matches the exact path', () => {
+    expect(isRepositoryListPagePath('/tree/ophir/repository-list')).toBe(true);
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(isRepositoryListPagePath('/tree/ophir/repository-list/')).toBe(true);
+  });
+
+  test('the per-record repository page does not match', () => {
+    expect(isRepositoryListPagePath('/tree/ophir/repository/R1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isRepositoryListPagePath('/tree/ophir')).toBe(false);
   });
 });
 

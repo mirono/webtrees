@@ -24,6 +24,9 @@ import {
   repositoryFactOtherAttributes,
   repositoryCanShowRecord,
   sourceCanShowRecord,
+  loadRepositoryList,
+  repositorySourceCounts,
+  recordLastChange,
 } from '../pages-server/source.mjs';
 import { parseFacts } from '../pages-server/individual.mjs';
 
@@ -65,6 +68,73 @@ describe('loadRepository', () => {
     const pool = mockPool(async () => ({ rows: [] }));
 
     expect(await loadRepository(pool, 1, 'R999')).toBeNull();
+  });
+});
+
+describe('loadRepositoryList', () => {
+  test('returns every repository, ordered by xref', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('FROM wt_other');
+      expect(sql).toContain("o_type = 'REPO'");
+      expect(sql).toContain('ORDER BY o_id');
+      expect(params).toEqual([1]);
+      return {
+        rows: [
+          { o_id: 'R1', o_gedcom: '0 @R1@ REPO\n1 NAME A' },
+          { o_id: 'R2', o_gedcom: '0 @R2@ REPO\n1 NAME B' },
+        ],
+      };
+    });
+
+    expect(await loadRepositoryList(pool, 1)).toEqual([
+      { xref: 'R1', gedcom: '0 @R1@ REPO\n1 NAME A' },
+      { xref: 'R2', gedcom: '0 @R2@ REPO\n1 NAME B' },
+    ]);
+  });
+
+  test('an empty tree returns an empty array', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await loadRepositoryList(pool, 1)).toEqual([]);
+  });
+});
+
+describe('repositorySourceCounts', () => {
+  test('returns a Map of xref -> source count', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('FROM wt_link');
+      expect(sql).toContain("l_type = 'REPO'");
+      expect(params).toEqual([1]);
+      return {
+        rows: [
+          { l_to: 'R1', total: '1' },
+          { l_to: 'R3', total: '12' },
+        ],
+      };
+    });
+
+    const counts = await repositorySourceCounts(pool, 1);
+    expect(counts.get('R1')).toBe(1);
+    expect(counts.get('R3')).toBe(12);
+    expect(counts.get('R2')).toBeUndefined();
+  });
+});
+
+describe('recordLastChange', () => {
+  test('extracts a real CHAN date and time', () => {
+    const gedcom = '0 @R1@ REPO\n1 NAME A\n1 CHAN\n2 DATE 30 DEC 2017\n3 TIME 17:45:26';
+
+    expect(recordLastChange(gedcom)).toEqual({ date: '30 DEC 2017', time: '17:45:26' });
+  });
+
+  test('a CHAN with no TIME still returns the date, with an empty time', () => {
+    const gedcom = '0 @R1@ REPO\n1 CHAN\n2 DATE 30 DEC 2017';
+
+    expect(recordLastChange(gedcom)).toEqual({ date: '30 DEC 2017', time: '' });
+  });
+
+  test('a record with no CHAN fact returns null', () => {
+    expect(recordLastChange('0 @R1@ REPO\n1 NAME A')).toBeNull();
   });
 });
 

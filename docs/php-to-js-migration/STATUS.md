@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-09-28 (step 19: `/tree/{tree}/header/{xref}` (HeaderPage) served entirely by Node — the eighth real-GEDCOM-record route. Also fixed a real "undefined"-labeled row bug found live, affecting every already-shipped "no tag allowlist" route: Note, Media, and Submitter). This is the entry point for "where are we" —
+**Last updated: 2026-09-28 (step 20: `/tree/{tree}/repository-list` (RepositoryListModule) served entirely by Node — the first "list" route this migration has ported, distinct from every prior single-record page). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4682 tests, all green.
+# Expect: 4708 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -119,6 +119,7 @@ just adding latency.
 | 5.17 | `/tree/{tree}/media/{xref}` (MediaPage) served entirely by Node — the sixth real-GEDCOM-record route; ports Media::canShowByType()'s identical "hidden if any linking record is private" override; per-file Title/Media type/Format rows, real signed image thumbnails (reusing step 14a's mechanism unchanged) and mime-icon fallback for non-image files (PDFs, real in this tree) | **Done (2026-09-28)** — [phase5-media-page.md](phase5-media-page.md) |
 | 5.18 | `/tree/{tree}/submitter/{xref}` (SubmitterPage) served entirely by Node — the seventh real-GEDCOM-record route, rendered via real PHP's generic record-page/record-page-details shared views (no dedicated template); no canShowByType() override at all (same shape as Repository); no tag allowlist (NOTE facts render inline, unlike Source/Repository's own deliberate NOTE exclusion) | **Done (2026-09-28)** — [phase5-submitter-page.md](phase5-submitter-page.md) |
 | 5.19 | `/tree/{tree}/header/{xref}` (HeaderPage) served entirely by Node — the eighth real-GEDCOM-record route (xref is the literal pseudo-xref "HEAD"); a real HEAD:SUBM fact resolves to a genuine submitter link. Also fixed a real "undefined"-labeled facts-table row bug, found live and affecting every already-shipped no-tag-allowlist route (Note/Media/Submitter): parseFacts()'s own leading "0 @xref@ TYPE" pseudo-fact block was leaking through wherever a route has no tag allowlist to drop it for free | **Done (2026-09-28)** — [phase5-header-page.md](phase5-header-page.md) |
+| 5.20 | `/tree/{tree}/repository-list` (RepositoryListModule) served entirely by Node — the first "list" route (distinct from every prior single-record page); module-enabled + module-access-level gating (wt_module/wt_module_privacy) ported for the first time; simplified from real PHP's DataTables-powered sortable/searchable table to a plain, always-fully-visible server-rendered table | **Done (2026-09-28)** — [phase5-repository-list.md](phase5-repository-list.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 

@@ -70,6 +70,7 @@ import {
   matchMediaPagePath,
   matchSubmitterPagePath,
   matchHeaderPagePath,
+  matchRepositoryListPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -145,7 +146,11 @@ import {
   repositoryFactOtherAttributes,
   repositoryCanShowRecord,
   sourceCanShowRecord,
+  loadRepositoryList,
+  repositorySourceCounts,
+  recordLastChange,
 } from './source.mjs';
+import { renderRepositoryListPage } from './repository-list-view.mjs';
 import { loadNote, noteCanShowRecord, noteText, displayableNoteFacts } from './note.mjs';
 import { renderNotePage } from './note-view.mjs';
 import { phpRouteUrl } from './route-url.mjs';
@@ -2876,6 +2881,139 @@ async function handleHeaderPage(req, res, treeName, xref) {
   res.end(html);
 }
 
+/**
+ * AbstractModule::accessLevel() (app/Module/AbstractModule.php:167-176):
+ * an explicit wt_module_privacy override for this exact (module,
+ * gedcom, interface) triple, else the module's own class default.
+ */
+async function moduleAccessLevel(gedcomId, moduleName, interfaceName, defaultLevel) {
+  const result = await pool.query(
+    'SELECT access_level FROM wt_module_privacy WHERE gedcom_id = $1 AND module_name = $2 AND interface = $3',
+    [gedcomId, moduleName, interfaceName],
+  );
+
+  return result.rows[0] ? Number(result.rows[0].access_level) : defaultLevel;
+}
+
+async function handleRepositoryListPage(req, res, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let repositories;
+
+  try {
+    // RepositoryListModule::boot() only registers this route while the
+    // module itself is enabled (app/Module/RepositoryListModule.php) -
+    // this migration's proxy has no way to know that ahead of time (its
+    // routing is purely path-based), so the Node handler checks it
+    // directly and 404s otherwise, the closest available approximation
+    // of "this route was never registered."
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'repository_list'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // RepositoryListModule's own class default (Auth::PRIV_USER = 1,
+    // "member") - app/Module/RepositoryListModule.php:39.
+    const listAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'repository_list',
+      'Fisharebest\\Webtrees\\Module\\ModuleListInterface',
+      1,
+    );
+
+    if (listAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const allRepositories = await loadRepositoryList(pool, tree.gedcomId);
+    const sourceCounts = await repositorySourceCounts(pool, tree.gedcomId);
+    const viewer = { accessLevel, isSelfRecord: false };
+
+    repositories = [];
+
+    for (const repository of allRepositories) {
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, repository.xref);
+      const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+
+      if (!repositoryCanShowRecord(treeForPrivacy, repository.gedcom, viewer, defaultResnInfo.treeFactResn)) {
+        continue;
+      }
+
+      const nameFact = extractNameFromFact(repository.gedcom, 'NAME');
+      const fullNameHtml =
+        nameFact !== null ? nameFact.full : `<span class="NAME" dir="auto" translate="no">${repository.xref}</span>`;
+      const lastChangeRaw = recordLastChange(repository.gedcom);
+
+      repositories.push({
+        xref: repository.xref,
+        url: phpRouteUrl(`/tree/${tree.name}/repository/${repository.xref}`, siteUrlConfig),
+        fullNameHtml,
+        sourceCount: sourceCounts.get(repository.xref) ?? 0,
+        lastChange: lastChangeRaw !== null ? { date: displayDate(new GedcomDate(lastChangeRaw.date)), time: lastChangeRaw.time } : null,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to resolve repository list:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderRepositoryListPage({ tree, user, csrfToken, title: 'Repositories', repositories });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -2983,6 +3121,13 @@ const server = createServer(async (req, res) => {
 
   if (headerMatch !== null) {
     await handleHeaderPage(req, res, headerMatch.tree, headerMatch.xref);
+    return;
+  }
+
+  const repositoryListTreeName = matchRepositoryListPagePath(url.pathname);
+
+  if (repositoryListTreeName !== null) {
+    await handleRepositoryListPage(req, res, repositoryListTreeName);
     return;
   }
 

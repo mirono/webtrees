@@ -266,3 +266,18 @@ export function matchHeaderPagePath(pathname) {
 
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * PHP's route (app/Module/RepositoryListModule.php's own
+ * `ROUTE_URL = '/tree/{tree}/repository-list'`) - an EXACT match, not
+ * a per-record prefix (there's no xref/slug), same shape as
+ * matchTreePagePath() above.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchRepositoryListPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/repository-list\/?$/.exec(pathname);
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
