@@ -149,6 +149,7 @@ import {
   repositoryCanShowRecord,
   sourceCanShowRecord,
   loadRepositoryList,
+  loadShowLastChangePref,
   repositorySourceCounts,
   recordLastChange,
   loadSourceList,
@@ -2954,6 +2955,7 @@ async function handleRepositoryListPage(req, res, treeName) {
   }
 
   let repositories;
+  let showLastChange;
 
   try {
     // RepositoryListModule::boot() only registers this route while the
@@ -2989,6 +2991,7 @@ async function handleRepositoryListPage(req, res, treeName) {
     const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
     const allRepositories = await loadRepositoryList(pool, tree.gedcomId);
     const sourceCounts = await repositorySourceCounts(pool, tree.gedcomId);
+    showLastChange = await loadShowLastChangePref(pool, tree.gedcomId);
     const viewer = { accessLevel, isSelfRecord: false };
 
     repositories = [];
@@ -3022,7 +3025,7 @@ async function handleRepositoryListPage(req, res, treeName) {
   }
 
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderRepositoryListPage({ tree, user, csrfToken, title: 'Repositories', repositories });
+  const html = renderRepositoryListPage({ tree, user, csrfToken, title: 'Repositories', repositories, showLastChange });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -3073,6 +3076,7 @@ async function handleSourceListPage(req, res, treeName) {
   }
 
   let sources;
+  let showLastChange;
 
   try {
     // SourceListModule::boot() only registers this route while the
@@ -3109,6 +3113,7 @@ async function handleSourceListPage(req, res, treeName) {
     const familyCounts = await sourceFamilyCounts(pool, tree.gedcomId);
     const mediaCounts = await sourceMediaCounts(pool, tree.gedcomId);
     const noteCounts = await sourceNoteCounts(pool, tree.gedcomId);
+    showLastChange = await loadShowLastChangePref(pool, tree.gedcomId);
     const viewer = { accessLevel, isSelfRecord: false };
 
     sources = [];
@@ -3164,7 +3169,7 @@ async function handleSourceListPage(req, res, treeName) {
   }
 
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderSourceListPage({ tree, user, csrfToken, title: 'Sources', sources });
+  const html = renderSourceListPage({ tree, user, csrfToken, title: 'Sources', sources, showLastChange });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -3215,6 +3220,7 @@ async function handleNoteListPage(req, res, treeName) {
   }
 
   let notes;
+  let showLastChange;
 
   try {
     // NoteListModule::boot() only registers this route while the module
@@ -3254,6 +3260,7 @@ async function handleNoteListPage(req, res, treeName) {
     const familyCounts = await noteFamilyCounts(pool, tree.gedcomId);
     const mediaCounts = await noteMediaCounts(pool, tree.gedcomId);
     const sourceCounts = await noteSourceCounts(pool, tree.gedcomId);
+    showLastChange = await loadShowLastChangePref(pool, tree.gedcomId);
     const viewer = { accessLevel, isSelfRecord: false };
 
     notes = [];
@@ -3291,7 +3298,7 @@ async function handleNoteListPage(req, res, treeName) {
   }
 
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderNoteListPage({ tree, user, csrfToken, title: 'Shared notes', notes });
+  const html = renderNoteListPage({ tree, user, csrfToken, title: 'Notes', notes, showLastChange });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 

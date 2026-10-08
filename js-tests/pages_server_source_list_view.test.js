@@ -23,6 +23,7 @@ function baseParams(overrides = {}) {
     csrfToken: null,
     title: 'Sources',
     sources: [],
+    showLastChange: true,
     ...overrides,
   };
 }
@@ -151,6 +152,66 @@ describe('renderSourceListPage', () => {
 
   test('escapes the page title', () => {
     expect(renderSourceListPage(baseParams({ title: '<script>alert(1)</script>' }))).toContain('&lt;script&gt;');
+  });
+
+  describe('column visibility, mirroring real PHP\'s sources-table.phtml data-columns config', () => {
+    function zeroSource(xref) {
+      return {
+        xref,
+        url: `/tree/ophir/source/${xref}`,
+        fullNameHtml: `<bdi>${xref}</bdi>`,
+        abbreviation: '',
+        author: '',
+        publication: '',
+        individualCount: 0,
+        familyCount: 0,
+        mediaCount: 0,
+        noteCount: 0,
+        lastChange: null,
+      };
+    }
+
+    test('every count column is omitted when every source has a zero count', () => {
+      const html = renderSourceListPage(baseParams({ sources: [zeroSource('S1'), zeroSource('S2')] }));
+
+      expect(html).not.toContain('<th>Individuals</th>');
+      expect(html).not.toContain('<th>Families</th>');
+      expect(html).not.toContain('<th>Media objects</th>');
+      expect(html).not.toContain('<th>Shared notes</th>');
+    });
+
+    test('Abbreviation/Author/Publication stay visible even when every source has a zero count (real PHP never hides these)', () => {
+      const html = renderSourceListPage(baseParams({ sources: [zeroSource('S1')] }));
+
+      expect(html).toContain('<th>Abbreviation</th>');
+      expect(html).toContain('<th>Author</th>');
+      expect(html).toContain('<th>Publication</th>');
+    });
+
+    test('each count column is shown independently when at least one source has a nonzero value for it', () => {
+      const html = renderSourceListPage(
+        baseParams({
+          sources: [{ ...zeroSource('S1'), individualCount: 1 }, zeroSource('S2')],
+        }),
+      );
+
+      expect(html).toContain('<th>Individuals</th>');
+      expect(html).not.toContain('<th>Families</th>');
+      expect(html).not.toContain('<th>Media objects</th>');
+      expect(html).not.toContain('<th>Shared notes</th>');
+    });
+
+    test('"Last change" is omitted entirely when showLastChange is false, even with real data', () => {
+      const html = renderSourceListPage(
+        baseParams({
+          showLastChange: false,
+          sources: [{ ...zeroSource('S1'), lastChange: { date: 'December 30, 2017', time: '17:45:26' } }],
+        }),
+      );
+
+      expect(html).not.toContain('<th>Last change</th>');
+      expect(html).not.toContain('December 30, 2017');
+    });
   });
 
   describe('the header, logged-in vs. anonymous', () => {

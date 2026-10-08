@@ -69,8 +69,24 @@ function renderLastChange(lastChange) {
  * }[]} params.sources `fullNameHtml` is PRE-ESCAPED SAFE HTML - inserted
  *   RAW, never passed through escapeHtml() again; every other field is
  *   plain text, escaped here.
+ * @param {boolean} params.showLastChange mirrors real PHP's own
+ *   `(bool) $tree->getPreference('SHOW_LAST_CHANGE')` column-visibility
+ *   check (sources-table.phtml's own `data-columns` config) - resolved
+ *   by the caller from the tree's own preference
+ *   (source.mjs's loadShowLastChangePref()). Abbreviation/Author/
+ *   Publication are NOT conditionally hidden in real PHP (confirmed:
+ *   `null` in that same `data-columns` array, unlike the four count
+ *   columns below) - always shown here too.
  */
-export function renderSourceListPage({ tree, user, csrfToken, title, sources }) {
+export function renderSourceListPage({ tree, user, csrfToken, title, sources, showLastChange }) {
+  // Mirrors sources-table.phtml's own `array_sum($count_xxx) > 0` checks
+  // - each derived from the rows themselves (every source already
+  // carries its own resolved counts), not a separate tree preference
+  // like showLastChange above.
+  const showIndividuals = sources.some((source) => source.individualCount > 0);
+  const showFamilies = sources.some((source) => source.familyCount > 0);
+  const showMedia = sources.some((source) => source.mediaCount > 0);
+  const showNotes = sources.some((source) => source.noteCount > 0);
   const csrfMetaTag =
     user !== null
       ? `
@@ -96,21 +112,37 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources }) 
                     </li>`;
 
   const rowsHtml = sources
-    .map(
-      (source) => `
+    .map((source) => {
+      const cells = [
+        `<td><a href="${escapeHtml(source.url)}">${source.fullNameHtml}</a></td>`,
+        `<td>${escapeHtml(source.abbreviation)}</td>`,
+        `<td>${escapeHtml(source.author)}</td>`,
+        `<td>${escapeHtml(source.publication)}</td>`,
+        showIndividuals ? `<td class="text-center">${source.individualCount}</td>` : null,
+        showFamilies ? `<td class="text-center">${source.familyCount}</td>` : null,
+        showMedia ? `<td class="text-center">${source.mediaCount}</td>` : null,
+        showNotes ? `<td class="text-center">${source.noteCount}</td>` : null,
+        showLastChange ? `<td>${renderLastChange(source.lastChange)}</td>` : null,
+      ].filter((cell) => cell !== null);
+
+      return `
         <tr>
-            <td><a href="${escapeHtml(source.url)}">${source.fullNameHtml}</a></td>
-            <td>${escapeHtml(source.abbreviation)}</td>
-            <td>${escapeHtml(source.author)}</td>
-            <td>${escapeHtml(source.publication)}</td>
-            <td class="text-center">${source.individualCount}</td>
-            <td class="text-center">${source.familyCount}</td>
-            <td class="text-center">${source.mediaCount}</td>
-            <td class="text-center">${source.noteCount}</td>
-            <td>${renderLastChange(source.lastChange)}</td>
-        </tr>`,
-    )
+            ${cells.join('\n            ')}
+        </tr>`;
+    })
     .join('');
+
+  const headers = [
+    '<th>Title</th>',
+    '<th>Abbreviation</th>',
+    '<th>Author</th>',
+    '<th>Publication</th>',
+    showIndividuals ? '<th>Individuals</th>' : null,
+    showFamilies ? '<th>Families</th>' : null,
+    showMedia ? '<th>Media objects</th>' : null,
+    showNotes ? '<th>Shared notes</th>' : null,
+    showLastChange ? '<th>Last change</th>' : null,
+  ].filter((header) => header !== null);
 
   const tableHtml =
     sources.length > 0
@@ -118,15 +150,7 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources }) 
     <table class="table table-bordered table-sm wt-table-source">
         <thead>
             <tr>
-                <th>Title</th>
-                <th>Abbreviation</th>
-                <th>Author</th>
-                <th>Publication</th>
-                <th>Individuals</th>
-                <th>Families</th>
-                <th>Media objects</th>
-                <th>Shared notes</th>
-                <th>Last change</th>
+                ${headers.join('\n                ')}
             </tr>
         </thead>
         <tbody>${rowsHtml}

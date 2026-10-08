@@ -65,8 +65,19 @@ function renderLastChange(lastChange) {
  *   lastChange: {date: string, time: string}|null,
  * }[]} params.repositories `fullNameHtml` is PRE-ESCAPED SAFE HTML -
  *   inserted RAW, never passed through escapeHtml() again.
+ * @param {boolean} params.showLastChange mirrors real PHP's own
+ *   `(bool) $tree->getPreference('SHOW_LAST_CHANGE')` column-visibility
+ *   check (repositories-table.phtml's own `data-columns` config) - the
+ *   caller resolves this from the tree's own preference
+ *   (source.mjs's loadShowLastChangePref()), not derived from the rows
+ *   themselves like the "Sources" column below.
  */
-export function renderRepositoryListPage({ tree, user, csrfToken, title, repositories }) {
+export function renderRepositoryListPage({ tree, user, csrfToken, title, repositories, showLastChange }) {
+  // Mirrors repositories-table.phtml's own `array_sum($count_sources) > 0`
+  // check - unlike showLastChange above, this is derived from the rows
+  // themselves (every repository already carries its own resolved
+  // sourceCount), not a separate tree-level preference.
+  const showSources = repositories.some((repository) => repository.sourceCount > 0);
   const csrfMetaTag =
     user !== null
       ? `
@@ -95,9 +106,9 @@ export function renderRepositoryListPage({ tree, user, csrfToken, title, reposit
     .map(
       (repository) => `
         <tr>
-            <td><a href="${escapeHtml(repository.url)}">${repository.fullNameHtml}</a></td>
-            <td class="text-center">${repository.sourceCount}</td>
-            <td>${renderLastChange(repository.lastChange)}</td>
+            <td><a href="${escapeHtml(repository.url)}">${repository.fullNameHtml}</a></td>${
+        showSources ? `\n            <td class="text-center">${repository.sourceCount}</td>` : ''
+      }${showLastChange ? `\n            <td>${renderLastChange(repository.lastChange)}</td>` : ''}
         </tr>`,
     )
     .join('');
@@ -108,9 +119,9 @@ export function renderRepositoryListPage({ tree, user, csrfToken, title, reposit
     <table class="table table-bordered table-sm wt-table-repository">
         <thead>
             <tr>
-                <th>Repository name</th>
-                <th>Sources</th>
-                <th>Last change</th>
+                <th>Repository name</th>${showSources ? '\n                <th>Sources</th>' : ''}${
+        showLastChange ? '\n                <th>Last change</th>' : ''
+      }
             </tr>
         </thead>
         <tbody>${rowsHtml}

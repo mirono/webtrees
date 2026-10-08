@@ -66,8 +66,21 @@ function renderLastChange(lastChange) {
  *   lastChange: {date: string, time: string}|null,
  * }[]} params.notes `fullNameHtml` is PRE-ESCAPED SAFE HTML - inserted
  *   RAW, never passed through escapeHtml() again.
+ * @param {boolean} params.showLastChange mirrors real PHP's own
+ *   `(bool) $tree->getPreference('SHOW_LAST_CHANGE')` column-visibility
+ *   check (notes-table.phtml's own `data-columns` config) - resolved by
+ *   the caller from the tree's own preference (source.mjs's
+ *   loadShowLastChangePref()).
  */
-export function renderNoteListPage({ tree, user, csrfToken, title, notes }) {
+export function renderNoteListPage({ tree, user, csrfToken, title, notes, showLastChange }) {
+  // Mirrors notes-table.phtml's own `array_sum($count_xxx) > 0` checks -
+  // each derived from the rows themselves (every note already carries
+  // its own resolved counts), not a separate tree preference like
+  // showLastChange above.
+  const showIndividuals = notes.some((note) => note.individualCount > 0);
+  const showFamilies = notes.some((note) => note.familyCount > 0);
+  const showMedia = notes.some((note) => note.mediaCount > 0);
+  const showSources = notes.some((note) => note.sourceCount > 0);
   const csrfMetaTag =
     user !== null
       ? `
@@ -93,18 +106,31 @@ export function renderNoteListPage({ tree, user, csrfToken, title, notes }) {
                     </li>`;
 
   const rowsHtml = notes
-    .map(
-      (note) => `
+    .map((note) => {
+      const cells = [
+        `<td><a href="${escapeHtml(note.url)}">${note.fullNameHtml}</a></td>`,
+        showIndividuals ? `<td class="text-center">${note.individualCount}</td>` : null,
+        showFamilies ? `<td class="text-center">${note.familyCount}</td>` : null,
+        showMedia ? `<td class="text-center">${note.mediaCount}</td>` : null,
+        showSources ? `<td class="text-center">${note.sourceCount}</td>` : null,
+        showLastChange ? `<td>${renderLastChange(note.lastChange)}</td>` : null,
+      ].filter((cell) => cell !== null);
+
+      return `
         <tr>
-            <td><a href="${escapeHtml(note.url)}">${note.fullNameHtml}</a></td>
-            <td class="text-center">${note.individualCount}</td>
-            <td class="text-center">${note.familyCount}</td>
-            <td class="text-center">${note.mediaCount}</td>
-            <td class="text-center">${note.sourceCount}</td>
-            <td>${renderLastChange(note.lastChange)}</td>
-        </tr>`,
-    )
+            ${cells.join('\n            ')}
+        </tr>`;
+    })
     .join('');
+
+  const headers = [
+    '<th>Title</th>',
+    showIndividuals ? '<th>Individuals</th>' : null,
+    showFamilies ? '<th>Families</th>' : null,
+    showMedia ? '<th>Media objects</th>' : null,
+    showSources ? '<th>Sources</th>' : null,
+    showLastChange ? '<th>Last change</th>' : null,
+  ].filter((header) => header !== null);
 
   const tableHtml =
     notes.length > 0
@@ -112,12 +138,7 @@ export function renderNoteListPage({ tree, user, csrfToken, title, notes }) {
     <table class="table table-bordered table-sm wt-table-note">
         <thead>
             <tr>
-                <th>Title</th>
-                <th>Individuals</th>
-                <th>Families</th>
-                <th>Media objects</th>
-                <th>Sources</th>
-                <th>Last change</th>
+                ${headers.join('\n                ')}
             </tr>
         </thead>
         <tbody>${rowsHtml}

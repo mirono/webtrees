@@ -447,3 +447,31 @@ export function firstFactPlainValue(gedcom, tag) {
 
   return fact ? factPlainValue(fact) : '';
 }
+
+/**
+ * The tree's own SHOW_LAST_CHANGE preference, matching real PHP's
+ * `(bool) $tree->getPreference('SHOW_LAST_CHANGE')` used by every one
+ * of the "list" routes' own DataTables `data-columns` config
+ * (repositories-table.phtml/sources-table.phtml/notes-table.phtml) to
+ * decide whether the "Last change" column is visible at all - default
+ * OFF (no `wt_gedcom_setting` row, unlike e.g. HIDE_LIVE_PEOPLE's own
+ * '1' default), confirmed by grepping app/ for every
+ * `setPreference('SHOW_LAST_CHANGE', ...)` call site: only
+ * `TreePreferencesAction.php`'s own admin-settings-form write, never a
+ * default seeded at tree-creation time. Same "'' and '0' are the only
+ * falsy strings" PHP semantics already established for
+ * `loadTreePrivacyPrefs()`'s own HIDE_LIVE_PEOPLE/USE_SILHOUETTE.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<boolean>}
+ */
+export async function loadShowLastChangePref(pool, gedcomId) {
+  const result = await pool.query(
+    "SELECT setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name = 'SHOW_LAST_CHANGE'",
+    [gedcomId],
+  );
+  const value = result.rows[0]?.setting_value ?? '';
+
+  return value !== '' && value !== '0';
+}

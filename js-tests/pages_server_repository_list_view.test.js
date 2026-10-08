@@ -23,6 +23,7 @@ function baseParams(overrides = {}) {
     csrfToken: null,
     title: 'Repositories',
     repositories: [],
+    showLastChange: true,
     ...overrides,
   };
 }
@@ -94,6 +95,57 @@ describe('renderRepositoryListPage', () => {
 
   test('escapes the page title', () => {
     expect(renderRepositoryListPage(baseParams({ title: '<script>alert(1)</script>' }))).toContain('&lt;script&gt;');
+  });
+
+  describe('column visibility, mirroring real PHP\'s repositories-table.phtml data-columns config', () => {
+    test('the "Sources" column is omitted entirely when every repository has a zero count', () => {
+      const html = renderRepositoryListPage(
+        baseParams({
+          repositories: [
+            { xref: 'R1', url: '/tree/ophir/repository/R1', fullNameHtml: '<bdi>R1</bdi>', sourceCount: 0, lastChange: null },
+            { xref: 'R2', url: '/tree/ophir/repository/R2', fullNameHtml: '<bdi>R2</bdi>', sourceCount: 0, lastChange: null },
+          ],
+        }),
+      );
+
+      expect(html).not.toContain('<th>Sources</th>');
+      expect(html).not.toContain('<td class="text-center">0</td>');
+    });
+
+    test('the "Sources" column is shown when at least one repository has a nonzero count', () => {
+      const html = renderRepositoryListPage(
+        baseParams({
+          repositories: [
+            { xref: 'R1', url: '/tree/ophir/repository/R1', fullNameHtml: '<bdi>R1</bdi>', sourceCount: 0, lastChange: null },
+            { xref: 'R2', url: '/tree/ophir/repository/R2', fullNameHtml: '<bdi>R2</bdi>', sourceCount: 3, lastChange: null },
+          ],
+        }),
+      );
+
+      expect(html).toContain('<th>Sources</th>');
+      expect(html).toContain('<td class="text-center">0</td>');
+      expect(html).toContain('<td class="text-center">3</td>');
+    });
+
+    test('"Last change" is omitted entirely when showLastChange is false, even with real data', () => {
+      const html = renderRepositoryListPage(
+        baseParams({
+          showLastChange: false,
+          repositories: [
+            {
+              xref: 'R1',
+              url: '/tree/ophir/repository/R1',
+              fullNameHtml: '<bdi>R1</bdi>',
+              sourceCount: 5,
+              lastChange: { date: 'December 30, 2017', time: '17:45:26' },
+            },
+          ],
+        }),
+      );
+
+      expect(html).not.toContain('<th>Last change</th>');
+      expect(html).not.toContain('December 30, 2017');
+    });
   });
 
   describe('the header, logged-in vs. anonymous', () => {

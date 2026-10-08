@@ -33,6 +33,7 @@ import {
   sourceMediaCounts,
   sourceNoteCounts,
   firstFactPlainValue,
+  loadShowLastChangePref,
 } from '../pages-server/source.mjs';
 import { parseFacts } from '../pages-server/individual.mjs';
 
@@ -222,6 +223,37 @@ describe('firstFactPlainValue', () => {
 
   test('no matching fact -> empty string', () => {
     expect(firstFactPlainValue('0 @S1@ SOUR\n1 TITL Census 1900', 'PUBL')).toBe('');
+  });
+});
+
+describe('loadShowLastChangePref', () => {
+  test('no row at all -> false (real PHP default, unlike HIDE_LIVE_PEOPLE\'s own \'1\' default)', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await loadShowLastChangePref(pool, 1)).toBe(false);
+  });
+
+  test("setting_value '0' -> false", async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: '0' }] }));
+
+    expect(await loadShowLastChangePref(pool, 1)).toBe(false);
+  });
+
+  test("setting_value '1' -> true", async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: '1' }] }));
+
+    expect(await loadShowLastChangePref(pool, 1)).toBe(true);
+  });
+
+  test('queries wt_gedcom_setting for the SHOW_LAST_CHANGE row', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('FROM wt_gedcom_setting');
+      expect(sql).toContain('SHOW_LAST_CHANGE');
+      expect(params).toEqual([1]);
+      return { rows: [] };
+    });
+
+    await loadShowLastChangePref(pool, 1);
   });
 });
 

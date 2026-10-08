@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-10-08 (step 22: `/tree/{tree}/note-list` (NoteListModule) served entirely by Node — the third "list" route this migration has ported; the first module-gated route whose default access level is "visitor" (open to everyone), not member-only). This is the entry point for "where are we" —
+**Last updated: 2026-10-08 (step 22 + follow-up: `/tree/{tree}/note-list` (NoteListModule) served entirely by Node, plus a retroactive fix — found via a user screenshot comparison — porting real PHP's conditional column-hiding to all three list routes shipped so far). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4759 tests, all green.
+# Expect: 4773 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -122,6 +122,7 @@ just adding latency.
 | 5.20 | `/tree/{tree}/repository-list` (RepositoryListModule) served entirely by Node — the first "list" route (distinct from every prior single-record page); module-enabled + module-access-level gating (wt_module/wt_module_privacy) ported for the first time; simplified from real PHP's DataTables-powered sortable/searchable table to a plain, always-fully-visible server-rendered table | **Done (2026-09-28)** — [phase5-repository-list.md](phase5-repository-list.md) |
 | 5.21 | `/tree/{tree}/source-list` (SourceListModule) served entirely by Node — the second "list" route, reusing step 20's module-gating + source.mjs's privacy cascade; four separate linked-record counts (Individuals/Families/Media/Shared notes) instead of one, plus Abbreviation/Author/Publication columns | **Done (2026-10-08)** — [phase5-source-list.md](phase5-source-list.md) |
 | 5.22 | `/tree/{tree}/note-list` (NoteListModule) served entirely by Node — the third "list" route, reusing note.mjs's NotePage privacy chain; the first list route whose default access level is "visitor" (open to everyone), not member-only; found that `proxy` (not just `pages`) needs restarting to pick up a new route | **Done (2026-10-08)** — [phase5-note-list.md](phase5-note-list.md) |
+| 5.22f | Retroactive fix for all 3 list routes (found via user screenshot comparison): real PHP conditionally hides a count column when every row sums to 0, and hides "Last change" entirely when the tree's SHOW_LAST_CHANGE preference is off (default OFF, unlike HIDE_LIVE_PEOPLE) — ported properly instead of leaving "always show every column" as a documented gap; also fixed note-list's page title ("Shared notes" → "Notes", the module's menu label vs. its actual page title) | **Done (2026-10-08)** — [phase5-list-column-visibility.md](phase5-list-column-visibility.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
