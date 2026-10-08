@@ -281,3 +281,17 @@ export function matchRepositoryListPagePath(pathname) {
 
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * PHP's route (app/Module/SourceListModule.php's own
+ * `ROUTE_URL = '/tree/{tree}/source-list'`) - same exact-match shape as
+ * matchRepositoryListPagePath() above.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchSourceListPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/source-list\/?$/.exec(pathname);
+
+  return match ? decodeURIComponent(match[1]) : null;
+}

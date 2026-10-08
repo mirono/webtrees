@@ -27,6 +27,12 @@ import {
   loadRepositoryList,
   repositorySourceCounts,
   recordLastChange,
+  loadSourceList,
+  sourceIndividualCounts,
+  sourceFamilyCounts,
+  sourceMediaCounts,
+  sourceNoteCounts,
+  firstFactPlainValue,
 } from '../pages-server/source.mjs';
 import { parseFacts } from '../pages-server/individual.mjs';
 
@@ -135,6 +141,87 @@ describe('recordLastChange', () => {
 
   test('a record with no CHAN fact returns null', () => {
     expect(recordLastChange('0 @R1@ REPO\n1 NAME A')).toBeNull();
+  });
+});
+
+describe('loadSourceList', () => {
+  test('returns every source, ordered by xref', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('FROM wt_sources');
+      expect(sql).toContain('ORDER BY s_id');
+      expect(params).toEqual([1]);
+      return {
+        rows: [
+          { s_id: 'S1', s_gedcom: '0 @S1@ SOUR\n1 TITL A' },
+          { s_id: 'S2', s_gedcom: '0 @S2@ SOUR\n1 TITL B' },
+        ],
+      };
+    });
+
+    expect(await loadSourceList(pool, 1)).toEqual([
+      { xref: 'S1', gedcom: '0 @S1@ SOUR\n1 TITL A' },
+      { xref: 'S2', gedcom: '0 @S2@ SOUR\n1 TITL B' },
+    ]);
+  });
+
+  test('an empty tree returns an empty array', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await loadSourceList(pool, 1)).toEqual([]);
+  });
+});
+
+describe.each([
+  ['sourceIndividualCounts', sourceIndividualCounts, 'wt_individuals'],
+  ['sourceFamilyCounts', sourceFamilyCounts, 'wt_families'],
+  ['sourceMediaCounts', sourceMediaCounts, 'wt_media'],
+])('%s', (_name, fn, table) => {
+  test(`returns a Map of xref -> count, joined to ${table}`, async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain(`FROM ${table}`);
+      expect(sql).toContain("l_type = 'SOUR'");
+      expect(params).toEqual([1]);
+      return {
+        rows: [
+          { l_to: 'S1', total: '1' },
+          { l_to: 'S3', total: '12' },
+        ],
+      };
+    });
+
+    const counts = await fn(pool, 1);
+    expect(counts.get('S1')).toBe(1);
+    expect(counts.get('S3')).toBe(12);
+    expect(counts.get('S2')).toBeUndefined();
+  });
+});
+
+describe('sourceNoteCounts', () => {
+  test('returns a Map of xref -> count, joined to wt_other filtered to NOTE', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('FROM wt_other');
+      expect(sql).toContain("o_type = 'NOTE'");
+      expect(sql).toContain("l_type = 'SOUR'");
+      expect(params).toEqual([1]);
+      return { rows: [{ l_to: 'S1', total: '2' }] };
+    });
+
+    const counts = await sourceNoteCounts(pool, 1);
+    expect(counts.get('S1')).toBe(2);
+    expect(counts.get('S2')).toBeUndefined();
+  });
+});
+
+describe('firstFactPlainValue', () => {
+  test("returns the first matching fact's plain value", () => {
+    const gedcom = '0 @S1@ SOUR\n1 TITL Census 1900\n1 ABBR Census\n1 AUTH J. Smith';
+
+    expect(firstFactPlainValue(gedcom, 'ABBR')).toBe('Census');
+    expect(firstFactPlainValue(gedcom, 'AUTH')).toBe('J. Smith');
+  });
+
+  test('no matching fact -> empty string', () => {
+    expect(firstFactPlainValue('0 @S1@ SOUR\n1 TITL Census 1900', 'PUBL')).toBe('');
   });
 });
 

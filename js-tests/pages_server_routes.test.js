@@ -17,6 +17,7 @@ import {
   matchSubmitterPagePath,
   matchHeaderPagePath,
   matchRepositoryListPagePath,
+  matchSourceListPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -421,5 +422,24 @@ describe('matchRepositoryListPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchRepositoryListPagePath('/tree/ophir')).toBeNull();
     expect(matchRepositoryListPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchSourceListPagePath', () => {
+  test('extracts the tree name', () => {
+    expect(matchSourceListPagePath('/tree/ophir/source-list')).toBe('ophir');
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchSourceListPagePath('/tree/ophir/source-list/')).toBe('ophir');
+  });
+
+  test('a per-record source page does not match (no xref here)', () => {
+    expect(matchSourceListPagePath('/tree/ophir/source/S1')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchSourceListPagePath('/tree/ophir')).toBeNull();
+    expect(matchSourceListPagePath('/')).toBeNull();
   });
 });

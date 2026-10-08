@@ -36,7 +36,7 @@
 // repositoryFactOtherAttributes() extend that to RepositoryPage's own
 // route - see docs/php-to-js-migration/phase5-repository-page.md).
 
-import { canShowViaResnChain, otherFactAttributes } from './individual.mjs';
+import { canShowViaResnChain, otherFactAttributes, factPlainValue, parseFacts } from './individual.mjs';
 
 // Base GedcomRecord::canShowByType() (app/GedcomRecord.php:841-852)'s
 // own record-type-level default: PUBLIC unless a tree-wide
@@ -322,4 +322,128 @@ export function sourceCanShowRecord(tree, gedcom, viewer, treeFactResn, repoCanS
 
     return defaultRecordCanShow(treeFactResn, 'SOUR', viewer);
   });
+}
+
+/**
+ * Every source in the tree (SourceListModule::handle(),
+ * app/Module/SourceListModule.php:103-107 - `DB::table('sources')
+ * ->where('s_file', '=', $tree->id())->get()`), ordered by xref - same
+ * "real PHP has no explicit ORDER BY, DataTables sorts client-side"
+ * reasoning as loadRepositoryList() above.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<{xref: string, gedcom: string}[]>}
+ */
+export async function loadSourceList(pool, gedcomId) {
+  const result = await pool.query('SELECT s_id, s_gedcom FROM wt_sources WHERE s_file = $1 ORDER BY s_id', [gedcomId]);
+
+  return result.rows.map((row) => ({ xref: row.s_id, gedcom: row.s_gedcom }));
+}
+
+/**
+ * Mirrors resources/views/lists/sources-table.phtml's own
+ * `$count_individuals` query - a single grouped count of every SOUR-citing
+ * `wt_link` row per source, joined to `wt_individuals` the same way the
+ * real template joins to `individuals`. Deliberately NOT privacy-filtered,
+ * same acknowledged shortcut as repositorySourceCounts() above.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function sourceIndividualCounts(pool, gedcomId) {
+  const result = await pool.query(
+    `SELECT l_to, COUNT(*) AS total
+     FROM wt_individuals
+     JOIN wt_link ON l_from = i_id AND l_file = i_file
+     WHERE l_type = 'SOUR' AND l_file = $1
+     GROUP BY l_to`,
+    [gedcomId],
+  );
+
+  return new Map(result.rows.map((row) => [row.l_to, Number(row.total)]));
+}
+
+/**
+ * Mirrors sources-table.phtml's `$count_families` query - same shape as
+ * sourceIndividualCounts() above, joined to `wt_families` instead.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function sourceFamilyCounts(pool, gedcomId) {
+  const result = await pool.query(
+    `SELECT l_to, COUNT(*) AS total
+     FROM wt_families
+     JOIN wt_link ON l_from = f_id AND l_file = f_file
+     WHERE l_type = 'SOUR' AND l_file = $1
+     GROUP BY l_to`,
+    [gedcomId],
+  );
+
+  return new Map(result.rows.map((row) => [row.l_to, Number(row.total)]));
+}
+
+/**
+ * Mirrors sources-table.phtml's `$count_media` query - same shape as
+ * sourceIndividualCounts() above, joined to `wt_media` instead.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function sourceMediaCounts(pool, gedcomId) {
+  const result = await pool.query(
+    `SELECT l_to, COUNT(*) AS total
+     FROM wt_media
+     JOIN wt_link ON l_from = m_id AND l_file = m_file
+     WHERE l_type = 'SOUR' AND l_file = $1
+     GROUP BY l_to`,
+    [gedcomId],
+  );
+
+  return new Map(result.rows.map((row) => [row.l_to, Number(row.total)]));
+}
+
+/**
+ * Mirrors sources-table.phtml's `$count_notes` query - every SOUR-citing
+ * `wt_link` row whose `l_from` is a NOTE-typed `wt_other` row (same
+ * "shared notes stored in the generic wt_other table" fact as
+ * loadRepository() above), joined and filtered exactly like the real
+ * template's own `o_type = 'NOTE'` clause.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function sourceNoteCounts(pool, gedcomId) {
+  const result = await pool.query(
+    `SELECT l_to, COUNT(*) AS total
+     FROM wt_other
+     JOIN wt_link ON l_from = o_id AND l_file = o_file
+     WHERE o_type = 'NOTE' AND l_type = 'SOUR' AND l_file = $1
+     GROUP BY l_to`,
+    [gedcomId],
+  );
+
+  return new Map(result.rows.map((row) => [row.l_to, Number(row.total)]));
+}
+
+/**
+ * The first fact matching `tag`'s own plain value, e.g. a source's own
+ * ABBR/AUTH line - mirrors sources-table.phtml's own
+ * `$source->facts(['ABBR'])->isNotEmpty() ? ...->first()->value() : ''`
+ * pattern. Returns '' when the source has no such fact, same as the
+ * real template's own ternary fallback.
+ *
+ * @param {string} gedcom
+ * @param {string} tag
+ * @returns {string}
+ */
+export function firstFactPlainValue(gedcom, tag) {
+  const fact = parseFacts(gedcom).find((f) => factTag(f) === tag);
+
+  return fact ? factPlainValue(fact) : '';
 }

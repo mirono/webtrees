@@ -11,6 +11,7 @@ import {
   isSubmitterPagePath,
   isHeaderPagePath,
   isRepositoryListPagePath,
+  isSourceListPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -501,6 +502,24 @@ describe('isRepositoryListPagePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(isRepositoryListPagePath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isSourceListPagePath', () => {
+  test('matches the exact path', () => {
+    expect(isSourceListPagePath('/tree/ophir/source-list')).toBe(true);
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(isSourceListPagePath('/tree/ophir/source-list/')).toBe(true);
+  });
+
+  test('the per-record source page does not match', () => {
+    expect(isSourceListPagePath('/tree/ophir/source/S1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isSourceListPagePath('/tree/ophir')).toBe(false);
   });
 });
 

@@ -71,6 +71,7 @@ import {
   matchSubmitterPagePath,
   matchHeaderPagePath,
   matchRepositoryListPagePath,
+  matchSourceListPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -149,8 +150,15 @@ import {
   loadRepositoryList,
   repositorySourceCounts,
   recordLastChange,
+  loadSourceList,
+  sourceIndividualCounts,
+  sourceFamilyCounts,
+  sourceMediaCounts,
+  sourceNoteCounts,
+  firstFactPlainValue,
 } from './source.mjs';
 import { renderRepositoryListPage } from './repository-list-view.mjs';
+import { renderSourceListPage } from './source-list-view.mjs';
 import { loadNote, noteCanShowRecord, noteText, displayableNoteFacts } from './note.mjs';
 import { renderNotePage } from './note-view.mjs';
 import { phpRouteUrl } from './route-url.mjs';
@@ -3014,6 +3022,148 @@ async function handleRepositoryListPage(req, res, treeName) {
   res.end(html);
 }
 
+async function handleSourceListPage(req, res, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let sources;
+
+  try {
+    // SourceListModule::boot() only registers this route while the
+    // module itself is enabled (app/Module/SourceListModule.php) - same
+    // "proxy routing is purely path-based" reasoning as
+    // handleRepositoryListPage() above.
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'source_list'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // SourceListModule's own class default (Auth::PRIV_USER = 1,
+    // "member") - app/Module/SourceListModule.php:40.
+    const listAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'source_list',
+      'Fisharebest\\Webtrees\\Module\\ModuleListInterface',
+      1,
+    );
+
+    if (listAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const allSources = await loadSourceList(pool, tree.gedcomId);
+    const individualCounts = await sourceIndividualCounts(pool, tree.gedcomId);
+    const familyCounts = await sourceFamilyCounts(pool, tree.gedcomId);
+    const mediaCounts = await sourceMediaCounts(pool, tree.gedcomId);
+    const noteCounts = await sourceNoteCounts(pool, tree.gedcomId);
+    const viewer = { accessLevel, isSelfRecord: false };
+
+    sources = [];
+
+    for (const source of allSources) {
+      const facts = parseFacts(source.gedcom);
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, source.xref);
+      const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+
+      const repoCanShowResults = [];
+
+      for (const repoXref of repoXrefs(facts)) {
+        const repository = await loadRepository(pool, tree.gedcomId, repoXref);
+
+        if (repository === null) {
+          continue;
+        }
+
+        const repoDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, repository.xref);
+        const repoTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: repoDefaultResnInfo.individualResn };
+
+        repoCanShowResults.push(repositoryCanShowRecord(repoTreeForPrivacy, repository.gedcom, viewer, repoDefaultResnInfo.treeFactResn));
+      }
+
+      if (!sourceCanShowRecord(treeForPrivacy, source.gedcom, viewer, defaultResnInfo.treeFactResn, repoCanShowResults)) {
+        continue;
+      }
+
+      const titleName = extractNameFromFact(source.gedcom, 'TITL');
+      const fullNameHtml =
+        titleName !== null ? titleName.full : `<span class="NAME" dir="auto" translate="no">${source.xref}</span>`;
+      const lastChangeRaw = recordLastChange(source.gedcom);
+
+      sources.push({
+        xref: source.xref,
+        url: phpRouteUrl(`/tree/${tree.name}/source/${source.xref}`, siteUrlConfig),
+        fullNameHtml,
+        abbreviation: firstFactPlainValue(source.gedcom, 'ABBR'),
+        author: firstFactPlainValue(source.gedcom, 'AUTH'),
+        publication: firstFactPlainValue(source.gedcom, 'PUBL'),
+        individualCount: individualCounts.get(source.xref) ?? 0,
+        familyCount: familyCounts.get(source.xref) ?? 0,
+        mediaCount: mediaCounts.get(source.xref) ?? 0,
+        noteCount: noteCounts.get(source.xref) ?? 0,
+        lastChange: lastChangeRaw !== null ? { date: displayDate(new GedcomDate(lastChangeRaw.date)), time: lastChangeRaw.time } : null,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to resolve source list:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderSourceListPage({ tree, user, csrfToken, title: 'Sources', sources });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -3128,6 +3278,13 @@ const server = createServer(async (req, res) => {
 
   if (repositoryListTreeName !== null) {
     await handleRepositoryListPage(req, res, repositoryListTreeName);
+    return;
+  }
+
+  const sourceListTreeName = matchSourceListPagePath(url.pathname);
+
+  if (sourceListTreeName !== null) {
+    await handleSourceListPage(req, res, sourceListTreeName);
     return;
   }
 
