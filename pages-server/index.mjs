@@ -72,6 +72,7 @@ import {
   matchHeaderPagePath,
   matchRepositoryListPagePath,
   matchSourceListPagePath,
+  matchNoteListPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -159,7 +160,18 @@ import {
 } from './source.mjs';
 import { renderRepositoryListPage } from './repository-list-view.mjs';
 import { renderSourceListPage } from './source-list-view.mjs';
-import { loadNote, noteCanShowRecord, noteText, displayableNoteFacts } from './note.mjs';
+import {
+  loadNote,
+  noteCanShowRecord,
+  noteText,
+  displayableNoteFacts,
+  loadNoteList,
+  noteIndividualCounts,
+  noteFamilyCounts,
+  noteMediaCounts,
+  noteSourceCounts,
+} from './note.mjs';
+import { renderNoteListPage } from './note-list-view.mjs';
 import { renderNotePage } from './note-view.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
@@ -3164,6 +3176,133 @@ async function handleSourceListPage(req, res, treeName) {
   res.end(html);
 }
 
+async function handleNoteListPage(req, res, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let notes;
+
+  try {
+    // NoteListModule::boot() only registers this route while the module
+    // itself is enabled - same "proxy routing is purely path-based"
+    // reasoning as handleRepositoryListPage()/handleSourceListPage()
+    // above.
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'note_list'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // NoteListModule has no $access_level override of its own, unlike
+    // RepositoryListModule/SourceListModule - AbstractModule's own class
+    // default applies: Auth::PRIV_PRIVATE = 2 ("visitor"), i.e. open to
+    // everyone including anonymous visitors.
+    const listAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'note_list',
+      'Fisharebest\\Webtrees\\Module\\ModuleListInterface',
+      2,
+    );
+
+    if (listAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const allNotes = await loadNoteList(pool, tree.gedcomId);
+    const individualCounts = await noteIndividualCounts(pool, tree.gedcomId);
+    const familyCounts = await noteFamilyCounts(pool, tree.gedcomId);
+    const mediaCounts = await noteMediaCounts(pool, tree.gedcomId);
+    const sourceCounts = await noteSourceCounts(pool, tree.gedcomId);
+    const viewer = { accessLevel, isSelfRecord: false };
+
+    notes = [];
+
+    for (const note of allNotes) {
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, note.xref);
+      const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+      const linkedRecordsShowable = await noteLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, note.xref);
+
+      if (!noteCanShowRecord(treeForPrivacy, note.gedcom, viewer, defaultResnInfo.treeFactResn, linkedRecordsShowable)) {
+        continue;
+      }
+
+      const text = noteText(note.gedcom);
+      const firstLine = limitText(text.split('\n')[0] ?? '', 100, '…');
+      const fullNameHtml = firstLine !== '' ? `<bdi>${escapeHtml(firstLine)}</bdi>` : `<bdi>${escapeHtml(note.xref)}</bdi>`;
+      const lastChangeRaw = recordLastChange(note.gedcom);
+
+      notes.push({
+        xref: note.xref,
+        url: phpRouteUrl(`/tree/${tree.name}/note/${note.xref}`, siteUrlConfig),
+        fullNameHtml,
+        individualCount: individualCounts.get(note.xref) ?? 0,
+        familyCount: familyCounts.get(note.xref) ?? 0,
+        mediaCount: mediaCounts.get(note.xref) ?? 0,
+        sourceCount: sourceCounts.get(note.xref) ?? 0,
+        lastChange: lastChangeRaw !== null ? { date: displayDate(new GedcomDate(lastChangeRaw.date)), time: lastChangeRaw.time } : null,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to resolve note list:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderNoteListPage({ tree, user, csrfToken, title: 'Shared notes', notes });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -3285,6 +3424,13 @@ const server = createServer(async (req, res) => {
 
   if (sourceListTreeName !== null) {
     await handleSourceListPage(req, res, sourceListTreeName);
+    return;
+  }
+
+  const noteListTreeName = matchNoteListPagePath(url.pathname);
+
+  if (noteListTreeName !== null) {
+    await handleNoteListPage(req, res, noteListTreeName);
     return;
   }
 

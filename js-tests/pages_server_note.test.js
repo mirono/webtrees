@@ -14,7 +14,17 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import { loadNote, noteCanShowRecord, noteText, displayableNoteFacts } from '../pages-server/note.mjs';
+import {
+  loadNote,
+  noteCanShowRecord,
+  noteText,
+  displayableNoteFacts,
+  loadNoteList,
+  noteIndividualCounts,
+  noteFamilyCounts,
+  noteMediaCounts,
+  noteSourceCounts,
+} from '../pages-server/note.mjs';
 
 function mockPool(queryImpl) {
   return { query: vi.fn(queryImpl) };
@@ -88,6 +98,60 @@ describe('displayableNoteFacts', () => {
     const facts = ['0 @N3@ NOTE Some text', '1 CHAN\n2 DATE 1 JAN 2020'];
 
     expect(displayableNoteFacts(facts)).toEqual(['1 CHAN\n2 DATE 1 JAN 2020']);
+  });
+});
+
+describe('loadNoteList', () => {
+  test('returns every shared note, ordered by xref', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('FROM wt_other');
+      expect(sql).toContain("o_type = 'NOTE'");
+      expect(sql).toContain('ORDER BY o_id');
+      expect(params).toEqual([1]);
+      return {
+        rows: [
+          { o_id: 'N1', o_gedcom: '0 @N1@ NOTE A' },
+          { o_id: 'N2', o_gedcom: '0 @N2@ NOTE B' },
+        ],
+      };
+    });
+
+    expect(await loadNoteList(pool, 1)).toEqual([
+      { xref: 'N1', gedcom: '0 @N1@ NOTE A' },
+      { xref: 'N2', gedcom: '0 @N2@ NOTE B' },
+    ]);
+  });
+
+  test('an empty tree returns an empty array', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await loadNoteList(pool, 1)).toEqual([]);
+  });
+});
+
+describe.each([
+  ['noteIndividualCounts', noteIndividualCounts, 'wt_individuals'],
+  ['noteFamilyCounts', noteFamilyCounts, 'wt_families'],
+  ['noteMediaCounts', noteMediaCounts, 'wt_media'],
+  ['noteSourceCounts', noteSourceCounts, 'wt_sources'],
+])('%s', (_name, fn, table) => {
+  test(`returns a Map of xref -> count, joined to ${table}`, async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain(`FROM ${table}`);
+      expect(sql).toContain("l_type = 'NOTE'");
+      expect(params).toEqual([1]);
+      return {
+        rows: [
+          { l_to: 'N1', total: '1' },
+          { l_to: 'N3', total: '12' },
+        ],
+      };
+    });
+
+    const counts = await fn(pool, 1);
+    expect(counts.get('N1')).toBe(1);
+    expect(counts.get('N3')).toBe(12);
+    expect(counts.get('N2')).toBeUndefined();
   });
 });
 

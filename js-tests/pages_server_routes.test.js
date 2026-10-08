@@ -18,6 +18,7 @@ import {
   matchHeaderPagePath,
   matchRepositoryListPagePath,
   matchSourceListPagePath,
+  matchNoteListPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -441,5 +442,24 @@ describe('matchSourceListPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchSourceListPagePath('/tree/ophir')).toBeNull();
     expect(matchSourceListPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchNoteListPagePath', () => {
+  test('extracts the tree name', () => {
+    expect(matchNoteListPagePath('/tree/ophir/note-list')).toBe('ophir');
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchNoteListPagePath('/tree/ophir/note-list/')).toBe('ophir');
+  });
+
+  test('a per-record note page does not match (no xref here)', () => {
+    expect(matchNoteListPagePath('/tree/ophir/note/N1')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchNoteListPagePath('/tree/ophir')).toBeNull();
+    expect(matchNoteListPagePath('/')).toBeNull();
   });
 });

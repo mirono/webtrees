@@ -295,3 +295,17 @@ export function matchSourceListPagePath(pathname) {
 
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * PHP's route (app/Module/NoteListModule.php's own
+ * `ROUTE_URL = '/tree/{tree}/note-list'`) - same exact-match shape as
+ * matchRepositoryListPagePath()/matchSourceListPagePath() above.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchNoteListPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/note-list\/?$/.exec(pathname);
+
+  return match ? decodeURIComponent(match[1]) : null;
+}

@@ -12,6 +12,7 @@ import {
   isHeaderPagePath,
   isRepositoryListPagePath,
   isSourceListPagePath,
+  isNoteListPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -520,6 +521,24 @@ describe('isSourceListPagePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(isSourceListPagePath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isNoteListPagePath', () => {
+  test('matches the exact path', () => {
+    expect(isNoteListPagePath('/tree/ophir/note-list')).toBe(true);
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(isNoteListPagePath('/tree/ophir/note-list/')).toBe(true);
+  });
+
+  test('the per-record note page does not match', () => {
+    expect(isNoteListPagePath('/tree/ophir/note/N1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isNoteListPagePath('/tree/ophir')).toBe(false);
   });
 });
 

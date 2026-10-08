@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-10-08 (step 21: `/tree/{tree}/source-list` (SourceListModule) served entirely by Node — the second "list" route this migration has ported, reusing step 20's module-gating and `source.mjs` privacy infrastructure, with four separate linked-record counts instead of one). This is the entry point for "where are we" —
+**Last updated: 2026-10-08 (step 22: `/tree/{tree}/note-list` (NoteListModule) served entirely by Node — the third "list" route this migration has ported; the first module-gated route whose default access level is "visitor" (open to everyone), not member-only). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -50,7 +50,7 @@ vendor/bin/phpunit -d memory_limit=512M > /tmp/pu_full.txt 2>&1; tail -80 /tmp/p
 
 # JS suite
 npx vitest run
-# Expect: 4735 tests, all green.
+# Expect: 4759 tests, all green.
 
 # Static analysis on any file you touch
 vendor/bin/phpcs --colors --exclude=Generic.Files.LineLength <file>
@@ -121,6 +121,7 @@ just adding latency.
 | 5.19 | `/tree/{tree}/header/{xref}` (HeaderPage) served entirely by Node — the eighth real-GEDCOM-record route (xref is the literal pseudo-xref "HEAD"); a real HEAD:SUBM fact resolves to a genuine submitter link. Also fixed a real "undefined"-labeled facts-table row bug, found live and affecting every already-shipped no-tag-allowlist route (Note/Media/Submitter): parseFacts()'s own leading "0 @xref@ TYPE" pseudo-fact block was leaking through wherever a route has no tag allowlist to drop it for free | **Done (2026-09-28)** — [phase5-header-page.md](phase5-header-page.md) |
 | 5.20 | `/tree/{tree}/repository-list` (RepositoryListModule) served entirely by Node — the first "list" route (distinct from every prior single-record page); module-enabled + module-access-level gating (wt_module/wt_module_privacy) ported for the first time; simplified from real PHP's DataTables-powered sortable/searchable table to a plain, always-fully-visible server-rendered table | **Done (2026-09-28)** — [phase5-repository-list.md](phase5-repository-list.md) |
 | 5.21 | `/tree/{tree}/source-list` (SourceListModule) served entirely by Node — the second "list" route, reusing step 20's module-gating + source.mjs's privacy cascade; four separate linked-record counts (Individuals/Families/Media/Shared notes) instead of one, plus Abbreviation/Author/Publication columns | **Done (2026-10-08)** — [phase5-source-list.md](phase5-source-list.md) |
+| 5.22 | `/tree/{tree}/note-list` (NoteListModule) served entirely by Node — the third "list" route, reusing note.mjs's NotePage privacy chain; the first list route whose default access level is "visitor" (open to everyone), not member-only; found that `proxy` (not just `pages`) needs restarting to pick up a new route | **Done (2026-10-08)** — [phase5-note-list.md](phase5-note-list.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
