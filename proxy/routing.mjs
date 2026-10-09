@@ -145,6 +145,14 @@ export function isNoteListPagePath(pathname) {
   return /^\/tree\/[^/]+\/note-list\/?$/.test(pathname);
 }
 
+// /tree/{tree}/location-list: LocationListModule, the fourth "list" route
+// this migration has ported (see docs/php-to-js-migration/
+// phase5-location-list.md). Same exact-match shape as
+// isRepositoryListPagePath()/isSourceListPagePath()/isNoteListPagePath() above.
+export function isLocationListPagePath(pathname) {
+  return /^\/tree\/[^/]+\/location-list\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -169,7 +177,8 @@ export function isNodeRoute(pathname, searchParams) {
     isHeaderPagePath(pathname) ||
     isRepositoryListPagePath(pathname) ||
     isSourceListPagePath(pathname) ||
-    isNoteListPagePath(pathname)
+    isNoteListPagePath(pathname) ||
+    isLocationListPagePath(pathname)
   ) {
     return true;
   }
@@ -193,7 +202,8 @@ export function isNodeRoute(pathname, searchParams) {
     isHeaderPagePath(route) ||
     isRepositoryListPagePath(route) ||
     isSourceListPagePath(route) ||
-    isNoteListPagePath(route)
+    isNoteListPagePath(route) ||
+    isLocationListPagePath(route)
   );
 }
 

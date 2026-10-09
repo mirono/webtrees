@@ -73,6 +73,7 @@ import {
   matchRepositoryListPagePath,
   matchSourceListPagePath,
   matchNoteListPagePath,
+  matchLocationListPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -174,6 +175,14 @@ import {
 } from './note.mjs';
 import { renderNoteListPage } from './note-list-view.mjs';
 import { renderNotePage } from './note-view.mjs';
+import {
+  loadLocation,
+  loadLocationList,
+  locationIndividualCounts,
+  locationFamilyCounts,
+  locationCanShowRecord,
+} from './location.mjs';
+import { renderLocationListPage } from './location-list-view.mjs';
 import { phpRouteUrl } from './route-url.mjs';
 import { selectPreference } from './preferences.mjs';
 import {
@@ -3310,6 +3319,127 @@ async function handleNoteListPage(req, res, treeName) {
   res.end(html);
 }
 
+async function handleLocationListPage(req, res, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let locations;
+  let showLastChange;
+
+  try {
+    // LocationListModule::boot() only registers this route while the
+    // module itself is enabled - same "proxy routing is purely path-based"
+    // reasoning as handleRepositoryListPage()/handleSourceListPage()/
+    // handleNoteListPage() above.
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'location_list'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // LocationListModule's own class default (Auth::PRIV_USER = 1,
+    // "member") - app/Module/LocationListModule.php:41.
+    const listAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'location_list',
+      'Fisharebest\\Webtrees\\Module\\ModuleListInterface',
+      1,
+    );
+
+    if (listAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const allLocations = await loadLocationList(pool, tree.gedcomId);
+    const individualCounts = await locationIndividualCounts(pool, tree.gedcomId);
+    const familyCounts = await locationFamilyCounts(pool, tree.gedcomId);
+    showLastChange = await loadShowLastChangePref(pool, tree.gedcomId);
+    const viewer = { accessLevel, isSelfRecord: false };
+
+    locations = [];
+
+    for (const location of allLocations) {
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, location.xref);
+      const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+
+      if (!locationCanShowRecord(treeForPrivacy, location.gedcom, viewer, defaultResnInfo.treeFactResn)) {
+        continue;
+      }
+
+      const nameFact = extractNameFromFact(location.gedcom, 'NAME');
+      const fullNameHtml =
+        nameFact !== null ? nameFact.full : `<span class="NAME" dir="auto" translate="no">${location.xref}</span>`;
+      const lastChangeRaw = recordLastChange(location.gedcom);
+
+      locations.push({
+        xref: location.xref,
+        url: phpRouteUrl(`/tree/${tree.name}/location/${location.xref}`, siteUrlConfig),
+        fullNameHtml,
+        individualCount: individualCounts.get(location.xref) ?? 0,
+        familyCount: familyCounts.get(location.xref) ?? 0,
+        lastChange: lastChangeRaw !== null ? { date: displayDate(new GedcomDate(lastChangeRaw.date)), time: lastChangeRaw.time } : null,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to resolve location list:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const csrfToken = user !== null ? generateCsrfToken() : null;
+  const html = renderLocationListPage({ tree, user, csrfToken, title: 'Locations', locations, showLastChange });
+
+  const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+  if (csrfToken !== null) {
+    headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+  }
+
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -3438,6 +3568,13 @@ const server = createServer(async (req, res) => {
 
   if (noteListTreeName !== null) {
     await handleNoteListPage(req, res, noteListTreeName);
+    return;
+  }
+
+  const locationListTreeName = matchLocationListPagePath(url.pathname);
+
+  if (locationListTreeName !== null) {
+    await handleLocationListPage(req, res, locationListTreeName);
     return;
   }
 

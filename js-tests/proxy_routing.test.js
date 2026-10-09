@@ -13,6 +13,7 @@ import {
   isRepositoryListPagePath,
   isSourceListPagePath,
   isNoteListPagePath,
+  isLocationListPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -272,6 +273,16 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/tree/{tree}/repository-list', () => {
     const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Frepository-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/location-list is a Node route', () => {
+    const url = urlFor('/tree/ophir/location-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/location-list', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Flocation-list');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
@@ -539,6 +550,24 @@ describe('isNoteListPagePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(isNoteListPagePath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isLocationListPagePath', () => {
+  test('matches the exact path', () => {
+    expect(isLocationListPagePath('/tree/ophir/location-list')).toBe(true);
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(isLocationListPagePath('/tree/ophir/location-list/')).toBe(true);
+  });
+
+  test('the per-record location page does not match', () => {
+    expect(isLocationListPagePath('/tree/ophir/location/L1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isLocationListPagePath('/tree/ophir')).toBe(false);
   });
 });
 
