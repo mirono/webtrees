@@ -447,6 +447,41 @@ separate decision — see "Open decisions" below.
 
 ## Fixed bugs (found during manual testing)
 
+- **PHP pages felt dramatically slower than Node pages while navigating the
+  app manually** (2026-10-09): user asked whether "switching from PHP to JS"
+  was the cause. It wasn't — measured live: Node-served pages (e.g.
+  `/tree/{tree}/individual/{xref}`) took 5-30ms, while EVERY PHP page
+  (even a bare 404 with no tree logic at all) took 3.6-6.5 SECONDS. Root
+  cause: `docker/php.Dockerfile` runs the app via `php -S` (the built-in
+  single-process dev server), which uses the plain `cli` SAPI - where
+  OPcache's bytecode cache is OFF by default (`opcache.enable_cli=Off`)
+  even though the extension itself is compiled in, so every request
+  re-parsed/re-compiled webtrees' entire Composer-autoloaded class graph
+  from scratch. Confirmed via direct measurement inside the container
+  (autoload alone: ~0.4s; DB connect+query: ~15ms, not the bottleneck;
+  the remaining ~2s+ is framework bootstrap/DI/middleware re-executed
+  fresh every request). Fixed by adding `opcache.enable_cli = 1` and
+  `opcache.validate_timestamps = 0` (skip the per-file mtime `stat()`
+  check too - meaningfully slower here since the whole repo is
+  bind-mounted from the Windows host through WSL) via a new
+  `webtrees-opcache.ini`. Cut the same bare-404 case from ~3.7s to
+  ~2.1s live. Real PHP pages remain far slower than Node ones (that gap
+  is inherent to `php -S` re-bootstrapping the whole framework per
+  request with no persistent worker, not something one ini setting can
+  fully erase) — if anything, this confirms the migration itself SPEEDS
+  UP the app as more routes move to Node, it isn't the cause of slowness.
+  **Trade-off**: `validate_timestamps=0` means an edited PHP file won't
+  take effect until `docker compose restart app` — the exact same
+  bind-mount-caching caveat `pages`/`proxy` already have. **Needs
+  `docker compose build app && docker compose up -d app`** (not just a
+  restart - the ini file is baked into the image) to pick this up.
+  Confirmed unrelated: `/tree/{tree}/branches` returns a pre-existing
+  406 ("Not acceptable: routing") when hit via `curl` from inside this
+  Docker network, regardless of this fix — `AuthNotRobot`/`BadBotBlocker`
+  middleware flagging the request as a robot, happening both before and
+  after this change; not a regression, not investigated further (out of
+  scope for this performance question).
+
 - **Every "no tag allowlist" record page rendered an extra "undefined"-labeled
   row** (2026-09-28, found live while building HeaderPage): `parseFacts()`
   splits a record's raw gedcom purely on `\n(?=1)` boundaries

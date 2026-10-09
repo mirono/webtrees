@@ -60,6 +60,38 @@ RUN { \
         echo 'max_input_time = 300'; \
     } > /usr/local/etc/php/conf.d/webtrees-uploads.ini
 
+# `php -S` runs as the plain `cli` SAPI (confirmed via `php -r 'echo
+# PHP_SAPI;'`), where OPcache's bytecode cache is OFF by default
+# (opcache.enable_cli=Off) even though the `Zend OPcache` extension
+# itself is compiled in - every request was re-parsing/re-compiling
+# webtrees' entire Composer-autoloaded class graph from scratch.
+# Measured live against this exact container: a bare 404 (no tree
+# logic, no DB work beyond a trivial SELECT 1) took ~3.7s with the
+# stock config: ~0.4s of that is the autoloader alone; the rest is
+# framework bootstrap (DI/middleware/routing) re-executed fresh every
+# single request, independent of any one slow file or query. Turning
+# on `enable_cli` plus `validate_timestamps=0` (skip the mtime stat()
+# PHP would otherwise do on every one of those files, every request -
+# meaningfully slower here than on a native filesystem since this
+# whole repo is bind-mounted from the Windows host through WSL) cut
+# that same bare-404 case to ~2.1s - real PHP pages are still far
+# slower than this migration's Node-served ones (single-digit ms), but
+# that gap is inherent to `php -S` being a single-process dev server
+# re-bootstrapping the whole framework per request, not something this
+# one setting can fully erase.
+#
+# Trade-off: validate_timestamps=0 means OPcache no longer re-checks a
+# file's mtime, so an edit to any PHP file under app/ (or anywhere else
+# bind-mounted into this container) will NOT take effect until the
+# `app` container is restarted (`docker compose restart app`) - the
+# exact same "code is bind-mounted but the long-running process caches
+# it at/after startup" caveat this migration's own `pages`/`proxy`
+# Node services already have (see docs/php-to-js-migration/STATUS.md).
+RUN { \
+        echo 'opcache.enable_cli = 1'; \
+        echo 'opcache.validate_timestamps = 0'; \
+    } > /usr/local/etc/php/conf.d/webtrees-opcache.ini
+
 WORKDIR /var/www/html
 
 EXPOSE 8000
