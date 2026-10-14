@@ -132,9 +132,14 @@ export function renderNoteListPage({ tree, user, csrfToken, title, notes, showLa
     showLastChange ? '<th>Last change</th>' : null,
   ].filter((header) => header !== null);
 
+  // Wrapped in .table-responsive - see source-list-view.mjs's own doc
+  // comment for why: .wt-global's overflow-x:hidden silently clips a
+  // wide, unwrapped table's right-most columns with no error and no
+  // visual trace, found live via a user report.
   const tableHtml =
     notes.length > 0
       ? `
+    <div class="table-responsive">
     <table class="table table-bordered table-sm wt-table-note">
         <thead>
             <tr>
@@ -143,7 +148,8 @@ export function renderNoteListPage({ tree, user, csrfToken, title, notes, showLa
         </thead>
         <tbody>${rowsHtml}
         </tbody>
-    </table>`
+    </table>
+    </div>`
       : '';
 
   // dir="ltr" is required, not decorative - see account-view.mjs's own

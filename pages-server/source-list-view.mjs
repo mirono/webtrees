@@ -144,9 +144,20 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources, sh
     showLastChange ? '<th>Last change</th>' : null,
   ].filter((header) => header !== null);
 
+  // Wrapped in .table-responsive (Bootstrap's overflow-x:auto) because
+  // .wt-global (every page's own <body> class) sets overflow-x:hidden
+  // with its own explicit design assumption that "any wide content will
+  // have its own horizontal scrollbar" (resources/css/_base.css) - real
+  // PHP's DataTables-powered table provides that itself; this plain
+  // static table didn't, so with enough columns/data (confirmed live:
+  // Individuals/Families/Media objects on a real tree) the right-most
+  // columns were silently clipped off-screen - present in the raw HTML,
+  // no console error, no second request, just invisible. Found via user
+  // report ("columns aren't showing") + reading the raw HTML together.
   const tableHtml =
     sources.length > 0
       ? `
+    <div class="table-responsive">
     <table class="table table-bordered table-sm wt-table-source">
         <thead>
             <tr>
@@ -155,7 +166,8 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources, sh
         </thead>
         <tbody>${rowsHtml}
         </tbody>
-    </table>`
+    </table>
+    </div>`
       : '';
 
   // dir="ltr" is required, not decorative - see account-view.mjs's own
