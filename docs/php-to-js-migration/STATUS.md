@@ -448,6 +448,37 @@ separate decision — see "Open decisions" below.
 
 ## Fixed bugs (found during manual testing)
 
+- **All 4 list routes' count columns (Individuals/Families/Media objects/
+  Sources/etc.) were silently clipped off-screen on real data** (2026-10-15):
+  user reported `/tree/{tree}/source-list` "isn't showing the Individuals,
+  Families, Media objects columns like the php page does," then that they
+  "flash and disappear" on refresh, with no console error and no second
+  network request, in both a normal and a private window. Server-side
+  investigation first ruled out the data/privacy/gating layer entirely (a
+  disposable admin session confirmed the raw HTML genuinely contained all
+  the right columns, with correct nonzero counts) - the decisive step was
+  asking the user to View Page Source (Ctrl+U) directly, confirming the
+  columns WERE in the raw HTML the server sent, which eliminated the whole
+  Node data/privacy/rendering-logic layer as a suspect and pointed squarely
+  at CSS/client-side rendering. Root cause: every page's own
+  `<body class="wt-global ...">` sets `overflow-x: hidden`
+  (`resources/css/_base.css`), with the explicit design comment "any wide
+  content will have its own horizontal scrollbar." Real PHP's
+  DataTables-powered tables provide that themselves; this migration's plain
+  static `<table>`s (all four list views) never got a wrapper, so once a
+  table's natural width exceeded the viewport (routine with 2-4 extra count
+  columns), the right-most columns were clipped with zero visual trace - no
+  scrollbar, no error, present in the DOM but genuinely invisible. Fixed by
+  wrapping each list table in a standard Bootstrap `.table-responsive` div
+  (`overflow-x: auto`) in all four list views
+  (repository/source/note/location-list-view.mjs). Live-verified:
+  `/tree/ophir/source-list` now returns the wrapper + all 7 columns intact.
+  **Lesson**: "columns exist in the DOM but aren't visible, no console
+  error" is a CSS-clipping signature, not a data/logic bug - View Page
+  Source is the fastest way to split "wrong data/logic" from "wrong
+  rendering" when a user reports a visual mismatch that server-side
+  re-verification can't reproduce.
+
 - **PHP pages felt dramatically slower than Node pages while navigating the
   app manually** (2026-10-09): user asked whether "switching from PHP to JS"
   was the cause. It wasn't — measured live: Node-served pages (e.g.
