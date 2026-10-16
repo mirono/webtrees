@@ -315,3 +315,25 @@ export async function individualRowsForSurnames(pool, gedcomId, surnsToShow, gal
   // family-list.mjs's own familyXrefsForSurnames().
   return rows.filter((row) => initialLetter(normalize(strtoupper(row.matchedGivn ?? ''))) === galpha);
 }
+
+/**
+ * Mirrors the SHOW_EST_LIST_DATES tree preference individuals-table.phtml
+ * reads directly (its own default, '0' - app/Tree.php:75) - whether to
+ * display an ESTIMATED date at all when no real one exists (the
+ * estimation itself, getEstimatedBirthDate()/getEstimatedDeathDate()
+ * above, still runs regardless - it also drives those columns' sort
+ * keys even when not displayed).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<boolean>}
+ */
+export async function loadShowEstimatedDatesPref(pool, gedcomId) {
+  const result = await pool.query(
+    "SELECT setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name = 'SHOW_EST_LIST_DATES'",
+    [gedcomId],
+  );
+  const value = result.rows[0]?.setting_value ?? '0';
+
+  return value === '1';
+}

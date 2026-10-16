@@ -157,3 +157,17 @@ describe('individualRowsForSurnames', () => {
     expect(rows.every((r) => r.xref === 'I1')).toBe(true);
   });
 });
+
+describe('loadShowEstimatedDatesPref', () => {
+  test('defaults to false when no row exists', async () => {
+    const pool = { query: async () => ({ rows: [] }) };
+    const { loadShowEstimatedDatesPref } = await import('../pages-server/individual-list.mjs');
+    expect(await loadShowEstimatedDatesPref(pool, 1)).toBe(false);
+  });
+
+  test('true only when the stored value is exactly "1"', async () => {
+    const pool = { query: async () => ({ rows: [{ setting_value: '1' }] }) };
+    const { loadShowEstimatedDatesPref } = await import('../pages-server/individual-list.mjs');
+    expect(await loadShowEstimatedDatesPref(pool, 1)).toBe(true);
+  });
+});
