@@ -153,6 +153,18 @@ export function isLocationListPagePath(pathname) {
   return /^\/tree\/[^/]+\/location-list\/?$/.test(pathname);
 }
 
+// /tree/{tree}/family-list: FamilyListModule (AbstractIndividualListModule's
+// routeUrl() override) - the first full-fidelity list route (real
+// families-table.phtml/surnames-table.phtml markup, not the
+// plain-table simplification every prior list route used). Same
+// exact-match shape as the other list-page matchers above; query
+// params (surname/alpha/falpha/show/etc.) are never part of `pathname`
+// (URL parsing strips them before this runs), so no extra handling is
+// needed here.
+export function isFamilyListPagePath(pathname) {
+  return /^\/tree\/[^/]+\/family-list\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -178,7 +190,8 @@ export function isNodeRoute(pathname, searchParams) {
     isRepositoryListPagePath(pathname) ||
     isSourceListPagePath(pathname) ||
     isNoteListPagePath(pathname) ||
-    isLocationListPagePath(pathname)
+    isLocationListPagePath(pathname) ||
+    isFamilyListPagePath(pathname)
   ) {
     return true;
   }
@@ -203,7 +216,8 @@ export function isNodeRoute(pathname, searchParams) {
     isRepositoryListPagePath(route) ||
     isSourceListPagePath(route) ||
     isNoteListPagePath(route) ||
-    isLocationListPagePath(route)
+    isLocationListPagePath(route) ||
+    isFamilyListPagePath(route)
   );
 }
 

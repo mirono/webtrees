@@ -99,6 +99,7 @@ import {
   sexLabel,
   extractPrimaryName,
   extractAllNameFacts,
+  getPrimaryNameIndex,
   nameSubTagAttributes,
   parseFacts,
   getBirthDate,
@@ -137,7 +138,29 @@ import { loadHeader, headerCanShowRecord, displayableHeaderFacts, headerFactOthe
 import { renderHeaderPage } from './header-view.mjs';
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { renderFamilyPage } from './family-view.mjs';
-import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from './family.mjs';
+import {
+  loadFamily,
+  loadRelatedFamilyXrefs,
+  childrenXrefs,
+  displayableFamilyFacts,
+  familyCanShowRecord,
+  numberOfChildren,
+  getAllMarriageDates,
+  hasMarriageFact,
+  hasDivorceFact,
+} from './family.mjs';
+import { Age } from '../lib/age.js';
+import {
+  surnameData,
+  allSurns,
+  allSurnames,
+  surnameInitials,
+  givenNameInitials,
+  familyXrefsForSurnames,
+  resolveListRequest,
+  needsGivenNameSublist,
+} from './family-list.mjs';
+import { renderFamilyListPage, renderSurnamesTable, renderFamiliesTable } from './family-list-view.mjs';
 import { renderSourcePage } from './source-view.mjs';
 import { renderRepositoryPage } from './repository-view.mjs';
 import {

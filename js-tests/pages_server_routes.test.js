@@ -19,6 +19,8 @@ import {
   matchRepositoryListPagePath,
   matchSourceListPagePath,
   matchNoteListPagePath,
+  matchLocationListPagePath,
+  matchFamilyListPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -461,5 +463,43 @@ describe('matchNoteListPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchNoteListPagePath('/tree/ophir')).toBeNull();
     expect(matchNoteListPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchLocationListPagePath', () => {
+  test('extracts the tree name', () => {
+    expect(matchLocationListPagePath('/tree/ophir/location-list')).toBe('ophir');
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchLocationListPagePath('/tree/ophir/location-list/')).toBe('ophir');
+  });
+
+  test('a per-record location page does not match (no xref here)', () => {
+    expect(matchLocationListPagePath('/tree/ophir/location/L1')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchLocationListPagePath('/tree/ophir')).toBeNull();
+    expect(matchLocationListPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchFamilyListPagePath', () => {
+  test('extracts the tree name', () => {
+    expect(matchFamilyListPagePath('/tree/ophir/family-list')).toBe('ophir');
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchFamilyListPagePath('/tree/ophir/family-list/')).toBe('ophir');
+  });
+
+  test('a per-record family page does not match (no xref here)', () => {
+    expect(matchFamilyListPagePath('/tree/ophir/family/F1')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchFamilyListPagePath('/tree/ophir')).toBeNull();
+    expect(matchFamilyListPagePath('/')).toBeNull();
   });
 });

@@ -14,6 +14,7 @@ import {
   isSourceListPagePath,
   isNoteListPagePath,
   isLocationListPagePath,
+  isFamilyListPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -283,6 +284,16 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/tree/{tree}/location-list', () => {
     const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Flocation-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/family-list is a Node route', () => {
+    const url = urlFor('/tree/ophir/family-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/family-list', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Ffamily-list');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
@@ -568,6 +579,24 @@ describe('isLocationListPagePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(isLocationListPagePath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isFamilyListPagePath', () => {
+  test('matches the exact path', () => {
+    expect(isFamilyListPagePath('/tree/ophir/family-list')).toBe(true);
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(isFamilyListPagePath('/tree/ophir/family-list/')).toBe(true);
+  });
+
+  test('the per-record family page does not match', () => {
+    expect(isFamilyListPagePath('/tree/ophir/family/F1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isFamilyListPagePath('/tree/ophir')).toBe(false);
   });
 });
 
