@@ -473,11 +473,31 @@ separate decision — see "Open decisions" below.
   (`overflow-x: auto`) in all four list views
   (repository/source/note/location-list-view.mjs). Live-verified:
   `/tree/ophir/source-list` now returns the wrapper + all 7 columns intact.
+  **This alone turned out to be incomplete**: the user reported the same
+  symptom again afterward. Root cause #2: Bootstrap's `.table` sets
+  `width: 100%`, but with the default `table-layout: auto` that's only a
+  hint, not a hard limit - a browser still widens the table past 100%
+  rather than wrap long cell text (this is exactly why Bootstrap ships
+  `.table-responsive` as a scroll *fallback* at all, not a true fix). Real
+  PHP's DataTables avoids this because it computes fixed per-column pixel
+  widths via JS; these plain static tables have no such mechanism, so they
+  kept overflowing even after being narrowed (fewer always-visible
+  columns) and wrapped in `.table-responsive` - confirmed via a follow-up
+  question that the "disappeared" columns were in fact still reachable by
+  scrolling right, just not visible without scrolling. Fixed by also
+  forcing `style="table-layout: fixed; word-wrap: break-word;"` on all
+  four list `<table>` elements, which makes the browser actually respect
+  the 100% width and wrap text instead of overflowing it. Live-verified
+  again on all four routes after this second fix.
   **Lesson**: "columns exist in the DOM but aren't visible, no console
   error" is a CSS-clipping signature, not a data/logic bug - View Page
   Source is the fastest way to split "wrong data/logic" from "wrong
   rendering" when a user reports a visual mismatch that server-side
-  re-verification can't reproduce.
+  re-verification can't reproduce. Second lesson: `.table-responsive`
+  alone does not guarantee a table fits without scrolling - the user's
+  report of "still broken" after the first fix was itself diagnostic
+  (asking "does scrolling reveal them?" cleanly separated "still clipped"
+  from "just too wide," which `.table-responsive` turns into).
 
 - **PHP pages felt dramatically slower than Node pages while navigating the
   app manually** (2026-10-09): user asked whether "switching from PHP to JS"
