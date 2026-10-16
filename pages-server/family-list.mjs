@@ -464,3 +464,83 @@ export function resolveListRequest(rawParams, allSurns, allSurnames, showFamilie
 export function needsGivenNameSublist(sublistTrigger, matchedCount) {
   return sublistTrigger !== 0 && matchedCount >= sublistTrigger;
 }
+
+/**
+ * Mirrors the `switch ($alpha)` surname-selection filter inside
+ * AbstractIndividualListModule::handle()'s `$show === 'indi' || $show === 'surn'`
+ * block (app/Module/AbstractIndividualListModule.php:311-335) - the
+ * SAME filter decides both which canonical surnames the surnames-table
+ * body shows AND (via its total) whether a given-name sublist is
+ * needed, using the FINAL post-branching alpha/surname/showAll values
+ * (resolveListRequest()'s own `alpha`/`surname`/`showAll` fields).
+ *
+ * @param {Map<string, Map<string, number>>} allSurnamesMap
+ * @param {{alpha: string, surname: string, showAll: string}} selection
+ * @returns {Map<string, Map<string, number>>}
+ */
+export function filterSurnamesForAlpha(allSurnamesMap, { alpha, surname, showAll }) {
+  let predicate;
+
+  if (alpha === '@') {
+    predicate = (key) => key === NOMEN_NESCIO;
+  } else if (alpha === ',') {
+    predicate = (key) => key === '';
+  } else if (alpha === '') {
+    predicate = showAll === 'yes' ? (key) => key !== '' && key !== NOMEN_NESCIO : (key) => key === surname;
+  } else if (surname === '') {
+    predicate = (key) => initialLetter(key) === alpha;
+  } else {
+    predicate = (key) => key === surname;
+  }
+
+  const filtered = new Map();
+
+  for (const [key, value] of allSurnamesMap) {
+    if (predicate(key)) {
+      filtered.set(key, value);
+    }
+  }
+
+  return filtered;
+}
+
+/**
+ * Mirrors the `$surns_to_show` resolution inside
+ * AbstractIndividualListModule::handle()'s `$show === 'indi'` branch
+ * (app/Module/AbstractIndividualListModule.php:416-432) - the REAL
+ * n_surn spellings (not canonical keys) to pass to a surname-filtered
+ * individuals/families query. An empty return means "every real
+ * surname" (familyXrefsForSurnames()'s own `NOT IN ('', '@N.N.')`
+ * default handles that case).
+ *
+ * @param {Map<string, string[]>} allSurnsMap
+ * @param {{alpha: string, surname: string}} selection
+ * @returns {string[]}
+ */
+export function computeSurnsToShow(allSurnsMap, { alpha, surname }) {
+  if (alpha === '@') {
+    return [NOMEN_NESCIO];
+  }
+
+  if (alpha === ',') {
+    return [''];
+  }
+
+  if (surname !== '') {
+    return allSurnsMap.get(surname) ?? [];
+  }
+
+  if (alpha !== '') {
+    const matches = [];
+
+    for (const [key, spellings] of allSurnsMap) {
+      if (initialLetter(key) === alpha) {
+        matches.push(...spellings);
+      }
+    }
+
+    return matches;
+  }
+
+  return [];
+}

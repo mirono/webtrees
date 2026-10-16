@@ -21,6 +21,8 @@ import {
   surnameInitials,
   givenNameInitials,
   familyXrefsForSurnames,
+  filterSurnamesForAlpha,
+  computeSurnsToShow,
 } from '../pages-server/family-list.mjs';
 
 function mockPool(rows) {
@@ -211,5 +213,68 @@ describe('familyXrefsForSurnames', () => {
 
     const sql = pool.query.mock.calls[0][0];
     expect(sql).not.toContain('LATERAL');
+  });
+});
+
+describe('filterSurnamesForAlpha', () => {
+  const surnames = new Map([
+    ['SMITH', new Map([['Smith', 5]])],
+    ['JONES', new Map([['Jones', 3]])],
+    ['', new Map([['', 2]])],
+    ['@N.N.', new Map([['@N.N.', 1]])],
+  ]);
+
+  test('alpha="@" keeps only the unknown-surname bucket', () => {
+    expect([...filterSurnamesForAlpha(surnames, { alpha: '@', surname: '', showAll: 'no' }).keys()]).toEqual(['@N.N.']);
+  });
+
+  test('alpha="," keeps only the no-surname bucket', () => {
+    expect([...filterSurnamesForAlpha(surnames, { alpha: ',', surname: '', showAll: 'no' }).keys()]).toEqual(['']);
+  });
+
+  test('alpha="" + showAll=yes keeps every REAL surname (excludes blank and unknown)', () => {
+    const result = [...filterSurnamesForAlpha(surnames, { alpha: '', surname: '', showAll: 'yes' }).keys()];
+    expect(result.sort()).toEqual(['JONES', 'SMITH']);
+  });
+
+  test('alpha="" + showAll=no keeps only the exact surname', () => {
+    expect([...filterSurnamesForAlpha(surnames, { alpha: '', surname: 'SMITH', showAll: 'no' }).keys()]).toEqual(['SMITH']);
+  });
+
+  test('a plain alpha letter with no surname selected keeps every surname starting with it', () => {
+    expect([...filterSurnamesForAlpha(surnames, { alpha: 'S', surname: '', showAll: 'no' }).keys()]).toEqual(['SMITH']);
+  });
+
+  test('a plain alpha letter WITH a surname already selected ignores the letter, keeps only that surname', () => {
+    expect([...filterSurnamesForAlpha(surnames, { alpha: 'J', surname: 'SMITH', showAll: 'no' }).keys()]).toEqual(['SMITH']);
+  });
+});
+
+describe('computeSurnsToShow', () => {
+  const allSurns = new Map([
+    ['SMITH', ['Smith', 'SMITH']],
+    ['SMYTHE', ['Smythe']],
+    ['JONES', ['Jones']],
+  ]);
+
+  test('alpha="@" returns only the NOMEN_NESCIO sentinel', () => {
+    expect(computeSurnsToShow(allSurns, { alpha: '@', surname: '' })).toEqual(['@N.N.']);
+  });
+
+  test('alpha="," returns only the blank surname', () => {
+    expect(computeSurnsToShow(allSurns, { alpha: ',', surname: '' })).toEqual(['']);
+  });
+
+  test('a surname returns every real spelling under that canonical key', () => {
+    expect(computeSurnsToShow(allSurns, { alpha: '', surname: 'SMITH' })).toEqual(['Smith', 'SMITH']);
+  });
+
+  test('a plain alpha letter with no surname returns every spelling under every matching canonical key', () => {
+    const result = computeSurnsToShow(allSurns, { alpha: 'S', surname: '' });
+    expect(result.sort()).toEqual(['SMITH', 'Smith', 'Smythe'].sort());
+  });
+
+  test('no alpha and no surname means "show everything" (empty array)', () => {
+    expect(computeSurnsToShow(allSurns, { alpha: '', surname: '' })).toEqual([]);
   });
 });
