@@ -340,3 +340,18 @@ export function matchFamilyListPagePath(pathname) {
 
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * PHP's route (app/Module/AbstractIndividualListModule.php's own
+ * routeUrl() override in IndividualListModule -
+ * `/tree/{tree}/individual-list`) - same exact-match shape as
+ * matchFamilyListPagePath() above.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchIndividualListPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/individual-list\/?$/.exec(pathname);
+
+  return match ? decodeURIComponent(match[1]) : null;
+}

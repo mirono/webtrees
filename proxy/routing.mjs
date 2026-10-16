@@ -165,6 +165,13 @@ export function isFamilyListPagePath(pathname) {
   return /^\/tree\/[^/]+\/family-list\/?$/.test(pathname);
 }
 
+// /tree/{tree}/individual-list: IndividualListModule (the OTHER
+// AbstractIndividualListModule subclass) - same exact-match shape as
+// isFamilyListPagePath() above.
+export function isIndividualListPagePath(pathname) {
+  return /^\/tree\/[^/]+\/individual-list\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -191,7 +198,8 @@ export function isNodeRoute(pathname, searchParams) {
     isSourceListPagePath(pathname) ||
     isNoteListPagePath(pathname) ||
     isLocationListPagePath(pathname) ||
-    isFamilyListPagePath(pathname)
+    isFamilyListPagePath(pathname) ||
+    isIndividualListPagePath(pathname)
   ) {
     return true;
   }
@@ -217,7 +225,8 @@ export function isNodeRoute(pathname, searchParams) {
     isSourceListPagePath(route) ||
     isNoteListPagePath(route) ||
     isLocationListPagePath(route) ||
-    isFamilyListPagePath(route)
+    isFamilyListPagePath(route) ||
+    isIndividualListPagePath(route)
   );
 }
 

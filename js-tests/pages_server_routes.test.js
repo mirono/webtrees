@@ -21,6 +21,7 @@ import {
   matchNoteListPagePath,
   matchLocationListPagePath,
   matchFamilyListPagePath,
+  matchIndividualListPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -501,5 +502,24 @@ describe('matchFamilyListPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchFamilyListPagePath('/tree/ophir')).toBeNull();
     expect(matchFamilyListPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchIndividualListPagePath', () => {
+  test('extracts the tree name', () => {
+    expect(matchIndividualListPagePath('/tree/ophir/individual-list')).toBe('ophir');
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchIndividualListPagePath('/tree/ophir/individual-list/')).toBe('ophir');
+  });
+
+  test('a per-record individual page does not match (no xref here)', () => {
+    expect(matchIndividualListPagePath('/tree/ophir/individual/I1')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchIndividualListPagePath('/tree/ophir')).toBeNull();
+    expect(matchIndividualListPagePath('/')).toBeNull();
   });
 });
