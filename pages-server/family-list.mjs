@@ -278,3 +278,189 @@ export async function familyXrefsForSurnames(pool, gedcomId, surnsToShow, galpha
 
   return [...xrefs];
 }
+
+const NOMEN_NESCIO = '@N.N.';
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+/**
+ * Mirrors AbstractIndividualListModule::listUrl() (app/Module/AbstractIndividualListModule.php:84-102)
+ * for the no-xref case (every internal redirect/nav link on the list
+ * page itself - the xref-prefill branch only matters when LINKING TO
+ * the list from elsewhere, e.g. an individual's own page, not ported
+ * here). Omits any param whose value is null/''/undefined, matching
+ * `route()`'s own query-string building.
+ *
+ * @param {string} treeName
+ * @param {Record<string, string|null|undefined>} params
+ * @returns {string}
+ */
+export function familyListUrl(treeName, params = {}) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined && value !== '') {
+      query.set(key, value);
+    }
+  }
+
+  const queryString = query.toString();
+
+  return `/tree/${treeName}/family-list${queryString ? `?${queryString}` : ''}`;
+}
+
+/**
+ * Mirrors the query-param resolution half of
+ * AbstractIndividualListModule::handle() (app/Module/AbstractIndividualListModule.php:112-251) -
+ * everything EXCEPT the actual surname-index DB queries (the caller
+ * already ran surnameData()/allSurns()/allSurnames()/surnameInitials()
+ * and passes the results in) and the given-name-sublist threshold
+ * check (SUBLIST_TRIGGER_I needs a total-matched-individual count the
+ * caller computes from its own query results - see
+ * resolveGivenNameSublist() below).
+ *
+ * @param {{surnameParam: string, alpha: string, falpha: string, show: string, showAll: string, showMarnm: string, showAllFirstnames: string}} rawParams
+ * @param {Map<string, string[]>} allSurns
+ * @param {Map<string, Map<string, number>>} allSurnames
+ * @param {boolean} showFamilies true for FamilyListModule, false for
+ *   IndividualListModule (not yet ported - included for the exact
+ *   title wording this function already has to produce)
+ * @returns {
+ *   | {kind: 'redirect', url: string}
+ *   | {kind: 'not-found', surname: string, url: string}
+ *   | {
+ *       kind: 'ok',
+ *       alpha: string, falpha: string, surname: string,
+ *       showAll: string, show: string, showMarnm: string, showAllFirstnames: string,
+ *       legendHtml: string, title: string, listParams: Record<string, string>,
+ *     }
+ * }
+ */
+export function resolveListRequest(rawParams, allSurns, allSurnames, showFamilies) {
+  const { surnameParam, alpha: alphaParam, falpha: falphaParam, showMarnm } = rawParams;
+  let show = rawParams.show === '' || rawParams.show === undefined ? 'surn' : rawParams.show;
+  let showAll = rawParams.showAll;
+  let falpha = falphaParam;
+  let alpha = alphaParam;
+
+  const surname = strtoupper(normalize(surnameParam));
+
+  const redirectParams = { alpha, falpha, show, show_all: showAll, show_all_firstnames: rawParams.showAllFirstnames, show_marnm: showMarnm, surname };
+
+  if (surnameParam !== surname) {
+    return { kind: 'redirect', url: familyListUrl(rawParams.treeName, redirectParams) };
+  }
+
+  if (rawParams.showAllFirstnames === 'yes') {
+    falpha = '';
+  }
+
+  if (showAll === 'yes') {
+    alpha = '';
+  }
+
+  let effectiveSurname = showAll === 'yes' ? '' : surname;
+
+  if (effectiveSurname !== '') {
+    alpha = initialLetter(effectiveSurname);
+  }
+
+  if (effectiveSurname !== '' && !allSurns.has(effectiveSurname)) {
+    return { kind: 'not-found', surname: effectiveSurname, url: familyListUrl(rawParams.treeName, {}) };
+  }
+
+  let legend;
+  let listParams;
+  const treeName = rawParams.treeName;
+
+  if (showAll === 'yes') {
+    if (rawParams.showAllFirstnames === 'yes') {
+      legend = 'All';
+      listParams = { show_all: 'yes', show_marnm: showMarnm };
+      show = 'indi';
+    } else if (falpha !== '') {
+      legend = `All, ${escapeHtml(falpha)}…`;
+      listParams = { show_all: 'yes', show_marnm: showMarnm };
+      show = 'indi';
+    } else {
+      legend = 'All';
+      listParams = { show_all: 'yes', show_marnm: showMarnm };
+    }
+  } else if (effectiveSurname !== '') {
+    showAll = 'no';
+    show = 'indi';
+    listParams = { surname: effectiveSurname, falpha, show_marnm: showMarnm };
+
+    if (effectiveSurname === NOMEN_NESCIO) {
+      legend = '…';
+    } else {
+      const variants = [...(allSurnames.get(effectiveSurname)?.keys() ?? [effectiveSurname])];
+      variants.sort(compare);
+      legend = variants.map((x) => (x === '' ? 'No surname' : escapeHtml(x))).join('/');
+    }
+
+    if (falpha === '@') {
+      legend += ', …';
+    } else if (falpha !== '') {
+      legend += `, ${escapeHtml(falpha)}…`;
+    }
+  } else if (alpha === '@') {
+    showAll = 'no';
+    legend = '…';
+    listParams = { alpha, show_marnm: showMarnm };
+    effectiveSurname = NOMEN_NESCIO;
+    show = 'indi';
+  } else if (alpha === ',') {
+    showAll = 'no';
+    legend = 'No surname';
+    listParams = { alpha, show_marnm: showMarnm };
+    show = 'indi';
+  } else if (alpha !== '') {
+    showAll = 'no';
+    legend = `${escapeHtml(alpha)}…`;
+    listParams = { alpha, show_marnm: showMarnm };
+  } else {
+    showAll = 'no';
+    legend = '…';
+    listParams = { show_marnm: showMarnm };
+    show = 'none';
+  }
+
+  const legendHtml = `<bdi>${legend}</bdi>`;
+  const title = `${showFamilies ? 'Families' : 'Individuals'} — ${legendHtml}`;
+
+  return {
+    kind: 'ok',
+    alpha,
+    falpha,
+    surname: effectiveSurname,
+    showAll,
+    show,
+    showMarnm,
+    showAllFirstnames: rawParams.showAllFirstnames,
+    legendHtml,
+    title,
+    listParams: { ...listParams, tree: treeName },
+  };
+}
+
+/**
+ * Mirrors the given-name-sublist decision inside
+ * AbstractIndividualListModule::handle()'s `$show === 'indi'` branch
+ * (app/Module/AbstractIndividualListModule.php:374-414): don't break a
+ * list down by given-name initial at all unless SUBLIST_TRIGGER_I is
+ * both nonzero AND the matched-individual count reaches it.
+ *
+ * @param {number} sublistTrigger tree's SUBLIST_TRIGGER_I preference (default 200)
+ * @param {number} matchedCount
+ * @returns {boolean}
+ */
+export function needsGivenNameSublist(sublistTrigger, matchedCount) {
+  return sublistTrigger !== 0 && matchedCount >= sublistTrigger;
+}
