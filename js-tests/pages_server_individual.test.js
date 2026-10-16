@@ -26,6 +26,7 @@ import {
   nameSubTagAttributes,
   extractPrimaryName,
   extractAllNameFacts,
+  getPrimaryNameIndex,
   getBirthDate,
   getDeathDate,
   isDead,
@@ -290,6 +291,38 @@ describe('extractAllNameFacts', () => {
 
   test('no matching facts -> empty array', () => {
     expect(extractAllNameFacts('1 SEX M', 'NAME')).toEqual([]);
+  });
+
+  test('a NAME fact with "2 TYPE MARRIED" is typed _MARNM, matching a real standalone _MARNM fact', () => {
+    const names = extractAllNameFacts('1 NAME Jane /Smith/\n2 TYPE married', 'NAME');
+
+    expect(names[0].type).toBe('_MARNM');
+  });
+
+  test('a NAME fact with any other TYPE (or none) keeps the given tag', () => {
+    const withType = extractAllNameFacts('1 NAME Jane /Smith/\n2 TYPE nick', 'NAME');
+    const withoutType = extractAllNameFacts('1 NAME Jane /Smith/', 'NAME');
+
+    expect(withType[0].type).toBe('NAME');
+    expect(withoutType[0].type).toBe('NAME');
+  });
+});
+
+describe('getPrimaryNameIndex', () => {
+  test('returns 0 when the first name already matches the UI locale script (Latin)', () => {
+    expect(getPrimaryNameIndex([{ sort: 'SMITH,JOHN' }, { sort: 'בית,יוחנן' }])).toBe(0);
+  });
+
+  test('returns the index of the first Latin-script name when it is NOT first', () => {
+    expect(getPrimaryNameIndex([{ sort: 'בית,יוחנן' }, { sort: 'SMITH,JOHN' }])).toBe(1);
+  });
+
+  test('defaults to 0 when no name matches the UI locale script', () => {
+    expect(getPrimaryNameIndex([{ sort: 'בית,יוחנן' }, { sort: 'איוון,איוון' }])).toBe(0);
+  });
+
+  test('defaults to 0 for an empty array', () => {
+    expect(getPrimaryNameIndex([])).toBe(0);
   });
 });
 

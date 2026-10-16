@@ -30,6 +30,7 @@
 
 import { GedcomDate } from '../lib/gedcom-date.js';
 import { Age } from '../lib/age.js';
+import { textScript } from './collation.mjs';
 
 const NOMEN_NESCIO = '@N.N.';
 const PRAENOMEN_NESCIO = '@P.N.';
@@ -338,7 +339,16 @@ export function extractAllNameFacts(gedcom, tag) {
       continue;
     }
 
-    results.push({ ...addName(lineMatch[1], nameFact), rawValue: lineMatch[1], gedcom: nameFact });
+    // Mirrors GedcomRecord::extractNamesFromFacts()'s own special case
+    // (app/GedcomRecord.php:888-890): a `1 NAME` fact with a `2 TYPE
+    // MARRIED` subtag (case-insensitive) is treated as type '_MARNM',
+    // same as a real standalone `_MARNM` fact - used by FamilyListModule's
+    // families-table row rendering to decide which of an individual's
+    // names to show/hide (every non-married name, plus the married name
+    // ONLY if it's also the primary one).
+    const type = tag === 'NAME' && /\n2 TYPE MARRIED/i.test(nameFact) ? '_MARNM' : tag;
+
+    results.push({ ...addName(lineMatch[1], nameFact), type, rawValue: lineMatch[1], gedcom: nameFact });
   }
 
   return results;
@@ -359,6 +369,32 @@ export function extractNameFromFact(gedcom, tag) {
  */
 export function extractPrimaryName(gedcom) {
   return extractNameFromFact(gedcom, 'NAME');
+}
+
+// Mirrors GedcomRecord::getPrimaryName()'s own locale check
+// (app/GedcomRecord.php:350): `I18N::locale()->script()->code()` - this
+// install's locale is always LocaleEnUs (confirmed: no language module
+// is configured anywhere), whose script code is 'Latn'.
+const UI_LOCALE_SCRIPT = 'Latn';
+
+/**
+ * Mirrors GedcomRecord::getPrimaryName() (app/GedcomRecord.php:346-365):
+ * the first name whose SORT text matches the active UI locale's script,
+ * defaulting to index 0 if none match (or the array is empty - the
+ * real method is only ever called when getAllNames() is non-empty, same
+ * guarantee every real caller here already provides).
+ *
+ * @param {{sort: string}[]} allNames as returned by extractAllNameFacts()
+ * @returns {number}
+ */
+export function getPrimaryNameIndex(allNames) {
+  for (let i = 0; i < allNames.length; i += 1) {
+    if (textScript(allNames[i].sort) === UI_LOCALE_SCRIPT) {
+      return i;
+    }
+  }
+
+  return 0;
 }
 
 function dateForTagList(facts, tagList) {
