@@ -113,15 +113,19 @@ export function renderRepositoryListPage({ tree, user, csrfToken, title, reposit
     )
     .join('');
 
-  // Wrapped in .table-responsive - see source-list-view.mjs's own doc
-  // comment for why: .wt-global's overflow-x:hidden silently clips a
-  // wide, unwrapped table's right-most columns with no error and no
-  // visual trace, found live via a user report.
+  // Wrapped in .table-responsive, AND table-layout:fixed - see
+  // source-list-view.mjs's own doc comment for why both are needed:
+  // .wt-global's overflow-x:hidden silently clips a wide, unwrapped
+  // table's right-most columns with no error and no visual trace, and
+  // table-responsive alone doesn't stop the table from exceeding its
+  // container width in the first place (table-layout:auto treats
+  // Bootstrap's width:100% as only a hint) - both found live via user
+  // reports.
   const tableHtml =
     repositories.length > 0
       ? `
     <div class="table-responsive">
-    <table class="table table-bordered table-sm wt-table-repository">
+    <table class="table table-bordered table-sm wt-table-repository" style="table-layout: fixed; word-wrap: break-word;">
         <thead>
             <tr>
                 <th>Repository name</th>${showSources ? '\n                <th>Sources</th>' : ''}${

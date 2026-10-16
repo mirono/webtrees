@@ -163,11 +163,24 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources, sh
   // columns were silently clipped off-screen - present in the raw HTML,
   // no console error, no second request, just invisible. Found via user
   // report ("columns aren't showing") + reading the raw HTML together.
+  //
+  // table-layout:fixed is ALSO required, not decorative - Bootstrap's own
+  // .table sets width:100%, but with the default table-layout:auto that's
+  // only a hint: a browser still widens the table past 100% to avoid
+  // wrapping long cell text (this is exactly why Bootstrap ships
+  // .table-responsive as a scroll fallback at all). Real PHP's DataTables
+  // avoids this by computing fixed per-column pixel widths via JS, which
+  // this plain table doesn't have - table-layout:fixed makes the browser
+  // respect the 100% width and wrap text instead, which is what actually
+  // stops columns from needing a horizontal scroll on a normal desktop
+  // viewport (table-responsive alone was not sufficient - found live via
+  // a user report that persisted after that fix: columns were reachable
+  // by scrolling, which is not the same as visible without scrolling).
   const tableHtml =
     sources.length > 0
       ? `
     <div class="table-responsive">
-    <table class="table table-bordered table-sm wt-table-source">
+    <table class="table table-bordered table-sm wt-table-source" style="table-layout: fixed; word-wrap: break-word;">
         <thead>
             <tr>
                 ${headers.join('\n                ')}
