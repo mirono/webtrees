@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-10-09 (step 23: `/tree/{tree}/location-list` (LocationListModule) served entirely by Node — the fourth "list" route, first to build conditional column-hiding in from the start instead of retrofitting it). This is the entry point for "where are we" —
+**Last updated: 2026-10-16 (step 24: `/tree/{tree}/family-list` (FamilyListModule) served entirely by Node — the fifth "list" route and the first FULL FIDELITY one: real `families-table.phtml`/`surnames-table.phtml` markup, not the plain-table simplification every prior list route used). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -124,6 +124,7 @@ just adding latency.
 | 5.22 | `/tree/{tree}/note-list` (NoteListModule) served entirely by Node — the third "list" route, reusing note.mjs's NotePage privacy chain; the first list route whose default access level is "visitor" (open to everyone), not member-only; found that `proxy` (not just `pages`) needs restarting to pick up a new route | **Done (2026-10-08)** — [phase5-note-list.md](phase5-note-list.md) |
 | 5.22f | Retroactive fix for all 3 list routes (found via user screenshot comparison): real PHP conditionally hides a count column when every row sums to 0, and hides "Last change" entirely when the tree's SHOW_LAST_CHANGE preference is off (default OFF, unlike HIDE_LIVE_PEOPLE) — ported properly instead of leaving "always show every column" as a documented gap; also fixed note-list's page title ("Shared notes" → "Notes", the module's menu label vs. its actual page title) | **Done (2026-10-08)** — [phase5-list-column-visibility.md](phase5-list-column-visibility.md) |
 | 5.23 | `/tree/{tree}/location-list` (LocationListModule) served entirely by Node — the fourth "list" route; simplest yet (Location has no canShowByType() override, same base-privacy shape as Repository; member-only access level); two linked-record counts (Individuals/Families); built with conditional column-hiding from the start instead of retrofitting it | **Done (2026-10-09)** — [phase5-location-list.md](phase5-location-list.md) |
+| 5.24 | `/tree/{tree}/family-list` (FamilyListModule) served entirely by Node — the fifth "list" route, extending AbstractIndividualListModule (surname index/given-name-sublist machinery); the FIRST full-fidelity list route (real families-table.phtml/surnames-table.phtml markup + DataTables filter buttons, not the plain-table simplification every prior list route used); visitor-level access (no module override) | **Done (2026-10-16)** — [phase5-family-list.md](phase5-family-list.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
