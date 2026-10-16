@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { renderSurnamesTable, renderFamiliesTable } from '../pages-server/family-list-view.mjs';
+import { renderSurnamesTable, renderFamiliesTable, renderFamilyListPage } from '../pages-server/family-list-view.mjs';
 
 function baseFamily(overrides = {}) {
   return {
@@ -216,5 +216,67 @@ describe('renderFamiliesTable', () => {
     expect(html).toContain('<td hidden="hidden">Y100D</td>');
     expect(html).toContain('<td hidden="hidden">Y</td>');
     expect(html).toContain('<td hidden="hidden">R</td>');
+  });
+});
+
+describe('renderFamilyListPage', () => {
+  function baseParams(overrides = {}) {
+    return {
+      tree: { title: 'The Ophir Family Tree', name: 'ophir' },
+      user: null,
+      csrfToken: null,
+      title: 'Families — <bdi>Smith</bdi>',
+      legendHtml: '<bdi>Smith</bdi>',
+      surnameInitials: new Map([['A', 0], ['S', 5]]),
+      alpha: 'S',
+      showAll: 'no',
+      showMarnm: '',
+      show: 'indi',
+      listParams: { tree: 'ophir' },
+      bodyHtml: '<p>body</p>',
+      givenNameSublist: null,
+      ...overrides,
+    };
+  }
+
+  test('the <title> tag strips HTML tags (strip_tags, not escaping) so "<bdi>" never shows literally', () => {
+    const html = renderFamilyListPage(baseParams());
+    expect(html).toContain('<title>Families — Smith</title>');
+  });
+
+  test('the <h2> page title renders the legend HTML raw (not escaped)', () => {
+    const html = renderFamilyListPage(baseParams());
+    expect(html).toContain('<h2 class="wt-page-title">Families — <bdi>Smith</bdi></h2>');
+  });
+
+  test('a zero-count surname initial renders muted, not as a clickable link', () => {
+    const html = renderFamilyListPage(baseParams());
+    expect(html).toContain('<span class="wt-initial px-1 text-muted">A</span>');
+  });
+
+  test('a nonzero-count surname initial renders as a link with the active class when it matches alpha', () => {
+    const html = renderFamilyListPage(baseParams({ alpha: 'S' }));
+    expect(html).toMatch(/<a href="[^"]*alpha=S[^"]*" class="wt-initial px-1 active" title="5">S<\/a>/);
+  });
+
+  test('the show/hide married-names toggle link is omitted when show is "none"', () => {
+    const html = renderFamilyListPage(baseParams({ show: 'none' }));
+    expect(html).not.toContain('married name');
+  });
+
+  test('the given-name sublist nav is rendered only when provided', () => {
+    const withSublist = renderFamilyListPage(
+      baseParams({
+        givenNameSublist: { givenNameInitials: new Map([['J', 3]]), falpha: 'J', showAllFirstnames: '' },
+      }),
+    );
+    const withoutSublist = renderFamilyListPage(baseParams({ givenNameSublist: null }));
+
+    expect(withSublist).toContain('Given names');
+    expect(withoutSublist).not.toContain('wt-initials-list-given-names');
+  });
+
+  test('the body HTML is embedded as-is', () => {
+    expect(renderFamilyListPage(baseParams({ bodyHtml: '<table id="my-marker"></table>' }))).toContain('my-marker');
   });
 });

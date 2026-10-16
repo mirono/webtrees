@@ -400,3 +400,245 @@ export function renderFamiliesTable({ families, showLastChange }) {
     </table>
     </div>`;
 }
+
+/**
+ * Mirrors AbstractIndividualListModule::handle()'s own surname-initials
+ * nav strip (app/Module/AbstractIndividualListModule.php:254-274) - the
+ * `<?= $alpha ?>` row of letter links (plus ',' "no surname" and '@'
+ * "unknown") with a count-based active/muted state, and an "All" link.
+ * The real "search spiders don't get the All option" check
+ * (`Session::has('initiated')`) has no equivalent session/bot-detection
+ * concept in this migration - always shown here, a documented, safe
+ * simplification (a crawler seeing one extra link changes nothing
+ * privacy- or correctness-wise).
+ *
+ * @param {object} params
+ * @param {string} params.treeName
+ * @param {Map<string, number>} params.surnameInitials
+ * @param {string} params.alpha current alpha selection, for the active class
+ * @param {string} params.showAll
+ * @param {Record<string, string>} params.listParams
+ * @returns {string}
+ */
+function surnameInitialsNavHtml({ treeName, surnameInitials, alpha, showAll, listParams }) {
+  const items = [...surnameInitials.entries()]
+    .map(([letter, count]) => {
+      const label = letter === '@' ? '…' : letter === ',' ? 'No surname' : escapeHtml(letter);
+
+      if (count === 0) {
+        return `
+                    <li class="wt-initials-list-item d-flex">
+                        <span class="wt-initial px-1 text-muted">${label}</span>
+                    </li>`;
+      }
+
+      const url = familyListUrl(treeName, { ...listParams, alpha: letter });
+      const activeClass = letter === alpha ? ' active' : '';
+
+      return `
+                    <li class="wt-initials-list-item d-flex">
+                        <a href="${escapeHtml(url)}" class="wt-initial px-1${activeClass}" title="${count}">${label}</a>
+                    </li>`;
+    })
+    .join('');
+
+  const allUrl = familyListUrl(treeName, { ...listParams, show_all: 'yes' });
+  const allActiveClass = showAll === 'yes' ? ' active' : '';
+
+  return `
+            <ul class="d-flex flex-wrap list-unstyled justify-content-center wt-initials-list wt-initials-list-surname">${items}
+                <li class="wt-initials-list-item d-flex">
+                    <a class="wt-initial px-1${allActiveClass}" href="${escapeHtml(allUrl)}">All</a>
+                </li>
+            </ul>`;
+}
+
+/**
+ * Mirrors the given-name-initials nav strip inside
+ * AbstractIndividualListModule::handle()'s `$show === 'indi'` branch
+ * (app/Module/AbstractIndividualListModule.php:384-413) - only
+ * rendered at all when needsGivenNameSublist() said so.
+ *
+ * @param {object} params
+ * @param {string} params.treeName
+ * @param {Map<string, number>} params.givenNameInitials
+ * @param {string} params.falpha
+ * @param {string} params.showAllFirstnames
+ * @param {Record<string, string>} params.listParams
+ * @returns {string}
+ */
+function givenNameInitialsNavHtml({ treeName, givenNameInitials, falpha, showAllFirstnames, listParams }) {
+  const items = [...givenNameInitials.entries()]
+    .map(([letter, count]) => {
+      const label = letter === '@' ? '…' : escapeHtml(letter);
+
+      if (count === 0) {
+        return `
+                    <li class="wt-initials-list-item d-flex">
+                        <span class="wt-initial px-1 text-muted">${label}</span>
+                    </li>`;
+      }
+
+      const url = familyListUrl(treeName, { ...listParams, falpha: letter });
+      const activeClass = letter === falpha && showAllFirstnames !== 'yes' ? ' active' : '';
+
+      return `
+                    <li class="wt-initials-list-item d-flex">
+                        <a href="${escapeHtml(url)}" class="wt-initial px-1${activeClass}" title="${count}">${label}</a>
+                    </li>`;
+    })
+    .join('');
+
+  const allUrl = familyListUrl(treeName, { ...listParams, show_all_firstnames: 'yes' });
+  const allActiveClass = showAllFirstnames === 'yes' ? ' active' : '';
+
+  return `
+            <h2 class="wt-page-title">Given names</h2>
+            <ul class="d-flex flex-wrap list-unstyled justify-content-center wt-initials-list wt-initials-list-given-names">${items}
+                <li class="wt-initials-list-item d-flex">
+                    <a class="wt-initial px-1${allActiveClass}" href="${escapeHtml(allUrl)}" title="${escapeHtml(allUrl)}">All</a>
+                </li>
+            </ul>`;
+}
+
+/**
+ * Full page: /tree/{tree}/family-list (FamilyListModule). Mirrors
+ * AbstractIndividualListModule::handle()'s overall page structure
+ * (the surname-initials strip, the show/hide-married-names toggle
+ * link, the given-name-initials sub-strip when shown, then either
+ * the surnames-table or families-table body) wrapped in this
+ * migration's standard page shell (see repository-list-view.mjs's own
+ * doc comment for the shell's own conventions, unchanged here).
+ *
+ * @param {object} params
+ * @param {{title: string, name: string}} params.tree
+ * @param {{realName: string}|null} params.user
+ * @param {string|null} params.csrfToken
+ * @param {string} params.title
+ * @param {string} params.legendHtml
+ * @param {Map<string, number>} params.surnameInitials
+ * @param {string} params.alpha
+ * @param {string} params.showAll
+ * @param {string} params.showMarnm
+ * @param {string} params.show 'surn' | 'indi' | 'none'
+ * @param {Record<string, string>} params.listParams
+ * @param {string} params.bodyHtml already-rendered surnames-table or
+ *   families-table HTML (or '' when show === 'none')
+ * @param {{givenNameInitials: Map<string, number>, falpha: string, showAllFirstnames: string}|null} params.givenNameSublist
+ *   null when needsGivenNameSublist() said not to show one
+ * @returns {string}
+ */
+export function renderFamilyListPage({
+  tree,
+  user,
+  csrfToken,
+  title,
+  legendHtml,
+  surnameInitials,
+  alpha,
+  showAll,
+  showMarnm,
+  show,
+  listParams,
+  bodyHtml,
+  givenNameSublist,
+}) {
+  const csrfMetaTag =
+    user !== null
+      ? `
+    <meta name="csrf" content="${escapeHtml(csrfToken)}">`
+      : '';
+
+  const userMenuHtml =
+    user !== null
+      ? `
+                    <li class="nav-item">
+                        <span class="nav-link">${escapeHtml(user.realName)}</span>
+                    </li>
+                    <li class="nav-item menu-logout">
+                        <a class="nav-link" href="#" data-wt-post-url="/logout" data-wt-reload-url="/">Sign out</a>
+                    </li>`
+      : `
+                    <li class="nav-item">
+                        <a class="nav-link" href="/login">Sign in</a>
+                    </li>`;
+
+  const navHtml = surnameInitialsNavHtml({ treeName: tree.name, surnameInitials, alpha, showAll, listParams });
+
+  const marnmToggleHtml =
+    show !== 'none'
+      ? showMarnm === 'yes'
+        ? `
+            <p>
+                <a href="${escapeHtml(familyListUrl(tree.name, { ...listParams, show, show_marnm: 'no' }))}">
+                    Exclude individuals with “${legendHtml}” as a married name
+                </a>
+            </p>`
+        : `
+            <p>
+                <a href="${escapeHtml(familyListUrl(tree.name, { ...listParams, show, show_marnm: 'yes' }))}">
+                    Include individuals with “${legendHtml}” as a married name
+                </a>
+            </p>`
+      : '';
+
+  const givenNameSublistHtml =
+    givenNameSublist !== null
+      ? givenNameInitialsNavHtml({
+          treeName: tree.name,
+          givenNameInitials: givenNameSublist.givenNameInitials,
+          falpha: givenNameSublist.falpha,
+          showAllFirstnames: givenNameSublist.showAllFirstnames,
+          listParams,
+        })
+      : '';
+
+  // dir="ltr" is required, not decorative - see account-view.mjs's own
+  // doc comment for the [dir]-selector CSS finding this fix addresses.
+  return `<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+    <meta charset="UTF-8">${csrfMetaTag}
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${title.replace(/<[^>]+>/g, '')}</title>
+    <link rel="stylesheet" href="/public/css/vendor.min.css">
+    <link rel="stylesheet" href="/public/css/webtrees.min.css">
+</head>
+<body class="wt-global wt-theme-webtrees wt-route-family-list-page">
+    <header class="wt-header-wrapper d-print-none">
+        <div class="container-lg wt-header-container">
+            <div class="row wt-header-content">
+                <div class="col wt-site-logo"></div>
+                <h1 class="col wt-site-title">${escapeHtml(tree.title)}</h1>
+                <div class="col wt-secondary-navigation">
+                    <ul class="nav wt-user-menu">${userMenuHtml}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="content" class="wt-main-wrapper">
+        <div class="container-lg wt-main-container">
+            <div class="row">
+                <div class="col-md-12">
+                    <h2 class="wt-page-title">${title}</h2>
+                    <div class="d-flex flex-column wt-page-options wt-page-options-individual-list d-print-none">${navHtml}${marnmToggleHtml}
+                    </div>
+                    <div class="wt-page-content">
+                        ${givenNameSublistHtml}
+                        ${bodyHtml}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="container-lg wt-footers d-print-none"></footer>
+
+    <script src="/public/js/vendor.min.js"></script>
+    <script src="/public/js/webtrees.min.js"></script>
+</body>
+</html>
+`;
+}
