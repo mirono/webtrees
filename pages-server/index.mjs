@@ -94,6 +94,7 @@ import {
   loadDefaultResn,
   viewerRelationshipPrefs,
   canShowRecord,
+  canShowName,
   sex,
   sexLabel,
   extractPrimaryName,
@@ -1271,10 +1272,18 @@ async function resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs
     defaultResn: defaultResnInfo.individualResn,
     keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
     keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    // Only read by canShowName() below - canShowRecord() never looks at it.
+    showLivingNames: treePrivacyPrefs.showLivingNames,
   };
   const canShow = canShowRecord(treeForPrivacy, individual.gedcom, facts, viewer);
+  // Mirrors Family::husband()/wife()'s own weaker gate
+  // (app/Family.php:86-113): a living individual's NAME can be shown
+  // even when canShow (canShowRecord) is false, per SHOW_LIVING_NAMES -
+  // used by FamilyListModule's families-table row rendering, which
+  // calls husband()/wife() directly, not the full-record gate.
+  const canShowNameOnly = canShowName(treeForPrivacy, individual.gedcom, facts, viewer);
 
-  return { individual, facts, dead, canShow };
+  return { individual, facts, dead, canShow, canShowNameOnly };
 }
 
 /**

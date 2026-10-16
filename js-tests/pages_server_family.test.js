@@ -14,7 +14,18 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import { loadFamily, loadRelatedFamilyXrefs, childrenXrefs, displayableFamilyFacts, familyCanShowRecord } from '../pages-server/family.mjs';
+import {
+  loadFamily,
+  loadRelatedFamilyXrefs,
+  childrenXrefs,
+  displayableFamilyFacts,
+  familyCanShowRecord,
+  numberOfChildren,
+  getAllMarriageDates,
+  getMarriageDate,
+  hasMarriageFact,
+  hasDivorceFact,
+} from '../pages-server/family.mjs';
 import { parseFacts } from '../pages-server/individual.mjs';
 
 function mockPool(queryImpl) {
@@ -150,5 +161,78 @@ describe('familyCanShowRecord', () => {
 
   test('admin bypass applies before ever checking member visibility', () => {
     expect(familyCanShowRecord(baseTree, '', { ...baseViewer, accessLevel: 0 }, [false, false])).toBe(true);
+  });
+});
+
+describe('numberOfChildren', () => {
+  test('counts CHIL facts', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 CHIL @I1@\n1 CHIL @I2@');
+    expect(numberOfChildren(facts)).toBe(2);
+  });
+
+  test('an explicit NCHI raises the count if higher', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 CHIL @I1@\n1 NCHI 5');
+    expect(numberOfChildren(facts)).toBe(5);
+  });
+
+  test('an explicit NCHI lower than the real CHIL count never lowers it', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 CHIL @I1@\n1 CHIL @I2@\n1 NCHI 1');
+    expect(numberOfChildren(facts)).toBe(2);
+  });
+
+  test('no CHIL/NCHI facts -> 0', () => {
+    expect(numberOfChildren(parseFacts('0 @F1@ FAM\n1 HUSB @I1@'))).toBe(0);
+  });
+});
+
+describe('getAllMarriageDates / getMarriageDate', () => {
+  test('returns every dated MARR fact', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 MARR\n2 DATE 12 JUN 1950\n2 PLAC London\n1 MARR\n2 DATE 13 JUN 1950');
+
+    const dates = getAllMarriageDates(facts);
+    expect(dates).toHaveLength(2);
+    expect(dates[0].rawDate).toBe('12 JUN 1950');
+    expect(dates[0].place).toBe('London');
+    expect(dates[1].rawDate).toBe('13 JUN 1950');
+  });
+
+  test('falls back to _NMR when there is no dated MARR fact', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 _NMR\n2 DATE 1960');
+    const dates = getAllMarriageDates(facts);
+    expect(dates).toHaveLength(1);
+    expect(dates[0].rawDate).toBe('1960');
+  });
+
+  test('never mixes MARR and _NMR dates - MARR wins if it has any usable date', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 MARR\n2 DATE 12 JUN 1950\n1 _NMR\n2 DATE 1960');
+    const dates = getAllMarriageDates(facts);
+    expect(dates).toHaveLength(1);
+    expect(dates[0].rawDate).toBe('12 JUN 1950');
+  });
+
+  test('no dated facts at all -> empty array, and getMarriageDate is null', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 HUSB @I1@');
+    expect(getAllMarriageDates(facts)).toEqual([]);
+    expect(getMarriageDate(facts)).toBeNull();
+  });
+
+  test('getMarriageDate returns the first marriage date', () => {
+    const facts = parseFacts('0 @F1@ FAM\n1 MARR\n2 DATE 12 JUN 1950\n1 MARR\n2 DATE 13 JUN 1950');
+    expect(getMarriageDate(facts).rawDate).toBe('12 JUN 1950');
+  });
+});
+
+describe('hasMarriageFact / hasDivorceFact', () => {
+  test('hasMarriageFact is true for a MARR fact with no date', () => {
+    expect(hasMarriageFact(parseFacts('0 @F1@ FAM\n1 MARR Y'))).toBe(true);
+  });
+
+  test('hasMarriageFact is false with no MARR fact at all', () => {
+    expect(hasMarriageFact(parseFacts('0 @F1@ FAM\n1 HUSB @I1@'))).toBe(false);
+  });
+
+  test('hasDivorceFact detects a DIV fact', () => {
+    expect(hasDivorceFact(parseFacts('0 @F1@ FAM\n1 DIV'))).toBe(true);
+    expect(hasDivorceFact(parseFacts('0 @F1@ FAM\n1 MARR'))).toBe(false);
   });
 });

@@ -27,6 +27,10 @@
 // below), no slug canonicalization.
 
 import { canShowViaResnChain } from './individual.mjs';
+import { GedcomDate } from '../lib/gedcom-date.js';
+
+// Mirrors Gedcom::MARRIAGE_EVENTS (app/Gedcom.php:234).
+const MARRIAGE_EVENTS = ['MARR', '_NMR'];
 
 // Membership-link tags excluded from the "Facts and events" table -
 // these render as the parents/children cards instead, matching
@@ -150,6 +154,116 @@ export function displayableFamilyFacts(facts) {
     const tag = factTag(fact);
     return tag !== '' && !EXCLUDED_MEMBERSHIP_TAGS.includes(tag);
   });
+}
+
+/**
+ * Mirrors Family::numberOfChildren() (app/Family.php:201-210): the
+ * CHIL-fact count, raised to an explicit NCHI fact's value if that's
+ * higher (never lowered - `max()`, matching real PHP exactly).
+ *
+ * @param {string[]} facts
+ * @returns {number}
+ */
+export function numberOfChildren(facts) {
+  let count = childrenXrefs(facts).length;
+
+  for (const fact of facts) {
+    if (factTag(fact) !== 'NCHI') {
+      continue;
+    }
+
+    const match = /^1 NCHI (.+)/.exec(fact);
+
+    if (match) {
+      count = Math.max(count, parseInt(match[1], 10) || 0);
+    }
+  }
+
+  return count;
+}
+
+/**
+ * Mirrors Family::getAllMarriageDates()/getAllMarriagePlaces() (via
+ * their shared getAllEventDates()/getAllEventPlaces() helper,
+ * app/Family.php:260-288): try each MARRIAGE_EVENTS tag (MARR, then
+ * _NMR) in order, and return EVERY dated fact of the FIRST tag that has
+ * at least one - never a mix of tags. Unlike individual.mjs's own
+ * dateForTagList() (first match only, used for birth/death display),
+ * this returns the full array real PHP's families-table.phtml iterates
+ * over (`foreach ($marriage_dates as $marriage_date)`) - a real family
+ * can have more than one dated MARR fact (e.g. a civil + a religious
+ * ceremony).
+ *
+ * @param {string[]} facts
+ * @returns {{date: GedcomDate, rawDate: string, place: string}[]}
+ */
+export function getAllMarriageDates(facts) {
+  for (const tag of MARRIAGE_EVENTS) {
+    const matches = [];
+
+    for (const fact of facts) {
+      if (factTag(fact) !== tag) {
+        continue;
+      }
+
+      const dateMatch = /\n2 DATE (.+)/.exec(fact);
+
+      if (!dateMatch) {
+        continue;
+      }
+
+      const gedcomDate = new GedcomDate(dateMatch[1]);
+
+      if (gedcomDate.isOK()) {
+        const placeMatch = /\n2 PLAC (.+)/.exec(fact);
+        matches.push({ date: gedcomDate, rawDate: dateMatch[1], place: placeMatch ? placeMatch[1] : '' });
+      }
+    }
+
+    if (matches.length > 0) {
+      return matches;
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Mirrors Family::getMarriageDate() (app/Family.php:223-231): the
+ * FIRST of getAllMarriageDates() (an empty/unparsed Date when there is
+ * none), used for sorting and for the "has this family ever married"
+ * yes/no/blank fallback text.
+ *
+ * @param {string[]} facts
+ * @returns {{date: GedcomDate, rawDate: string, place: string}|null}
+ */
+export function getMarriageDate(facts) {
+  return getAllMarriageDates(facts)[0] ?? null;
+}
+
+/**
+ * Mirrors Family::hasMarriageFact() shape used inline in
+ * families-table.phtml (`$family->facts(['MARR'])->isNotEmpty()`) -
+ * whether a MARR fact exists at all, independent of whether it has a
+ * usable date (a family can have "1 MARR Y" with no DATE, still a real
+ * marriage fact for the "yes"/no-date distinction).
+ *
+ * @param {string[]} facts
+ * @returns {boolean}
+ */
+export function hasMarriageFact(facts) {
+  return facts.some((fact) => factTag(fact) === 'MARR');
+}
+
+/**
+ * Mirrors Family::facts(['DIV'])->isNotEmpty() used inline in
+ * families-table.phtml's hidden marriage-filter column.
+ *
+ * @param {string[]} facts
+ * @returns {boolean}
+ */
+export function hasDivorceFact(facts) {
+  return facts.some((fact) => factTag(fact) === 'DIV');
 }
 
 /**
