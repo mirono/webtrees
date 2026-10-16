@@ -75,6 +75,7 @@ import {
   matchNoteListPagePath,
   matchLocationListPagePath,
   matchFamilyListPagePath,
+  matchIndividualListPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -105,6 +106,8 @@ import {
   parseFacts,
   getBirthDate,
   getDeathDate,
+  getAllBirthDates,
+  getAllDeathDates,
   isDead,
   lifespan,
   ageString,
@@ -165,6 +168,14 @@ import {
   loadFamilyListPrefs,
 } from './family-list.mjs';
 import { renderFamilyListPage, renderSurnamesTable, renderFamiliesTable } from './family-list-view.mjs';
+import {
+  numberOfChildren as individualNumberOfChildren,
+  getEstimatedBirthDate,
+  getEstimatedDeathDate,
+  individualRowsForSurnames,
+  loadShowEstimatedDatesPref,
+} from './individual-list.mjs';
+import { renderIndividualsTable } from './individual-list-view.mjs';
 import { renderSourcePage } from './source-view.mjs';
 import { renderRepositoryPage } from './repository-view.mjs';
 import {
@@ -3850,6 +3861,322 @@ async function handleFamilyListPage(req, res, treeName, url) {
   res.end();
 }
 
+/**
+ * Mirrors Individual::getAllBirthPlaces()/getAllDeathPlaces() to the
+ * SAME "v1 simplification" degree getAllBirthDates()/getAllDeathDates()
+ * already carries (individual.mjs's own doc comment): place is read
+ * from the SAME dated fact as the date, not selected independently.
+ * `dates` here is the array already returned by getAllBirthDates()/
+ * getAllDeathDates() - this just extracts the non-blank `place` fields.
+ */
+function placesFromDates(dates) {
+  return dates.map((d) => d.place).filter((place) => place !== '');
+}
+
+async function handleIndividualListPage(req, res, treeName, url) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let redirectUrl = null;
+
+  try {
+    // IndividualListModule::boot() only registers this route while the
+    // module itself is enabled - same reasoning as every other list handler.
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'individual_list'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // IndividualListModule has no $access_level override of its own,
+    // same as FamilyListModule - AbstractModule's own class default,
+    // Auth::PRIV_PRIVATE = 2 ("visitor") - confirmed live: no
+    // wt_module_privacy override row for 'individual_list' either.
+    const listAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'individual_list',
+      'Fisharebest\\Webtrees\\Module\\ModuleListInterface',
+      2,
+    );
+
+    if (listAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showLastChange = await loadShowLastChangePref(pool, tree.gedcomId);
+    const showEstimatedDates = await loadShowEstimatedDatesPref(pool, tree.gedcomId);
+    const familyListPrefs = await loadFamilyListPrefs(pool, tree.gedcomId);
+
+    const rawParams = {
+      treeName: tree.name,
+      routeSegment: 'individual-list',
+      surnameParam: url.searchParams.get('surname') ?? '',
+      alpha: url.searchParams.get('alpha') ?? '',
+      falpha: url.searchParams.get('falpha') ?? '',
+      show: url.searchParams.get('show') ?? '',
+      showAll: url.searchParams.get('show_all') ?? '',
+      showMarnm: url.searchParams.get('show_marnm') ?? '',
+      showAllFirstnames: url.searchParams.get('show_all_firstnames') ?? '',
+    };
+
+    const marnm = rawParams.showMarnm === 'yes';
+    const data = await surnameData(pool, tree.gedcomId, marnm, false);
+    const surns = allSurns(data);
+    const surnames = allSurnames(data);
+
+    const resolved = resolveListRequest(rawParams, surns, surnames, false);
+
+    if (resolved.kind === 'redirect' || resolved.kind === 'not-found') {
+      redirectUrl = resolved.url;
+    } else {
+      const initials = surnameInitials(data);
+      let bodyHtml = '';
+      let givenNameSublist = null;
+
+      if (resolved.show === 'surn') {
+        const filteredSurnames = filterSurnamesForAlpha(surnames, {
+          alpha: resolved.alpha,
+          surname: resolved.surname,
+          showAll: resolved.showAll,
+        });
+
+        bodyHtml = renderSurnamesTable({
+          routeSegment: resolved.routeSegment,
+          treeName: tree.name,
+          surnames: filteredSurnames,
+          showFamilies: false,
+          listParams: resolved.listParams,
+        });
+      } else if (resolved.show === 'indi') {
+        const filteredSurnames = filterSurnamesForAlpha(surnames, {
+          alpha: resolved.alpha,
+          surname: resolved.surname,
+          showAll: resolved.showAll,
+        });
+        const matchedCount = [...filteredSurnames.values()]
+          .flatMap((spellings) => [...spellings.values()])
+          .reduce((sum, count) => sum + count, 0);
+
+        let falpha = resolved.falpha;
+        let showRows = true;
+
+        if (needsGivenNameSublist(familyListPrefs.sublistTrigger, matchedCount)) {
+          if (resolved.surname !== '' || resolved.showAll === 'yes') {
+            const surnsToShow = computeSurnsToShow(surns, { alpha: resolved.alpha, surname: resolved.surname });
+            const givenInitials = await givenNameInitials(pool, tree.gedcomId, surnsToShow, marnm, false);
+
+            givenNameSublist = { givenNameInitials: givenInitials, falpha, showAllFirstnames: resolved.showAllFirstnames };
+            showRows = falpha !== '' || resolved.showAllFirstnames === 'yes';
+          }
+        } else {
+          falpha = '';
+        }
+
+        if (showRows) {
+          const surnsToShow = computeSurnsToShow(surns, { alpha: resolved.alpha, surname: resolved.surname });
+          const rows = await individualRowsForSurnames(pool, tree.gedcomId, surnsToShow, falpha, marnm);
+
+          const nowDate = new Date();
+          const monthAbbrev = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][nowDate.getMonth()];
+          const today = new GedcomDate(`${String(nowDate.getDate()).padStart(2, '0')} ${monthAbbrev} ${nowDate.getFullYear()}`);
+          const todayShim = { date: today };
+          const hundredYearsAgoJd = today.minimumJulianDay() - 36525;
+          const todayJd = today.minimumJulianDay();
+
+          const individuals = [];
+
+          for (const row of rows) {
+            const resolvedMember = await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, row.xref);
+
+            if (resolvedMember === null || !resolvedMember.canShow) {
+              continue;
+            }
+
+            const { individual, facts, dead } = resolvedMember;
+            const allNames = extractAllNameFacts(individual.gedcom, 'NAME');
+            // Mirrors AbstractIndividualListModule::individuals()'s own
+            // setPrimaryName($n) (app/Module/AbstractIndividualListModule.php:718-729):
+            // the specific NAME fact that matched this surname/galpha
+            // query becomes primary for display, not necessarily the
+            // script-based default - falls back to the script-based
+            // index if (unexpectedly) no exact match is found.
+            const matchedIndex = allNames.findIndex((n) => n.givn === row.matchedGivn && n.surn === row.matchedSurn);
+            const primaryIndex = matchedIndex !== -1 ? matchedIndex : getPrimaryNameIndex(allNames);
+
+            const birthDates = getAllBirthDates(facts);
+            const deathDates = getAllDeathDates(facts);
+            const estimatedBirthDate = await getEstimatedBirthDate(
+              pool,
+              tree.gedcomId,
+              individual.xref,
+              facts,
+              treePrivacyPrefs.maxAliveAge,
+            );
+            const estimatedDeathDate = getEstimatedDeathDate(facts, estimatedBirthDate, treePrivacyPrefs.maxAliveAge);
+
+            const birthDatesHtml =
+              birthDates.length > 0
+                ? birthDates.map((d) => displayDate(d.date))
+                : showEstimatedDates && estimatedBirthDate.isOK()
+                  ? [displayDate(estimatedBirthDate)]
+                  : [];
+            const deathDatesHtml =
+              deathDates.length > 0
+                ? deathDates.map((d) => displayDate(d.date))
+                : showEstimatedDates && estimatedDeathDate.isOK() && estimatedDeathDate.minimumJulianDay() < todayJd
+                  ? [displayDate(estimatedDeathDate)]
+                  : [];
+
+            const birthAnniversaryAge = ageBetween(birthDates[0] ?? null, todayShim);
+            const deathAnniversaryAge = ageBetween(deathDates[0] ?? null, todayShim);
+            const ageAtDeath = ageBetween(birthDates[0] ?? null, deathDates[0] ?? null);
+
+            const childCount = await individualNumberOfChildren(pool, tree.gedcomId, individual.xref, facts);
+            const related = await loadRelatedFamilyXrefs(pool, tree.gedcomId, individual.xref);
+
+            const lastChangeRaw = recordLastChange(individual.gedcom);
+
+            let birthFilterCode;
+
+            if (estimatedBirthDate.maximumJulianDay() > hundredYearsAgoJd && estimatedBirthDate.maximumJulianDay() <= todayJd) {
+              birthFilterCode = 'Y100';
+            } else {
+              birthFilterCode = 'YES';
+            }
+
+            let deathFilterCode;
+
+            if (estimatedDeathDate.maximumJulianDay() > hundredYearsAgoJd && estimatedDeathDate.maximumJulianDay() <= todayJd) {
+              deathFilterCode = 'Y100';
+            } else if (dead) {
+              deathFilterCode = 'YES';
+            } else {
+              deathFilterCode = 'N';
+            }
+
+            let rootsLeavesFilterCode = '';
+
+            if (related.parentFamilies.length === 0) {
+              rootsLeavesFilterCode = 'R';
+            } else if (!dead && childCount < 1) {
+              rootsLeavesFilterCode = 'L';
+            }
+
+            individuals.push({
+              xref: individual.xref,
+              url: `/tree/${tree.name}/individual/${individual.xref}`,
+              isPendingAddition: false,
+              isPendingDeletion: false,
+              allNames,
+              primaryIndex,
+              sex: sex(individual.gedcom),
+              sortName: allNames[primaryIndex]?.sort ?? '',
+              birthDatesHtml,
+              birthDateSortKey: estimatedBirthDate.julianDay(),
+              birthAnniversaryAge,
+              birthPlaces: placesFromDates(birthDates),
+              birthPlaceSortKey: birthDates[0]?.place ?? '',
+              numberOfChildren: childCount,
+              deathDatesHtml,
+              deathDateSortKey: estimatedDeathDate.julianDay(),
+              deathAnniversaryAge,
+              ageAtDeath,
+              deathPlaces: placesFromDates(deathDates),
+              deathPlaceSortKey: deathDates[0]?.place ?? '',
+              lastChange:
+                lastChangeRaw !== null ? { date: displayDate(new GedcomDate(lastChangeRaw.date)), time: lastChangeRaw.time } : null,
+              lastChangeSortKey: lastChangeRaw !== null ? new GedcomDate(lastChangeRaw.date).julianDay() : 0,
+              sexFilterCode: sex(individual.gedcom),
+              birthFilterCode,
+              deathFilterCode,
+              rootsLeavesFilterCode,
+            });
+          }
+
+          bodyHtml = renderIndividualsTable({ individuals, showLastChange });
+        }
+      }
+
+      const csrfToken = user !== null ? generateCsrfToken() : null;
+      const html = renderFamilyListPage({
+        routeSegment: resolved.routeSegment,
+        tree,
+        user,
+        csrfToken,
+        title: resolved.title,
+        legendHtml: resolved.legendHtml,
+        surnameInitials: initials,
+        alpha: resolved.alpha,
+        showAll: resolved.showAll,
+        showMarnm: resolved.showMarnm,
+        show: resolved.show,
+        listParams: resolved.listParams,
+        bodyHtml,
+        givenNameSublist,
+      });
+
+      const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+      if (csrfToken !== null) {
+        headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+      }
+
+      res.writeHead(200, headers);
+      res.end(html);
+      return;
+    }
+  } catch (error) {
+    console.error('Failed to resolve individual list:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  res.writeHead(302, { Location: redirectUrl });
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -3992,6 +4319,13 @@ const server = createServer(async (req, res) => {
 
   if (familyListTreeName !== null) {
     await handleFamilyListPage(req, res, familyListTreeName, url);
+    return;
+  }
+
+  const individualListTreeName = matchIndividualListPagePath(url.pathname);
+
+  if (individualListTreeName !== null) {
+    await handleIndividualListPage(req, res, individualListTreeName, url);
     return;
   }
 
