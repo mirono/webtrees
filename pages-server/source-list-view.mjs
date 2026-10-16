@@ -74,9 +74,18 @@ function renderLastChange(lastChange) {
  *   check (sources-table.phtml's own `data-columns` config) - resolved
  *   by the caller from the tree's own preference
  *   (source.mjs's loadShowLastChangePref()). Abbreviation/Author/
- *   Publication are NOT conditionally hidden in real PHP (confirmed:
- *   `null` in that same `data-columns` array, unlike the four count
- *   columns below) - always shown here too.
+ *   Publication are NOT conditionally hidden via that same `data-columns`
+ *   colvis config (confirmed: `null` there, unlike the four count columns
+ *   below) - BUT real PHP does hide them statically below the `md`
+ *   breakpoint via `class="d-none d-md-table-cell"` on both header and
+ *   body cells (sources-table.phtml), ported here unconditionally (not
+ *   behind a param) since it's a fixed CSS breakpoint, not a tree
+ *   preference. Without it this table is permanently ~3 text columns
+ *   wider than PHP's, which on common viewport widths pushed the
+ *   Individuals/Families/Media objects columns off the right edge -
+ *   found live via a user report that persisted even after wrapping the
+ *   table in .table-responsive (which only turned "columns missing" into
+ *   "columns require scrolling to reach", not a real fix).
  */
 export function renderSourceListPage({ tree, user, csrfToken, title, sources, showLastChange }) {
   // Mirrors sources-table.phtml's own `array_sum($count_xxx) > 0` checks
@@ -115,9 +124,9 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources, sh
     .map((source) => {
       const cells = [
         `<td><a href="${escapeHtml(source.url)}">${source.fullNameHtml}</a></td>`,
-        `<td>${escapeHtml(source.abbreviation)}</td>`,
-        `<td>${escapeHtml(source.author)}</td>`,
-        `<td>${escapeHtml(source.publication)}</td>`,
+        `<td class="d-none d-md-table-cell">${escapeHtml(source.abbreviation)}</td>`,
+        `<td class="d-none d-md-table-cell">${escapeHtml(source.author)}</td>`,
+        `<td class="d-none d-md-table-cell">${escapeHtml(source.publication)}</td>`,
         showIndividuals ? `<td class="text-center">${source.individualCount}</td>` : null,
         showFamilies ? `<td class="text-center">${source.familyCount}</td>` : null,
         showMedia ? `<td class="text-center">${source.mediaCount}</td>` : null,
@@ -134,9 +143,9 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources, sh
 
   const headers = [
     '<th>Title</th>',
-    '<th>Abbreviation</th>',
-    '<th>Author</th>',
-    '<th>Publication</th>',
+    '<th class="d-none d-md-table-cell">Abbreviation</th>',
+    '<th class="d-none d-md-table-cell">Author</th>',
+    '<th class="d-none d-md-table-cell">Publication</th>',
     showIndividuals ? '<th>Individuals</th>' : null,
     showFamilies ? '<th>Families</th>' : null,
     showMedia ? '<th>Media objects</th>' : null,

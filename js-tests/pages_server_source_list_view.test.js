@@ -67,9 +67,9 @@ describe('renderSourceListPage', () => {
     );
 
     expect(html).toContain('<a href="/tree/ophir/source/S1"><span class="NAME" dir="auto" translate="no">Census 1900</span></a>');
-    expect(html).toContain('<td>Census</td>');
-    expect(html).toContain('<td>J. Smith</td>');
-    expect(html).toContain('<td>Somewhere</td>');
+    expect(html).toContain('<td class="d-none d-md-table-cell">Census</td>');
+    expect(html).toContain('<td class="d-none d-md-table-cell">J. Smith</td>');
+    expect(html).toContain('<td class="d-none d-md-table-cell">Somewhere</td>');
     expect(html).toContain('<td class="text-center">3</td>');
     expect(html).toContain('<td class="text-center">1</td>');
     expect(html).toContain('<td class="text-center">2</td>');
@@ -180,12 +180,25 @@ describe('renderSourceListPage', () => {
       expect(html).not.toContain('<th>Shared notes</th>');
     });
 
-    test('Abbreviation/Author/Publication stay visible even when every source has a zero count (real PHP never hides these)', () => {
+    test('Abbreviation/Author/Publication stay visible even when every source has a zero count (real PHP never hides these via colvis)', () => {
       const html = renderSourceListPage(baseParams({ sources: [zeroSource('S1')] }));
 
-      expect(html).toContain('<th>Abbreviation</th>');
-      expect(html).toContain('<th>Author</th>');
-      expect(html).toContain('<th>Publication</th>');
+      expect(html).toContain('<th class="d-none d-md-table-cell">Abbreviation</th>');
+      expect(html).toContain('<th class="d-none d-md-table-cell">Author</th>');
+      expect(html).toContain('<th class="d-none d-md-table-cell">Publication</th>');
+    });
+
+    test('Abbreviation/Author/Publication header and cells carry d-none d-md-table-cell (hidden below the md breakpoint, matching sources-table.phtml)', () => {
+      const html = renderSourceListPage(
+        baseParams({
+          sources: [{ ...zeroSource('S1'), abbreviation: 'Census', author: 'J. Smith', publication: 'Somewhere' }],
+        }),
+      );
+
+      expect(html).toContain('<th class="d-none d-md-table-cell">Abbreviation</th>');
+      expect(html).toContain('<td class="d-none d-md-table-cell">Census</td>');
+      expect(html).toContain('<td class="d-none d-md-table-cell">J. Smith</td>');
+      expect(html).toContain('<td class="d-none d-md-table-cell">Somewhere</td>');
     });
 
     test('each count column is shown independently when at least one source has a nonzero value for it', () => {
