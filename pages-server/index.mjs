@@ -3622,7 +3622,7 @@ async function handleFamilyListPage(req, res, treeName, url) {
     };
 
     const marnm = rawParams.showMarnm === 'yes';
-    const data = await surnameData(pool, tree.gedcomId, marnm);
+    const data = await surnameData(pool, tree.gedcomId, marnm, true);
     const surns = allSurns(data);
     const surnames = allSurnames(data);
 
@@ -3683,7 +3683,7 @@ async function handleFamilyListPage(req, res, treeName, url) {
         if (needsGivenNameSublist(familyListPrefs.sublistTrigger, matchedCount)) {
           if (resolved.surname !== '' || resolved.showAll === 'yes') {
             const surnsToShow = computeSurnsToShow(surns, { alpha: resolved.alpha, surname: resolved.surname });
-            const givenInitials = await givenNameInitials(pool, tree.gedcomId, surnsToShow, marnm);
+            const givenInitials = await givenNameInitials(pool, tree.gedcomId, surnsToShow, marnm, true);
 
             givenNameSublist = { givenNameInitials: givenInitials, falpha, showAllFirstnames: resolved.showAllFirstnames };
             // "Don't show the list until we have some filter criteria."

@@ -31,10 +31,10 @@ function mockPool(rows) {
 }
 
 describe('surnameData', () => {
-  test('queries wt_name joined to wt_link on FAMS, scoped to the tree', async () => {
+  test('fams=true: queries wt_name joined to wt_link on FAMS, scoped to the tree', async () => {
     const pool = mockPool([{ n_surn: 'SMITH', n_surname: 'Smith', total: '3' }]);
 
-    const data = await surnameData(pool, 1, true);
+    const data = await surnameData(pool, 1, true, true);
 
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql, params] = pool.query.mock.calls[0];
@@ -44,15 +44,21 @@ describe('surnameData', () => {
     expect(data).toEqual([{ n_surn: 'SMITH', n_surname: 'Smith', total: 3 }]);
   });
 
+  test('fams=false: no FAMS join at all (individual-list)', async () => {
+    const pool = mockPool([]);
+    await surnameData(pool, 1, true, false);
+    expect(pool.query.mock.calls[0][0]).not.toContain('wt_link');
+  });
+
   test('excludes married names when marnm is false', async () => {
     const pool = mockPool([]);
-    await surnameData(pool, 1, false);
+    await surnameData(pool, 1, false, true);
     expect(pool.query.mock.calls[0][0]).toContain("n_type <> '_MARNM'");
   });
 
   test('includes married names when marnm is true', async () => {
     const pool = mockPool([]);
-    await surnameData(pool, 1, true);
+    await surnameData(pool, 1, true, true);
     expect(pool.query.mock.calls[0][0]).not.toContain("n_type <> '_MARNM'");
   });
 });
@@ -148,15 +154,21 @@ describe('surnameInitials', () => {
 describe('givenNameInitials', () => {
   test('queries wt_name joined to wt_link on FAMS', async () => {
     const pool = mockPool([{ n_givn: 'John', total: '2' }]);
-    const initials = await givenNameInitials(pool, 1, [], true);
+    const initials = await givenNameInitials(pool, 1, [], true, true);
 
     expect(pool.query.mock.calls[0][0]).toContain("l_type = 'FAMS'");
     expect(initials.get('J')).toBe(2);
   });
 
+  test('fams=false: no FAMS join at all (individual-list)', async () => {
+    const pool = mockPool([]);
+    await givenNameInitials(pool, 1, [], true, false);
+    expect(pool.query.mock.calls[0][0]).not.toContain('wt_link');
+  });
+
   test('filters by surns when given', async () => {
     const pool = mockPool([]);
-    await givenNameInitials(pool, 1, ['SMITH'], true);
+    await givenNameInitials(pool, 1, ['SMITH'], true, true);
 
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toContain('n_surn = ANY(');
@@ -165,14 +177,14 @@ describe('givenNameInitials', () => {
 
   test('moves the unknown-given-name ("@P.N.") bucket to the end, under "@"', async () => {
     const pool = mockPool([{ n_givn: '@P.N.', total: '5' }]);
-    const initials = await givenNameInitials(pool, 1, [], true);
+    const initials = await givenNameInitials(pool, 1, [], true, true);
 
     expect(initials.get('@')).toBe(5);
   });
 
   test('does NOT remap a genuinely blank given name to "," - unlike surnameInitials, real PHP has no such case here', async () => {
     const pool = mockPool([{ n_givn: '', total: '3' }]);
-    const initials = await givenNameInitials(pool, 1, [], true);
+    const initials = await givenNameInitials(pool, 1, [], true, true);
 
     expect(initials.has(',')).toBe(false);
     expect(initials.get('')).toBe(3);

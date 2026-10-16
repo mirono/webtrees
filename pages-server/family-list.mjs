@@ -13,37 +13,40 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Data layer for /tree/{tree}/family-list (FamilyListModule), the
-// first of the two AbstractIndividualListModule.php-based routes
-// (app/Module/AbstractIndividualListModule.php, 759 lines) - the
-// surname index/given-name-sublist machinery shared with
-// IndividualListModule (not yet ported). Only the `showFamilies()`
-// true path is implemented here (`whereFamily($fams=true, ...)`
-// joins `wt_link` on `l_type='FAMS'` throughout) - IndividualListModule
-// would need its own `fams=false` variant of every query below.
+// Data layer shared by /tree/{tree}/family-list (FamilyListModule) AND
+// /tree/{tree}/individual-list (IndividualListModule) -
+// AbstractIndividualListModule.php's own surname-index/given-name-sublist
+// machinery (app/Module/AbstractIndividualListModule.php, 759 lines),
+// parameterized on `fams` the same way real PHP's own
+// `whereFamily(bool $fams, ...)` is: true joins `wt_link` on
+// `l_type='FAMS'` (only names belonging to a SPOUSE count, for the
+// family list); false (individual-list) applies no such join at all
+// (every individual's own names count, spouse or not).
 //
 // Full fidelity, per explicit user decision over the "simple list"
-// family's deliberate DataTables-to-plain-table simplification: this
-// route keeps the real surname-collation grouping (allSurns/
-// allSurnames/surnameInitials/givenNameInitials) and the real
-// families-table.phtml 14-column markup (see family-list-view.mjs),
+// family's deliberate DataTables-to-plain-table simplification: both
+// routes keep the real surname-collation grouping (allSurns/
+// allSurnames/surnameInitials/givenNameInitials) and their own real
+// *-table.phtml markup (see family-list-view.mjs/individual-list-view.mjs),
 // not a simplified plain table.
 
 import { alphabet, compare, initialLetter, normalize, strtoupper } from './collation.mjs';
 
 /**
- * Mirrors AbstractIndividualListModule::surnameData() (app/Module/AbstractIndividualListModule.php:566-590)
- * for the `fams=true` (family-list) case: every (n_surn, n_surname)
- * pair with its row count, joined to `wt_link` on FAMS (only names
- * belonging to an individual who is a spouse in some family count at
- * all - matching real PHP's `whereFamily(true, ...)` join exactly).
+ * Mirrors AbstractIndividualListModule::surnameData() (app/Module/AbstractIndividualListModule.php:566-590):
+ * every (n_surn, n_surname) pair with its row count. `fams=true`
+ * (family-list) joins `wt_link` on FAMS - only names belonging to an
+ * individual who is a spouse in some family count at all, matching
+ * `whereFamily(true, ...)`; `fams=false` (individual-list) applies no
+ * such join - every individual's own names count.
  *
  * @param {import('pg').Pool} pool
  * @param {number} gedcomId
  * @param {boolean} marnm include married (_MARNM) names
+ * @param {boolean} fams
  * @returns {Promise<{n_surn: string, n_surname: string, total: number}[]>}
  */
-export async function surnameData(pool, gedcomId, marnm) {
+export async function surnameData(pool, gedcomId, marnm, fams) {
   const conditions = ['n.n_file = $1', 'n.n_surn IS NOT NULL', 'n.n_surname IS NOT NULL'];
   const params = [gedcomId];
 
@@ -51,10 +54,12 @@ export async function surnameData(pool, gedcomId, marnm) {
     conditions.push("n.n_type <> '_MARNM'");
   }
 
+  const famsJoin = fams ? "JOIN wt_link l ON l.l_from = n.n_id AND l.l_file = n.n_file AND l.l_type = 'FAMS'" : '';
+
   const result = await pool.query(
     `SELECT n.n_surn, n.n_surname, COUNT(*) AS total
      FROM wt_name n
-     JOIN wt_link l ON l.l_from = n.n_id AND l.l_file = n.n_file AND l.l_type = 'FAMS'
+     ${famsJoin}
      WHERE ${conditions.join(' AND ')}
      GROUP BY n.n_surn, n.n_surname`,
     params,
@@ -156,21 +161,22 @@ export function surnameInitials(data) {
 }
 
 /**
- * Mirrors AbstractIndividualListModule::givenNameInitials() (app/Module/AbstractIndividualListModule.php:523-561)
- * for the `fams=true` case: a count per given-name initial letter,
- * among individuals with one of the given surnames (or everyone, if
- * `surns` is empty), seeded with every alphabet() letter at 0, with the
- * "unrecognized initial" bucket moved to '@' at the end (no ','/no-given-name
- * remapping here - unlike surnameInitials(), real PHP doesn't do that
- * for given names).
+ * Mirrors AbstractIndividualListModule::givenNameInitials() (app/Module/AbstractIndividualListModule.php:523-561):
+ * a count per given-name initial letter, among individuals with one of
+ * the given surnames (or everyone, if `surns` is empty), seeded with
+ * every alphabet() letter at 0, with the "unrecognized initial" bucket
+ * moved to '@' at the end (no ','/no-given-name remapping here - unlike
+ * surnameInitials(), real PHP doesn't do that for given names). `fams`
+ * same meaning as surnameData() above.
  *
  * @param {import('pg').Pool} pool
  * @param {number} gedcomId
  * @param {string[]} surns if non-empty, only consider these exact n_surn values
  * @param {boolean} marnm include married (_MARNM) names
+ * @param {boolean} fams
  * @returns {Promise<Map<string, number>>}
  */
-export async function givenNameInitials(pool, gedcomId, surns, marnm) {
+export async function givenNameInitials(pool, gedcomId, surns, marnm, fams) {
   const conditions = ["n.n_file = $1"];
   const params = [gedcomId];
 
@@ -183,10 +189,12 @@ export async function givenNameInitials(pool, gedcomId, surns, marnm) {
     conditions.push(`n.n_surn = ANY($${params.length})`);
   }
 
+  const famsJoin = fams ? "JOIN wt_link l ON l.l_from = n.n_id AND l.l_file = n.n_file AND l.l_type = 'FAMS'" : '';
+
   const result = await pool.query(
     `SELECT n.n_givn, COUNT(*) AS total
      FROM wt_name n
-     JOIN wt_link l ON l.l_from = n.n_id AND l.l_file = n.n_file AND l.l_type = 'FAMS'
+     ${famsJoin}
      WHERE ${conditions.join(' AND ')}
      GROUP BY n.n_givn`,
     params,
