@@ -448,6 +448,71 @@ export function getDeathDate(facts) {
 }
 
 /**
+ * Mirrors family.mjs's own getAllMarriageDates() shape exactly (see its
+ * doc comment): tries each tag in `tagList` in order, returns EVERY
+ * dated fact of the FIRST tag that has one - never mixes tags. Used by
+ * individuals-table.phtml's own `getAllBirthDates()`/`getAllDeathDates()`
+ * display columns, which (unlike getBirthDate()/getDeathDate() above)
+ * show every dated fact of that tag, not just the first.
+ *
+ * @param {string[]} facts
+ * @param {string[]} tagList
+ * @returns {{date: GedcomDate, rawDate: string, place: string}[]}
+ */
+function datesForTagList(facts, tagList) {
+  for (const tag of tagList) {
+    const matches = [];
+
+    for (const fact of facts) {
+      if (factTag(fact) !== tag) {
+        continue;
+      }
+
+      const dateMatch = /\n2 DATE (.+)/.exec(fact);
+
+      if (!dateMatch) {
+        continue;
+      }
+
+      const gedcomDate = new GedcomDate(dateMatch[1]);
+
+      if (gedcomDate.isOK()) {
+        const placeMatch = /\n2 PLAC (.+)/.exec(fact);
+        matches.push({ date: gedcomDate, rawDate: dateMatch[1], place: placeMatch ? placeMatch[1] : '' });
+      }
+    }
+
+    if (matches.length > 0) {
+      return matches;
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Mirrors Individual::getAllBirthDates() (app/Individual.php's own
+ * getAllEventDates(BIRTH_EVENTS)) - every dated fact of whichever
+ * BIRTH_EVENTS tag has one.
+ *
+ * @param {string[]} facts
+ * @returns {{date: GedcomDate, rawDate: string, place: string}[]}
+ */
+export function getAllBirthDates(facts) {
+  return datesForTagList(facts, BIRTH_EVENTS);
+}
+
+/**
+ * Mirrors Individual::getAllDeathDates() - see getAllBirthDates().
+ *
+ * @param {string[]} facts
+ * @returns {{date: GedcomDate, rawDate: string, place: string}[]}
+ */
+export function getAllDeathDates(facts) {
+  return datesForTagList(facts, DEATH_EVENTS);
+}
+
+/**
  * Mirrors Individual::isDead() (app/Individual.php:219-309) for its
  * first two branches ONLY - direct DEAT/BURI/CREM tag presence, then
  * any BIRTH_EVENTS/DEATH_EVENTS dated fact older than MAX_ALIVE_AGE.

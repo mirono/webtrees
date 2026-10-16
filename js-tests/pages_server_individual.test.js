@@ -29,6 +29,8 @@ import {
   getPrimaryNameIndex,
   getBirthDate,
   getDeathDate,
+  getAllBirthDates,
+  getAllDeathDates,
   isDead,
   lifespan,
   ageString,
@@ -352,6 +354,35 @@ describe('getBirthDate / getDeathDate', () => {
 
     expect(death.rawDate).toBe('1 JAN 1920');
     expect(death.place).toBe('Paris');
+  });
+});
+
+describe('getAllBirthDates / getAllDeathDates', () => {
+  test('returns every dated fact of the first tag that has one', () => {
+    const facts = parseFacts('1 BIRT\n2 DATE 1 JAN 1900\n1 BIRT\n2 DATE 2 JAN 1900');
+    const dates = getAllBirthDates(facts);
+
+    expect(dates).toHaveLength(2);
+    expect(dates[0].rawDate).toBe('1 JAN 1900');
+    expect(dates[1].rawDate).toBe('2 JAN 1900');
+  });
+
+  test('never mixes tags - BIRT wins over CHR if BIRT has any usable date', () => {
+    const facts = parseFacts('1 BIRT\n2 DATE 1 JAN 1900\n1 CHR\n2 DATE 2 JAN 1900');
+    const dates = getAllBirthDates(facts);
+
+    expect(dates).toHaveLength(1);
+    expect(dates[0].rawDate).toBe('1 JAN 1900');
+  });
+
+  test('falls through to the next tag when the first has no usable date', () => {
+    const facts = parseFacts('1 CHR\n2 DATE 3 MAR 1850');
+    expect(getAllBirthDates(facts)[0].rawDate).toBe('3 MAR 1850');
+  });
+
+  test('no matching facts -> empty array', () => {
+    expect(getAllBirthDates(parseFacts('1 SEX M'))).toEqual([]);
+    expect(getAllDeathDates(parseFacts('1 SEX M'))).toEqual([]);
   });
 });
 
