@@ -74,6 +74,7 @@ import {
   matchSourceListPagePath,
   matchNoteListPagePath,
   matchLocationListPagePath,
+  matchFamilyListPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -159,6 +160,9 @@ import {
   familyXrefsForSurnames,
   resolveListRequest,
   needsGivenNameSublist,
+  filterSurnamesForAlpha,
+  computeSurnsToShow,
+  loadFamilyListPrefs,
 } from './family-list.mjs';
 import { renderFamilyListPage, renderSurnamesTable, renderFamiliesTable } from './family-list-view.mjs';
 import { renderSourcePage } from './source-view.mjs';
@@ -3472,6 +3476,377 @@ async function handleLocationListPage(req, res, treeName) {
   res.end(html);
 }
 
+/**
+ * Mirrors Family::husband()/wife() exactly: null when the spouse xref
+ * is absent OR the resolved member's name can't even be shown
+ * (canShowNameOnly, Family's own weaker gate - see index.mjs's own
+ * resolveFamilyMember() doc comment) - families-table.phtml's row
+ * rendering falls back to a blank stub Individual in that case, which
+ * this view's spouseNameCellHtml() already renders as "…" for a null
+ * spouse (family-list-view.mjs).
+ *
+ * @param {{individual: {xref: string, gedcom: string}, canShowNameOnly: boolean, dead: boolean}|null} resolvedMember
+ * @param {string} treeName
+ * @returns {{allNames: object[], primaryIndex: number, sex: string, url: string, sortName: string}|null}
+ */
+function buildSpouseViewModel(resolvedMember, treeName) {
+  if (resolvedMember === null || !resolvedMember.canShowNameOnly) {
+    return null;
+  }
+
+  const allNames = extractAllNameFacts(resolvedMember.individual.gedcom, 'NAME');
+  const primaryIndex = getPrimaryNameIndex(allNames);
+
+  return {
+    allNames,
+    primaryIndex,
+    sex: sex(resolvedMember.individual.gedcom),
+    url: `/tree/${treeName}/individual/${resolvedMember.individual.xref}`,
+    // Simplified from families-table.phtml's own sort key (which
+    // reverses "SURN,GIVN" to "GIVN,SURN" and AAAA-substitutes
+    // commas/placeholders) to the plain sortName() string - this only
+    // affects DataTables' exact secondary tie-break order within this
+    // hidden sort column, never what's actually shown.
+    sortName: allNames[primaryIndex]?.sort ?? '',
+  };
+}
+
+/**
+ * Mirrors `new Age($birthDate, $otherDate)` - families-table.phtml's
+ * own age-at-event columns. Returns null (rendered as a blank cell by
+ * ageCellHtml() in family-list-view.mjs) when either side has no
+ * usable date - the SAME "skip Age entirely rather than construct it
+ * with an invalid-date shim" simplification individual.mjs's own
+ * ageString() already establishes for the "no birth date" case,
+ * applied consistently here to marriage-date gaps too.
+ *
+ * @param {{date: GedcomDate}|null} dateA
+ * @param {{date: GedcomDate}|null} dateB
+ * @returns {Age|null}
+ */
+function ageBetween(dateA, dateB) {
+  if (dateA === null || dateB === null) {
+    return null;
+  }
+
+  const shimA = { minimumDate: dateA.date.minimumDate(), maximumDate: dateA.date.maximumDate(), isOK: dateA.date.isOK() };
+  const shimB = { minimumDate: dateB.date.minimumDate(), maximumDate: dateB.date.maximumDate(), isOK: dateB.date.isOK() };
+
+  return new Age(shimA, shimB);
+}
+
+async function handleFamilyListPage(req, res, treeName, url) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  let redirectUrl = null;
+
+  try {
+    // FamilyListModule::boot() only registers this route while the
+    // module itself is enabled - same "proxy routing is purely
+    // path-based" reasoning as every other list handler above.
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'family_list'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // FamilyListModule has no $access_level override of its own -
+    // AbstractModule's own class default, Auth::PRIV_PRIVATE = 2
+    // ("visitor"), applies - confirmed live: no wt_module_privacy
+    // override row for 'family_list' in this tree either.
+    const listAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'family_list',
+      'Fisharebest\\Webtrees\\Module\\ModuleListInterface',
+      2,
+    );
+
+    if (listAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showLastChange = await loadShowLastChangePref(pool, tree.gedcomId);
+    const familyListPrefs = await loadFamilyListPrefs(pool, tree.gedcomId);
+
+    const rawParams = {
+      treeName: tree.name,
+      surnameParam: url.searchParams.get('surname') ?? '',
+      alpha: url.searchParams.get('alpha') ?? '',
+      falpha: url.searchParams.get('falpha') ?? '',
+      show: url.searchParams.get('show') ?? '',
+      showAll: url.searchParams.get('show_all') ?? '',
+      showMarnm: url.searchParams.get('show_marnm') ?? '',
+      showAllFirstnames: url.searchParams.get('show_all_firstnames') ?? '',
+    };
+
+    const marnm = rawParams.showMarnm === 'yes';
+    const data = await surnameData(pool, tree.gedcomId, marnm);
+    const surns = allSurns(data);
+    const surnames = allSurnames(data);
+
+    const resolved = resolveListRequest(rawParams, surns, surnames, true);
+
+    if (resolved.kind === 'redirect') {
+      redirectUrl = resolved.url;
+    } else if (resolved.kind === 'not-found') {
+      redirectUrl = resolved.url;
+    } else {
+      const initials = surnameInitials(data);
+      let bodyHtml = '';
+      let givenNameSublist = null;
+
+      if (resolved.show === 'surn') {
+        // Real PHP also supports 'style1' (column-list)/'style3'
+        // (tag-cloud) - deliberately not ported (see
+        // docs/php-to-js-migration/phase5-location-list.md's own
+        // "next candidates" note): this tree's real
+        // SURNAME_LIST_STYLE is 'style2' (the default, confirmed via
+        // the DB - no override row exists), so the real table is
+        // always what renders here regardless of the loaded pref.
+        const filteredSurnames = filterSurnamesForAlpha(surnames, {
+          alpha: resolved.alpha,
+          surname: resolved.surname,
+          showAll: resolved.showAll,
+        });
+
+        bodyHtml = renderSurnamesTable({
+          treeName: tree.name,
+          surnames: filteredSurnames,
+          showFamilies: true,
+          listParams: resolved.listParams,
+        });
+      } else if (resolved.show === 'indi') {
+        const filteredSurnames = filterSurnamesForAlpha(surnames, {
+          alpha: resolved.alpha,
+          surname: resolved.surname,
+          showAll: resolved.showAll,
+        });
+        const matchedCount = [...filteredSurnames.values()]
+          .flatMap((spellings) => [...spellings.values()])
+          .reduce((sum, count) => sum + count, 0);
+
+        // Mirrors handle()'s own "don't sublist short lists" gate
+        // (app/Module/AbstractIndividualListModule.php:374-414)
+        // EXACTLY, including its one real subtlety: the given-name
+        // nav/reassignment only happens at all when a specific surname
+        // or "all" was chosen - a plain alpha-letter browse (e.g.
+        // alpha=S with no surname) never sublists, no matter how many
+        // individuals match, because real PHP's own
+        // `if ($surname !== '' || $show_all === 'yes')` guard sits
+        // INSIDE the "needs a sublist" branch and is the only place
+        // `$show`/the nav get touched.
+        let falpha = resolved.falpha;
+        let showRows = true;
+
+        if (needsGivenNameSublist(familyListPrefs.sublistTrigger, matchedCount)) {
+          if (resolved.surname !== '' || resolved.showAll === 'yes') {
+            const surnsToShow = computeSurnsToShow(surns, { alpha: resolved.alpha, surname: resolved.surname });
+            const givenInitials = await givenNameInitials(pool, tree.gedcomId, surnsToShow, marnm);
+
+            givenNameSublist = { givenNameInitials: givenInitials, falpha, showAllFirstnames: resolved.showAllFirstnames };
+            // "Don't show the list until we have some filter criteria."
+            showRows = falpha !== '' || resolved.showAllFirstnames === 'yes';
+          }
+        } else {
+          falpha = '';
+        }
+
+        if (showRows) {
+          const surnsToShow = computeSurnsToShow(surns, { alpha: resolved.alpha, surname: resolved.surname });
+          const familyXrefs = await familyXrefsForSurnames(pool, tree.gedcomId, surnsToShow, falpha, marnm);
+
+          const nowDate = new Date();
+          const monthAbbrev = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][nowDate.getMonth()];
+          const today = new GedcomDate(`${String(nowDate.getDate()).padStart(2, '0')} ${monthAbbrev} ${nowDate.getFullYear()}`);
+          const todayShim = { date: today };
+          const hundredYearsAgoJd = today.minimumJulianDay() - 36525;
+          const todayJd = today.minimumJulianDay();
+
+          const families = [];
+
+          for (const familyXref of familyXrefs) {
+            const shown = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
+
+            if (shown === null) {
+              continue;
+            }
+
+            const husbandView = buildSpouseViewModel(shown.husband, tree.name);
+            const wifeView = buildSpouseViewModel(shown.wife, tree.name);
+
+            const husbandBirthDate = shown.husband !== null ? getBirthDate(shown.husband.facts) : null;
+            const wifeBirthDate = shown.wife !== null ? getBirthDate(shown.wife.facts) : null;
+            const marriageDates = getAllMarriageDates(shown.facts);
+            const marriageDate = marriageDates[0] ?? null;
+
+            const husbandAge = ageBetween(husbandBirthDate, marriageDate);
+            const wifeAge = ageBetween(wifeBirthDate, marriageDate);
+            const anniversaryAge = ageBetween(marriageDate, todayShim);
+
+            const lastChangeRaw = recordLastChange(shown.family.gedcom);
+
+            const husbandDead = shown.husband?.dead ?? false;
+            const wifeDead = shown.wife?.dead ?? false;
+            const husbandSexValue = husbandView?.sex ?? '';
+            const wifeSexValue = wifeView?.sex ?? '';
+
+            let aliveDeadFilterCode = '';
+
+            if (husbandDead && wifeDead) {
+              aliveDeadFilterCode = 'Y';
+            } else if (husbandDead && !wifeDead) {
+              aliveDeadFilterCode = wifeSexValue === 'F' ? 'H' : wifeSexValue === 'M' ? 'W' : '';
+            } else if (!husbandDead && wifeDead) {
+              aliveDeadFilterCode = husbandSexValue === 'M' ? 'W' : husbandSexValue === 'F' ? 'H' : '';
+            } else {
+              aliveDeadFilterCode = 'N';
+            }
+
+            const husbandRelated =
+              shown.husband !== null && husbandView !== null
+                ? await loadRelatedFamilyXrefs(pool, tree.gedcomId, shown.husband.individual.xref)
+                : { parentFamilies: [], spouseFamilies: [] };
+            const wifeRelated =
+              shown.wife !== null && wifeView !== null
+                ? await loadRelatedFamilyXrefs(pool, tree.gedcomId, shown.wife.individual.xref)
+                : { parentFamilies: [], spouseFamilies: [] };
+
+            const childCount = numberOfChildren(shown.facts);
+            let rootsLeavesFilterCode = '';
+
+            if (husbandRelated.parentFamilies.length === 0 && wifeRelated.parentFamilies.length === 0) {
+              rootsLeavesFilterCode = 'R';
+            } else if (!husbandDead && !wifeDead && childCount === 0) {
+              rootsLeavesFilterCode = 'L';
+            }
+
+            let marriageFilterCode = '';
+
+            if (marriageDate !== null && marriageDate.date.maximumJulianDay() > hundredYearsAgoJd && marriageDate.date.maximumJulianDay() <= todayJd) {
+              marriageFilterCode += 'Y100';
+            } else if (hasMarriageFact(shown.facts)) {
+              marriageFilterCode += 'YES';
+            } else {
+              marriageFilterCode += 'U';
+            }
+
+            if (hasDivorceFact(shown.facts)) {
+              marriageFilterCode += 'D';
+            }
+
+            if (husbandRelated.spouseFamilies.length > 1 || wifeRelated.spouseFamilies.length > 1) {
+              marriageFilterCode += 'M';
+            }
+
+            families.push({
+              xref: shown.family.xref,
+              url: `/tree/${tree.name}/family/${shown.family.xref}`,
+              isPendingAddition: false,
+              isPendingDeletion: false,
+              husband: husbandView,
+              wife: wifeView,
+              husbandAge,
+              wifeAge,
+              anniversaryAge,
+              marriageDatesHtml: marriageDates.map((d) => displayDate(d.date)),
+              marriageDateSortKey: marriageDate !== null ? marriageDate.date.julianDay() : 0,
+              marriageYesNo: marriageDates.length > 0 ? null : hasMarriageFact(shown.facts) ? 'yes' : 'no',
+              marriagePlaces: marriageDates.map((d) => d.place).filter((place) => place !== ''),
+              marriagePlaceSortKey: marriageDates[0]?.place ?? '',
+              numberOfChildren: childCount,
+              lastChange:
+                lastChangeRaw !== null ? { date: displayDate(new GedcomDate(lastChangeRaw.date)), time: lastChangeRaw.time } : null,
+              lastChangeSortKey: lastChangeRaw !== null ? new GedcomDate(lastChangeRaw.date).julianDay() : 0,
+              marriageFilterCode,
+              aliveDeadFilterCode,
+              rootsLeavesFilterCode,
+            });
+          }
+
+          bodyHtml = renderFamiliesTable({ families, showLastChange });
+        }
+      }
+
+      const csrfToken = user !== null ? generateCsrfToken() : null;
+      const html = renderFamilyListPage({
+        tree,
+        user,
+        csrfToken,
+        title: resolved.title,
+        legendHtml: resolved.legendHtml,
+        surnameInitials: initials,
+        alpha: resolved.alpha,
+        showAll: resolved.showAll,
+        showMarnm: resolved.showMarnm,
+        show: resolved.show,
+        listParams: resolved.listParams,
+        bodyHtml,
+        givenNameSublist,
+      });
+
+      const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+      if (csrfToken !== null) {
+        headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+      }
+
+      res.writeHead(200, headers);
+      res.end(html);
+      return;
+    }
+  } catch (error) {
+    console.error('Failed to resolve family list:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  res.writeHead(302, { Location: redirectUrl });
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -3607,6 +3982,13 @@ const server = createServer(async (req, res) => {
 
   if (locationListTreeName !== null) {
     await handleLocationListPage(req, res, locationListTreeName);
+    return;
+  }
+
+  const familyListTreeName = matchFamilyListPagePath(url.pathname);
+
+  if (familyListTreeName !== null) {
+    await handleFamilyListPage(req, res, familyListTreeName, url);
     return;
   }
 
