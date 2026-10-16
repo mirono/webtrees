@@ -23,6 +23,7 @@ import {
   familyXrefsForSurnames,
   filterSurnamesForAlpha,
   computeSurnsToShow,
+  loadFamilyListPrefs,
 } from '../pages-server/family-list.mjs';
 
 function mockPool(rows) {
@@ -276,5 +277,20 @@ describe('computeSurnsToShow', () => {
 
   test('no alpha and no surname means "show everything" (empty array)', () => {
     expect(computeSurnsToShow(allSurns, { alpha: '', surname: '' })).toEqual([]);
+  });
+});
+
+describe('loadFamilyListPrefs', () => {
+  test('defaults when no row exists at all (missing settings row, real PHP default)', async () => {
+    const pool = mockPool([]);
+    expect(await loadFamilyListPrefs(pool, 1)).toEqual({ surnameListStyle: 'style2', sublistTrigger: 200 });
+  });
+
+  test('reads real stored values when present', async () => {
+    const pool = mockPool([
+      { setting_name: 'SURNAME_LIST_STYLE', setting_value: 'style3' },
+      { setting_name: 'SUBLIST_TRIGGER_I', setting_value: '50' },
+    ]);
+    expect(await loadFamilyListPrefs(pool, 1)).toEqual({ surnameListStyle: 'style3', sublistTrigger: 50 });
   });
 });

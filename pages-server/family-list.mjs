@@ -279,6 +279,37 @@ export async function familyXrefsForSurnames(pool, gedcomId, surnsToShow, galpha
   return [...xrefs];
 }
 
+/**
+ * Mirrors the two tree preferences AbstractIndividualListModule::handle()
+ * reads directly (app/Module/AbstractIndividualListModule.php:339,375) -
+ * their real defaults ('style2', '200' - app/Tree.php:88-89) apply the
+ * same way `loadTreePrivacyPrefs()`'s own HIDE_LIVE_PEOPLE default does:
+ * no `wt_gedcom_setting` row at all means the PHP default, since
+ * `Tree::getPreference()` falls back to `self::DEFAULT_PREFERENCES`.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<{surnameListStyle: 'style1'|'style2'|'style3', sublistTrigger: number}>}
+ */
+export async function loadFamilyListPrefs(pool, gedcomId) {
+  const result = await pool.query(
+    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('SURNAME_LIST_STYLE', 'SUBLIST_TRIGGER_I')",
+    [gedcomId],
+  );
+  const byName = Object.fromEntries(result.rows.map((row) => [row.setting_name, row.setting_value]));
+
+  return {
+    // `??` (not `||`) deliberately: a MISSING row falls back to the
+    // real PHP default, but a row that explicitly stores '' would stay
+    // '' in real PHP too (Tree::getPreference() only substitutes its
+    // DEFAULT_PREFERENCES fallback when no row exists at all) - same
+    // distinction loadShowLastChangePref() elsewhere in this migration
+    // already has to make.
+    surnameListStyle: byName.SURNAME_LIST_STYLE ?? 'style2',
+    sublistTrigger: Number(byName.SUBLIST_TRIGGER_I ?? '200'),
+  };
+}
+
 const NOMEN_NESCIO = '@N.N.';
 
 function escapeHtml(value) {
