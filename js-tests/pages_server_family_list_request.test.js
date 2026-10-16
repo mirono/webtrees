@@ -14,11 +14,12 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { resolveListRequest, needsGivenNameSublist, familyListUrl } from '../pages-server/family-list.mjs';
+import { resolveListRequest, needsGivenNameSublist, listUrl } from '../pages-server/family-list.mjs';
 
 function baseParams(overrides = {}) {
   return {
     treeName: 'ophir',
+    routeSegment: 'family-list',
     surnameParam: '',
     alpha: '',
     falpha: '',
@@ -30,15 +31,15 @@ function baseParams(overrides = {}) {
   };
 }
 
-describe('familyListUrl', () => {
+describe('listUrl', () => {
   test('omits empty/null/undefined params', () => {
-    expect(familyListUrl('ophir', { surname: 'SMITH', falpha: '', show_marnm: null, alpha: undefined })).toBe(
+    expect(listUrl('family-list', 'ophir', { surname: 'SMITH', falpha: '', show_marnm: null, alpha: undefined })).toBe(
       '/tree/ophir/family-list?surname=SMITH',
     );
   });
 
   test('with no params at all, just the bare route', () => {
-    expect(familyListUrl('ophir', {})).toBe('/tree/ophir/family-list');
+    expect(listUrl('family-list', 'ophir', {})).toBe('/tree/ophir/family-list');
   });
 });
 

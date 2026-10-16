@@ -334,13 +334,18 @@ function escapeHtml(value) {
  * page itself - the xref-prefill branch only matters when LINKING TO
  * the list from elsewhere, e.g. an individual's own page, not ported
  * here). Omits any param whose value is null/''/undefined, matching
- * `route()`'s own query-string building.
+ * `route()`'s own query-string building. `routeSegment` is
+ * `'family-list'` or `'individual-list'` - both routes share this
+ * EXACT URL-building logic (real PHP's `listUrl()` is the same method
+ * on both module subclasses, calling `route(static::class, ...)`,
+ * which differs only in each module's own `routeUrl()`).
  *
+ * @param {string} routeSegment
  * @param {string} treeName
  * @param {Record<string, string|null|undefined>} params
  * @returns {string}
  */
-export function familyListUrl(treeName, params = {}) {
+export function listUrl(routeSegment, treeName, params = {}) {
   const query = new URLSearchParams();
 
   for (const [key, value] of Object.entries(params)) {
@@ -351,7 +356,7 @@ export function familyListUrl(treeName, params = {}) {
 
   const queryString = query.toString();
 
-  return `/tree/${treeName}/family-list${queryString ? `?${queryString}` : ''}`;
+  return `/tree/${treeName}/${routeSegment}${queryString ? `?${queryString}` : ''}`;
 }
 
 /**
@@ -364,12 +369,12 @@ export function familyListUrl(treeName, params = {}) {
  * caller computes from its own query results - see
  * resolveGivenNameSublist() below).
  *
- * @param {{surnameParam: string, alpha: string, falpha: string, show: string, showAll: string, showMarnm: string, showAllFirstnames: string}} rawParams
+ * @param {{treeName: string, routeSegment: 'family-list'|'individual-list', surnameParam: string, alpha: string, falpha: string, show: string, showAll: string, showMarnm: string, showAllFirstnames: string}} rawParams
  * @param {Map<string, string[]>} allSurns
  * @param {Map<string, Map<string, number>>} allSurnames
  * @param {boolean} showFamilies true for FamilyListModule, false for
- *   IndividualListModule (not yet ported - included for the exact
- *   title wording this function already has to produce)
+ *   IndividualListModule - both share this exact title-wording logic
+ *   (I18N::translate('Families') vs. I18N::translate('Individuals'))
  * @returns {
  *   | {kind: 'redirect', url: string}
  *   | {kind: 'not-found', surname: string, url: string}
@@ -378,6 +383,7 @@ export function familyListUrl(treeName, params = {}) {
  *       alpha: string, falpha: string, surname: string,
  *       showAll: string, show: string, showMarnm: string, showAllFirstnames: string,
  *       legendHtml: string, title: string, listParams: Record<string, string>,
+ *       routeSegment: string,
  *     }
  * }
  */
@@ -393,7 +399,7 @@ export function resolveListRequest(rawParams, allSurns, allSurnames, showFamilie
   const redirectParams = { alpha, falpha, show, show_all: showAll, show_all_firstnames: rawParams.showAllFirstnames, show_marnm: showMarnm, surname };
 
   if (surnameParam !== surname) {
-    return { kind: 'redirect', url: familyListUrl(rawParams.treeName, redirectParams) };
+    return { kind: 'redirect', url: listUrl(rawParams.routeSegment, rawParams.treeName, redirectParams) };
   }
 
   if (rawParams.showAllFirstnames === 'yes') {
@@ -411,7 +417,7 @@ export function resolveListRequest(rawParams, allSurns, allSurnames, showFamilie
   }
 
   if (effectiveSurname !== '' && !allSurns.has(effectiveSurname)) {
-    return { kind: 'not-found', surname: effectiveSurname, url: familyListUrl(rawParams.treeName, {}) };
+    return { kind: 'not-found', surname: effectiveSurname, url: listUrl(rawParams.routeSegment, rawParams.treeName, {}) };
   }
 
   let legend;
@@ -486,6 +492,7 @@ export function resolveListRequest(rawParams, allSurns, allSurnames, showFamilie
     legendHtml,
     title,
     listParams: { ...listParams, tree: treeName },
+    routeSegment: rawParams.routeSegment,
   };
 }
 

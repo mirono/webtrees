@@ -24,7 +24,7 @@
 // picks these up automatically, so no hand-rolled sort/search/filter JS
 // is needed here, only matching markup.
 
-import { familyListUrl } from './family-list.mjs';
+import { listUrl } from './family-list.mjs';
 
 function escapeHtml(value) {
   return String(value)
@@ -70,7 +70,7 @@ function nextId(prefix) {
  *   `$params` passed into `listUrl()`)
  * @returns {string}
  */
-export function renderSurnamesTable({ treeName, surnames, showFamilies, listParams }) {
+export function renderSurnamesTable({ routeSegment, treeName, surnames, showFamilies, listParams }) {
   const tableId = nextId('surnames-table-');
   const columnHeader = showFamilies ? 'Spouses' : 'Individuals';
 
@@ -91,7 +91,7 @@ export function renderSurnamesTable({ treeName, surnames, showFamilies, listPara
             label = escapeHtml(spelling);
           }
 
-          const url = familyListUrl(treeName, { ...listParams, surname: surn });
+          const url = listUrl(routeSegment, treeName, { ...listParams, surname: surn });
 
           return `<a href="${escapeHtml(url)}" class="ut">${label}</a><br>`;
         })
@@ -420,7 +420,7 @@ export function renderFamiliesTable({ families, showLastChange }) {
  * @param {Record<string, string>} params.listParams
  * @returns {string}
  */
-function surnameInitialsNavHtml({ treeName, surnameInitials, alpha, showAll, listParams }) {
+function surnameInitialsNavHtml({ routeSegment, treeName, surnameInitials, alpha, showAll, listParams }) {
   const items = [...surnameInitials.entries()]
     .map(([letter, count]) => {
       const label = letter === '@' ? '…' : letter === ',' ? 'No surname' : escapeHtml(letter);
@@ -432,7 +432,7 @@ function surnameInitialsNavHtml({ treeName, surnameInitials, alpha, showAll, lis
                     </li>`;
       }
 
-      const url = familyListUrl(treeName, { ...listParams, alpha: letter });
+      const url = listUrl(routeSegment, treeName, { ...listParams, alpha: letter });
       const activeClass = letter === alpha ? ' active' : '';
 
       return `
@@ -442,7 +442,7 @@ function surnameInitialsNavHtml({ treeName, surnameInitials, alpha, showAll, lis
     })
     .join('');
 
-  const allUrl = familyListUrl(treeName, { ...listParams, show_all: 'yes' });
+  const allUrl = listUrl(routeSegment, treeName, { ...listParams, show_all: 'yes' });
   const allActiveClass = showAll === 'yes' ? ' active' : '';
 
   return `
@@ -467,7 +467,7 @@ function surnameInitialsNavHtml({ treeName, surnameInitials, alpha, showAll, lis
  * @param {Record<string, string>} params.listParams
  * @returns {string}
  */
-function givenNameInitialsNavHtml({ treeName, givenNameInitials, falpha, showAllFirstnames, listParams }) {
+function givenNameInitialsNavHtml({ routeSegment, treeName, givenNameInitials, falpha, showAllFirstnames, listParams }) {
   const items = [...givenNameInitials.entries()]
     .map(([letter, count]) => {
       const label = letter === '@' ? '…' : escapeHtml(letter);
@@ -479,7 +479,7 @@ function givenNameInitialsNavHtml({ treeName, givenNameInitials, falpha, showAll
                     </li>`;
       }
 
-      const url = familyListUrl(treeName, { ...listParams, falpha: letter });
+      const url = listUrl(routeSegment, treeName, { ...listParams, falpha: letter });
       const activeClass = letter === falpha && showAllFirstnames !== 'yes' ? ' active' : '';
 
       return `
@@ -489,7 +489,7 @@ function givenNameInitialsNavHtml({ treeName, givenNameInitials, falpha, showAll
     })
     .join('');
 
-  const allUrl = familyListUrl(treeName, { ...listParams, show_all_firstnames: 'yes' });
+  const allUrl = listUrl(routeSegment, treeName, { ...listParams, show_all_firstnames: 'yes' });
   const allActiveClass = showAllFirstnames === 'yes' ? ' active' : '';
 
   return `
@@ -529,6 +529,7 @@ function givenNameInitialsNavHtml({ treeName, givenNameInitials, falpha, showAll
  * @returns {string}
  */
 export function renderFamilyListPage({
+  routeSegment,
   tree,
   user,
   csrfToken,
@@ -563,20 +564,20 @@ export function renderFamilyListPage({
                         <a class="nav-link" href="/login">Sign in</a>
                     </li>`;
 
-  const navHtml = surnameInitialsNavHtml({ treeName: tree.name, surnameInitials, alpha, showAll, listParams });
+  const navHtml = surnameInitialsNavHtml({ routeSegment, treeName: tree.name, surnameInitials, alpha, showAll, listParams });
 
   const marnmToggleHtml =
     show !== 'none'
       ? showMarnm === 'yes'
         ? `
             <p>
-                <a href="${escapeHtml(familyListUrl(tree.name, { ...listParams, show, show_marnm: 'no' }))}">
+                <a href="${escapeHtml(listUrl(routeSegment, tree.name, { ...listParams, show, show_marnm: 'no' }))}">
                     Exclude individuals with “${legendHtml}” as a married name
                 </a>
             </p>`
         : `
             <p>
-                <a href="${escapeHtml(familyListUrl(tree.name, { ...listParams, show, show_marnm: 'yes' }))}">
+                <a href="${escapeHtml(listUrl(routeSegment, tree.name, { ...listParams, show, show_marnm: 'yes' }))}">
                     Include individuals with “${legendHtml}” as a married name
                 </a>
             </p>`
@@ -585,6 +586,7 @@ export function renderFamilyListPage({
   const givenNameSublistHtml =
     givenNameSublist !== null
       ? givenNameInitialsNavHtml({
+          routeSegment,
           treeName: tree.name,
           givenNameInitials: givenNameSublist.givenNameInitials,
           falpha: givenNameSublist.falpha,
@@ -604,7 +606,7 @@ export function renderFamilyListPage({
     <link rel="stylesheet" href="/public/css/vendor.min.css">
     <link rel="stylesheet" href="/public/css/webtrees.min.css">
 </head>
-<body class="wt-global wt-theme-webtrees wt-route-family-list-page">
+<body class="wt-global wt-theme-webtrees wt-route-${routeSegment}-page">
     <header class="wt-header-wrapper d-print-none">
         <div class="container-lg wt-header-container">
             <div class="row wt-header-content">

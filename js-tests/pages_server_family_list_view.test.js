@@ -45,6 +45,7 @@ function baseFamily(overrides = {}) {
 describe('renderSurnamesTable', () => {
   test('carries the real datatables class and data-* attributes, so bundled JS turns it into a DataTable', () => {
     const html = renderSurnamesTable({
+      routeSegment: 'family-list',
       treeName: 'ophir',
       surnames: new Map([['SMITH', new Map([['Smith', 5]])]]),
       showFamilies: true,
@@ -58,13 +59,13 @@ describe('renderSurnamesTable', () => {
 
   test('"Spouses" header for a family list, "Individuals" for an individual list', () => {
     const surnames = new Map([['SMITH', new Map([['Smith', 1]])]]);
-    expect(renderSurnamesTable({ treeName: 'ophir', surnames, showFamilies: true, listParams: {} })).toContain('<th>Spouses</th>');
-    expect(renderSurnamesTable({ treeName: 'ophir', surnames, showFamilies: false, listParams: {} })).toContain('<th>Individuals</th>');
+    expect(renderSurnamesTable({ routeSegment: 'family-list', treeName: 'ophir', surnames, showFamilies: true, listParams: {} })).toContain('<th>Spouses</th>');
+    expect(renderSurnamesTable({ routeSegment: 'family-list', treeName: 'ophir', surnames, showFamilies: false, listParams: {} })).toContain('<th>Individuals</th>');
   });
 
   test('each spelling variant links to the surname-filtered list, carrying extra listParams', () => {
     const surnames = new Map([['SMITH', new Map([['Smith', 3], ['SMYTHE', 2]])]]);
-    const html = renderSurnamesTable({ treeName: 'ophir', surnames, showFamilies: true, listParams: { show_marnm: 'yes' } });
+    const html = renderSurnamesTable({ routeSegment: 'family-list', treeName: 'ophir', surnames, showFamilies: true, listParams: { show_marnm: 'yes' } });
 
     expect(html).toContain('/tree/ophir/family-list?show_marnm=yes&amp;surname=SMITH');
     expect(html).toContain('>Smith<');
@@ -73,12 +74,14 @@ describe('renderSurnamesTable', () => {
 
   test('shows the total count only when there is more than one spelling variant', () => {
     const oneSpelling = renderSurnamesTable({
+      routeSegment: 'family-list',
       treeName: 'ophir',
       surnames: new Map([['SMITH', new Map([['Smith', 5]])]]),
       showFamilies: true,
       listParams: {},
     });
     const twoSpellings = renderSurnamesTable({
+      routeSegment: 'family-list',
       treeName: 'ophir',
       surnames: new Map([['SMITH', new Map([['Smith', 3], ['SMYTHE', 2]])]]),
       showFamilies: true,
@@ -91,7 +94,7 @@ describe('renderSurnamesTable', () => {
 
   test('the NOMEN_NESCIO ("@N.N.") spelling renders as an ellipsis, not the raw sentinel', () => {
     const surnames = new Map([['@N.N.', new Map([['@N.N.', 1]])]]);
-    const html = renderSurnamesTable({ treeName: 'ophir', surnames, showFamilies: true, listParams: {} });
+    const html = renderSurnamesTable({ routeSegment: 'family-list', treeName: 'ophir', surnames, showFamilies: true, listParams: {} });
     expect(html).not.toContain('@N.N.<');
     expect(html).toContain('>…<');
   });
@@ -222,6 +225,7 @@ describe('renderFamiliesTable', () => {
 describe('renderFamilyListPage', () => {
   function baseParams(overrides = {}) {
     return {
+      routeSegment: 'family-list',
       tree: { title: 'The Ophir Family Tree', name: 'ophir' },
       user: null,
       csrfToken: null,
@@ -278,5 +282,17 @@ describe('renderFamilyListPage', () => {
 
   test('the body HTML is embedded as-is', () => {
     expect(renderFamilyListPage(baseParams({ bodyHtml: '<table id="my-marker"></table>' }))).toContain('my-marker');
+  });
+
+  test('routeSegment flows into the body class and every nav URL - reused as-is for individual-list', () => {
+    const familyHtml = renderFamilyListPage(baseParams({ routeSegment: 'family-list' }));
+    const individualHtml = renderFamilyListPage(baseParams({ routeSegment: 'individual-list' }));
+
+    expect(familyHtml).toContain('wt-route-family-list-page');
+    expect(familyHtml).toMatch(/href="\/tree\/ophir\/family-list\?/);
+
+    expect(individualHtml).toContain('wt-route-individual-list-page');
+    expect(individualHtml).toMatch(/href="\/tree\/ophir\/individual-list\?/);
+    expect(individualHtml).not.toContain('undefined');
   });
 });

@@ -3612,6 +3612,7 @@ async function handleFamilyListPage(req, res, treeName, url) {
 
     const rawParams = {
       treeName: tree.name,
+      routeSegment: 'family-list',
       surnameParam: url.searchParams.get('surname') ?? '',
       alpha: url.searchParams.get('alpha') ?? '',
       falpha: url.searchParams.get('falpha') ?? '',
@@ -3652,6 +3653,7 @@ async function handleFamilyListPage(req, res, treeName, url) {
         });
 
         bodyHtml = renderSurnamesTable({
+          routeSegment: resolved.routeSegment,
           treeName: tree.name,
           surnames: filteredSurnames,
           showFamilies: true,
@@ -3811,6 +3813,7 @@ async function handleFamilyListPage(req, res, treeName, url) {
 
       const csrfToken = user !== null ? generateCsrfToken() : null;
       const html = renderFamilyListPage({
+        routeSegment: resolved.routeSegment,
         tree,
         user,
         csrfToken,
