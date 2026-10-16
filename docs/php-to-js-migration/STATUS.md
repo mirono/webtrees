@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-10-16 (step 24: `/tree/{tree}/family-list` (FamilyListModule) served entirely by Node — the fifth "list" route and the first FULL FIDELITY one: real `families-table.phtml`/`surnames-table.phtml` markup, not the plain-table simplification every prior list route used). This is the entry point for "where are we" —
+**Last updated: 2026-10-16 (step 25: `/tree/{tree}/individual-list` (IndividualListModule) served entirely by Node — the sixth "list" route, the second AbstractIndividualListModule-based one; full fidelity including the real birth/death-date ESTIMATION algorithm. The "list" family is now COMPLETE except MediaListModule, a different shape entirely). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -125,6 +125,7 @@ just adding latency.
 | 5.22f | Retroactive fix for all 3 list routes (found via user screenshot comparison): real PHP conditionally hides a count column when every row sums to 0, and hides "Last change" entirely when the tree's SHOW_LAST_CHANGE preference is off (default OFF, unlike HIDE_LIVE_PEOPLE) — ported properly instead of leaving "always show every column" as a documented gap; also fixed note-list's page title ("Shared notes" → "Notes", the module's menu label vs. its actual page title) | **Done (2026-10-08)** — [phase5-list-column-visibility.md](phase5-list-column-visibility.md) |
 | 5.23 | `/tree/{tree}/location-list` (LocationListModule) served entirely by Node — the fourth "list" route; simplest yet (Location has no canShowByType() override, same base-privacy shape as Repository; member-only access level); two linked-record counts (Individuals/Families); built with conditional column-hiding from the start instead of retrofitting it | **Done (2026-10-09)** — [phase5-location-list.md](phase5-location-list.md) |
 | 5.24 | `/tree/{tree}/family-list` (FamilyListModule) served entirely by Node — the fifth "list" route, extending AbstractIndividualListModule (surname index/given-name-sublist machinery); the FIRST full-fidelity list route (real families-table.phtml/surnames-table.phtml markup + DataTables filter buttons, not the plain-table simplification every prior list route used); visitor-level access (no module override) | **Done (2026-10-16)** — [phase5-family-list.md](phase5-family-list.md) |
+| 5.25 | `/tree/{tree}/individual-list` (IndividualListModule) served entirely by Node — the sixth "list" route, the second AbstractIndividualListModule-based one (fams=false surname queries, individuals-table.phtml's 16-column markup); includes a real birth/death-date ESTIMATION algorithm (family-graph-walking heuristic, ported exactly); visitor-level access (no module override). The "list" family is now COMPLETE except MediaListModule | **Done (2026-10-16)** — [phase5-individual-list.md](phase5-individual-list.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
