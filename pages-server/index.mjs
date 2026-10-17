@@ -76,6 +76,7 @@ import {
   matchLocationListPagePath,
   matchFamilyListPagePath,
   matchIndividualListPagePath,
+  matchMediaListPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -134,7 +135,11 @@ import {
   displayableMediaFacts,
   mediaFactOtherAttributes,
   mediaCanShowRecord,
+  allFolders,
+  allMedia,
+  linkedRecordXrefsForMedia,
 } from './media.mjs';
+import { renderMediaListPage } from './media-list-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -4177,6 +4182,401 @@ async function handleIndividualListPage(req, res, treeName, url) {
   res.end();
 }
 
+function mediaListRedirectUrl(treeName, params) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined && value !== '') {
+      query.set(key, String(value));
+    }
+  }
+
+  return `/tree/${treeName}/media-list?${query.toString()}`;
+}
+
+async function handleMediaListPage(req, res, treeName, url) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // Mirrors MediaListModule::handle()'s own "Convert POST requests into
+  // GET requests for pretty URLs" (app/Module/MediaListModule.php:128-139) -
+  // the search form posts, real PHP redirects to the equivalent GET URL.
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+
+    res.writeHead(302, {
+      Location: mediaListRedirectUrl(treeName, {
+        go: '1',
+        page: formData.get('page') ?? '1',
+        max: formData.get('max') ?? '20',
+        folder: formData.get('folder') ?? '',
+        filter: formData.get('filter') ?? '',
+        subdirs: formData.get('subdirs') ? '1' : '',
+        format: formData.get('format') ?? '',
+      }),
+    });
+    res.end();
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'media_list'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // MediaListModule has no $access_level override of its own, same as
+    // every other list module - AbstractModule's own class default,
+    // Auth::PRIV_PRIVATE = 2 ("visitor") - confirmed live: no
+    // wt_module_privacy override row for 'media_list' either.
+    const listAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'media_list',
+      'Fisharebest\\Webtrees\\Module\\ModuleListInterface',
+      2,
+    );
+
+    if (listAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+
+    const folders = await allFolders(pool, tree.gedcomId);
+    const go = url.searchParams.get('go') === '1';
+    const page = parseInt(url.searchParams.get('page') ?? '1', 10) || 1;
+    const max = parseInt(url.searchParams.get('max') ?? '20', 10) || 20;
+    const folder = url.searchParams.get('folder') ?? '';
+    const filter = url.searchParams.get('filter') ?? '';
+    const subdirs = url.searchParams.get('subdirs') === '1';
+    const format = url.searchParams.get('format') ?? '';
+
+    const mediaXrefs = go ? await allMedia(pool, tree.gedcomId, folder, subdirs, filter, format) : [];
+
+    // Mirrors GedcomRecord::accessFilter(), applied to allMedia()'s own
+    // result set BEFORE pagination (app/Module/MediaListModule.php:260) -
+    // real PHP's $count/$pages are computed from the ALREADY-filtered
+    // collection, so privacy must be resolved for the WHOLE matched set
+    // here too, not just the current page's slice (otherwise count/pages
+    // would be wrong, and a page could silently render fewer than `max`
+    // cards whenever some of its slice turned out unshowable - found
+    // live: a 502 first, from an unrelated SQL bug, then a found-but-short
+    // page once that was fixed, before this ordering fix).
+    const showableMedia = [];
+
+    for (const xref of mediaXrefs) {
+      const mediaRecord = await loadMedia(pool, tree.gedcomId, xref);
+
+      if (mediaRecord === null) {
+        continue;
+      }
+
+      const facts = parseFacts(mediaRecord.gedcom);
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, mediaRecord.xref);
+      const treeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: defaultResnInfo.individualResn };
+      const mediaViewer = { accessLevel, isSelfRecord: false };
+      const linkedRecordsShowable = await mediaLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, mediaRecord.xref);
+      const shown = mediaCanShowRecord(treeForPrivacy, mediaRecord.gedcom, mediaViewer, defaultResnInfo.treeFactResn, linkedRecordsShowable);
+
+      if (shown) {
+        showableMedia.push({ mediaRecord, facts });
+      }
+    }
+
+    const count = showableMedia.length;
+    const pages = Math.max(1, Math.ceil(count / max));
+    const clampedPage = Math.max(Math.min(page, pages), 1);
+    const pageItems = showableMedia.slice((clampedPage - 1) * max, clampedPage * max);
+
+    let glideKey = null;
+    const media = [];
+
+    for (const { mediaRecord, facts } of pageItems) {
+      const rawFiles = mediaFileDetails(mediaRecord.gedcom);
+
+      if (glideKey === null && rawFiles.some((file) => !file.isExternal)) {
+        glideKey = await loadGlideKey(pool);
+      }
+
+      const watermark = needsWatermark(accessLevel, treePrivacyPrefs.showNoWatermark);
+      const thumbnailHtml = rawFiles
+        .filter((file) => !file.isExternal && file.mimeType !== null)
+        .map((file) => {
+          const imageUrl = mediaThumbnailUrl(
+            { xref: mediaRecord.xref, treeName: tree.name, factId: file.factId, width: 300, height: 200, fit: 'contain', needsWatermark: watermark },
+            glideKey,
+            siteUrlConfig,
+          );
+
+          return `<img class="img-fluid" src="${imageUrl}">`;
+        });
+
+      const firstFile = rawFiles[0] ?? null;
+      const typeLabelHtml =
+        firstFile !== null && firstFile.type !== ''
+          ? `<div><span class="label">Type</span>: <span class="value">${escapeHtml(firstFile.type)}</span></div>`
+          : '';
+
+      // Simplified from real PHP's own `view('fact-gedcom-fields', ...)`
+      // partial (full GEDCOM-structure-aware fact rendering, not ported
+      // anywhere in this migration) to each fact's plain text value -
+      // shows the same content, not byte-identical formatting. Also
+      // simplified away entirely: the editor-only raw filename/file-
+      // attributes display and the "file does not exist" check (both
+      // need real filesystem access this migration's Node side
+      // deliberately never does - the same "no Node-side image/file
+      // processing" decision already made for thumbnails themselves).
+      // Resolves a `1 SOUR @Sx@` citation to a real link (source's own
+      // title, privacy-checked) rather than showing the raw GEDCOM
+      // pointer text - a real bug found live (factPlainValue() on a
+      // pointer fact just returns "@S558@" verbatim, since that IS the
+      // fact's own value line). A non-pointer (inline, unstructured)
+      // SOUR citation falls back to its plain text, same as before.
+      const sourceFactsHtml = [];
+
+      for (const fact of facts.filter((f) => /^1 SOUR/.test(f))) {
+        const pointerMatch = /^1 SOUR @([^@]+)@/.exec(fact);
+
+        if (pointerMatch === null) {
+          sourceFactsHtml.push(`<div>${escapeHtml(factPlainValue(fact))}</div>`);
+          continue;
+        }
+
+        const citedSourceXref = pointerMatch[1];
+        const citedSource = await loadSource(pool, tree.gedcomId, citedSourceXref);
+
+        if (citedSource === null) {
+          continue;
+        }
+
+        const citedDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, citedSourceXref);
+        const citedTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: citedDefaultResnInfo.individualResn };
+        const citedViewer = { accessLevel, isSelfRecord: false };
+
+        if (sourceCanShowRecord(citedTreeForPrivacy, citedSource.gedcom, citedViewer, citedDefaultResnInfo.treeFactResn, [])) {
+          const citedName = extractNameFromFact(citedSource.gedcom, 'TITL');
+          const citedLabel = citedName !== null ? citedName.full : `<span class="NAME" dir="auto" translate="no">${citedSourceXref}</span>`;
+
+          sourceFactsHtml.push(`<div><a href="/tree/${tree.name}/source/${citedSourceXref}">${citedLabel}</a></div>`);
+        }
+      }
+
+      // Same pointer-resolution fix as SOUR above, for a `1 NOTE @Nx@`
+      // shared-note citation; an inline (non-pointer) NOTE falls back
+      // to its plain text.
+      const noteFactsHtml = [];
+
+      for (const fact of facts.filter((f) => /^1 NOTE/.test(f))) {
+        const pointerMatch = /^1 NOTE @([^@]+)@/.exec(fact);
+
+        if (pointerMatch === null) {
+          noteFactsHtml.push(`<div>${escapeHtml(factPlainValue(fact))}</div>`);
+          continue;
+        }
+
+        const citedNoteXref = pointerMatch[1];
+        const citedNote = await loadNote(pool, tree.gedcomId, citedNoteXref);
+
+        if (citedNote === null) {
+          continue;
+        }
+
+        const citedDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, citedNoteXref);
+        const citedTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: citedDefaultResnInfo.individualResn };
+        const citedViewer = { accessLevel, isSelfRecord: false };
+        const citedLinkedRecordsShowable = await noteLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, relPrefs, citedNoteXref);
+
+        if (noteCanShowRecord(citedTreeForPrivacy, citedNote.gedcom, citedViewer, citedDefaultResnInfo.treeFactResn, citedLinkedRecordsShowable)) {
+          const citedLabel = noteText(citedNote.gedcom);
+
+          noteFactsHtml.push(`<div><a href="/tree/${tree.name}/note/${citedNoteXref}">${escapeHtml(citedLabel)}</a></div>`);
+        }
+      }
+
+      // Mirrors Media::extractNames() (app/Media.php:104-128) EXACTLY
+      // the same way handleMediaPage() already does above: the first
+      // non-empty FILE title (NOT a top-level TITL fact, which media
+      // records don't have - a real bug found live, where this
+      // originally used extractNameFromFact(gedcom, 'TITL') and every
+      // card fell back to showing its bare xref), else the first
+      // non-empty filename, else the record's own xref.
+      const titles = rawFiles.map((file) => file.title).filter((title) => title !== '');
+      const filenames = rawFiles.map((file) => file.filename).filter((filename) => filename !== '');
+      const chosenName = titles[0] ?? filenames[0] ?? mediaRecord.xref;
+      const fullNameHtml = `<bdi>${escapeHtml(chosenName)}</bdi>`;
+
+      const linkedXrefs = await linkedRecordXrefsForMedia(pool, tree.gedcomId, mediaRecord.xref);
+
+      const linkedIndividuals = [];
+
+      for (const linkedXref of linkedXrefs.individuals) {
+        const resolved = await resolveFamilyMember(tree, treePrivacyPrefs, accessLevel, relPrefs, linkedXref);
+
+        if (resolved !== null && resolved.canShow) {
+          const linkedName = extractPrimaryName(resolved.individual.gedcom);
+
+          linkedIndividuals.push({
+            url: `/tree/${tree.name}/individual/${linkedXref}`,
+            fullNameHtml: linkedName !== null ? linkedName.full : `<span class="NAME" dir="auto" translate="no">${linkedXref}</span>`,
+          });
+        }
+      }
+
+      const linkedFamilies = [];
+
+      for (const linkedXref of linkedXrefs.families) {
+        const shownFamily = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, linkedXref);
+
+        if (shownFamily !== null) {
+          const husbandName = shownFamily.husband !== null ? extractPrimaryName(shownFamily.husband.individual.gedcom) : null;
+          const wifeName = shownFamily.wife !== null ? extractPrimaryName(shownFamily.wife.individual.gedcom) : null;
+          const combinedName = `${husbandName?.full ?? '…'} + ${wifeName?.full ?? '…'}`;
+
+          linkedFamilies.push({ url: `/tree/${tree.name}/family/${linkedXref}`, fullNameHtml: combinedName });
+        }
+      }
+
+      const linkedSources = [];
+
+      for (const linkedXref of linkedXrefs.sources) {
+        const source = await loadSource(pool, tree.gedcomId, linkedXref);
+
+        if (source === null) {
+          continue;
+        }
+
+        const sourceDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, linkedXref);
+        const sourceTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: sourceDefaultResnInfo.individualResn };
+        const sourceViewer = { accessLevel, isSelfRecord: false };
+
+        // Repo-citation privacy is skipped for this footer mention,
+        // same established shortcut already used elsewhere in this
+        // migration for a source referenced only in passing (not the
+        // page's own subject record) - see index.mjs's own comment at
+        // sourceCanShowRecord's other such call site.
+        if (sourceCanShowRecord(sourceTreeForPrivacy, source.gedcom, sourceViewer, sourceDefaultResnInfo.treeFactResn, [])) {
+          const sourceName = extractNameFromFact(source.gedcom, 'TITL');
+
+          linkedSources.push({
+            url: `/tree/${tree.name}/source/${linkedXref}`,
+            fullNameHtml: sourceName !== null ? sourceName.full : `<span class="NAME" dir="auto" translate="no">${linkedXref}</span>`,
+          });
+        }
+      }
+
+      const linkedLocations = [];
+
+      for (const linkedXref of linkedXrefs.locations) {
+        const location = await loadLocation(pool, tree.gedcomId, linkedXref);
+
+        if (location === null) {
+          continue;
+        }
+
+        const locationDefaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, linkedXref);
+        const locationTreeForPrivacy = { hideLivePeople: treePrivacyPrefs.hideLivePeople, defaultResn: locationDefaultResnInfo.individualResn };
+        const locationViewer = { accessLevel, isSelfRecord: false };
+
+        if (locationCanShowRecord(locationTreeForPrivacy, location.gedcom, locationViewer, locationDefaultResnInfo.treeFactResn)) {
+          const locationName = extractNameFromFact(location.gedcom, 'NAME');
+
+          linkedLocations.push({
+            url: `/tree/${tree.name}/location/${linkedXref}`,
+            fullNameHtml: locationName !== null ? locationName.full : `<span class="NAME" dir="auto" translate="no">${linkedXref}</span>`,
+          });
+        }
+      }
+
+      media.push({
+        xref: mediaRecord.xref,
+        url: `/tree/${tree.name}/media/${mediaRecord.xref}`,
+        fullNameHtml,
+        thumbnailHtml,
+        typeLabelHtml,
+        sourceFactsHtml: sourceFactsHtml.join(''),
+        noteFactsHtml: noteFactsHtml.join(''),
+        filenameHtml: '',
+        linkedIndividuals,
+        linkedFamilies,
+        linkedSources,
+        linkedLocations,
+      });
+    }
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderMediaListPage({
+      tree,
+      user,
+      csrfToken,
+      folders,
+      folder,
+      subdirs,
+      max,
+      format,
+      filter,
+      count,
+      page: clampedPage,
+      pages,
+      media,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve media list:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -4326,6 +4726,13 @@ const server = createServer(async (req, res) => {
 
   if (individualListTreeName !== null) {
     await handleIndividualListPage(req, res, individualListTreeName, url);
+    return;
+  }
+
+  const mediaListTreeName = matchMediaListPagePath(url.pathname);
+
+  if (mediaListTreeName !== null) {
+    await handleMediaListPage(req, res, mediaListTreeName, url);
     return;
   }
 

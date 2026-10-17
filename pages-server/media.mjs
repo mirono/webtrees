@@ -542,10 +542,11 @@ export async function allMedia(pool, gedcomId, folder, subdirs, filter, format) 
   // hypothetical multi-file one, never affecting which media show or
   // their content.
   const result = await pool.query(
-    `SELECT DISTINCT m_id
+    `SELECT m_id, MIN(descriptive_title) AS sort_title
      FROM wt_media_file
      WHERE ${conditions.join(' AND ')}
-     ORDER BY (SELECT MIN(descriptive_title) FROM wt_media_file mf2 WHERE mf2.m_id = wt_media_file.m_id AND mf2.m_file = wt_media_file.m_file)`,
+     GROUP BY m_id
+     ORDER BY sort_title`,
     params,
   );
 
