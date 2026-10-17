@@ -75,6 +75,28 @@ export async function loadShowHighlightImagesPref(pool, gedcomId) {
 }
 
 /**
+ * Mirrors Tree::getPreference('SHOW_PRIVATE_RELATIONSHIPS') (default
+ * '1' - app/Tree.php:86, ALSO this tree's own real, unoverridden value,
+ * confirmed live) - see buildChartBoxViewModel()'s own doc comment for
+ * why this matters: when true, Family::husband()/wife()/children()
+ * force Auth::PRIV_HIDE (-1) regardless of the real viewer, for chart
+ * relationship traversal specifically.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<boolean>}
+ */
+export async function loadShowPrivateRelationshipsPref(pool, gedcomId) {
+  const result = await pool.query(
+    "SELECT setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name = 'SHOW_PRIVATE_RELATIONSHIPS'",
+    [gedcomId],
+  );
+  const value = result.rows[0]?.setting_value ?? '1';
+
+  return value === '1';
+}
+
+/**
  * Mirrors Fact::summary()'s simplified shape (app/Fact.php:388-420) for
  * a plain dated/placed event fact (no linked-record target, the only
  * case BIRT/DEAT facts are) - value (if not 'Y'), date, place, each

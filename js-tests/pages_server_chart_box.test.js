@@ -181,3 +181,17 @@ describe('loadShowHighlightImagesPref', () => {
     expect(await loadShowHighlightImagesPref(pool, 1)).toBe(false);
   });
 });
+
+describe('loadShowPrivateRelationshipsPref', () => {
+  test('defaults to true when no row exists (real PHP default is "1")', async () => {
+    const pool = { query: async () => ({ rows: [] }) };
+    const { loadShowPrivateRelationshipsPref } = await import('../pages-server/chart-box.mjs');
+    expect(await loadShowPrivateRelationshipsPref(pool, 1)).toBe(true);
+  });
+
+  test('false only when explicitly stored as "0"', async () => {
+    const pool = { query: async () => ({ rows: [{ setting_value: '0' }] }) };
+    const { loadShowPrivateRelationshipsPref } = await import('../pages-server/chart-box.mjs');
+    expect(await loadShowPrivateRelationshipsPref(pool, 1)).toBe(false);
+  });
+});
