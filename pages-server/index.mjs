@@ -77,6 +77,7 @@ import {
   matchFamilyListPagePath,
   matchIndividualListPagePath,
   matchMediaListPagePath,
+  matchAncestorsChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -140,6 +141,8 @@ import {
   linkedRecordXrefsForMedia,
 } from './media.mjs';
 import { renderMediaListPage } from './media-list-view.mjs';
+import { buildChartBoxViewModel, loadShowHighlightImagesPref, loadShowPrivateRelationshipsPref } from './chart-box.mjs';
+import { renderAncestorsTreeNode, renderAncestorsChartPage } from './ancestors-chart-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -4577,6 +4580,431 @@ async function handleMediaListPage(req, res, treeName, url) {
   }
 }
 
+const ANCESTORS_CHART_MIN_GENERATIONS = 2;
+// Mirrors AncestorsChartModule::MAXIMUM_GENERATIONS (app/Module/AncestorsChartModule.php:58):
+// `PHP_INT_SIZE === 4 ? 31 : 63` - Node always runs on a 64-bit build,
+// so this is always 63, the SAME branch any real 64-bit PHP install
+// would take too (not a divergence specific to this port).
+const ANCESTORS_CHART_MAX_GENERATIONS = 63;
+
+/**
+ * Mirrors Family::spouses()'s own filter (via husband($access_level)/
+ * wife($access_level), each internally gated by canShowName()) - a
+ * spouse that exists but fails canShowName is OMITTED from the
+ * family's own spouse list entirely (no box at all for that side), not
+ * shown as a "Private" placeholder box - a real, confirmed difference
+ * from chart-box.mjs's own "canShow false -> show a Private box"
+ * behavior, which only applies once a spouse has ALREADY cleared this
+ * gate and is being rendered as a box in its own right.
+ *
+ * @param {{canShowNameOnly: boolean}|null} resolvedMember
+ * @returns {boolean}
+ */
+function spouseEntersChart(resolvedMember) {
+  return resolvedMember !== null && resolvedMember.canShowNameOnly;
+}
+
+/**
+ * Mirrors ancestors-chart/tree.phtml's own marriage-summary line
+ * (`$parents->facts(['MARR', 'DIV', '_NMR'], true)` - label + date per
+ * fact, joined by " — "). English-only labels, this migration's
+ * established no-I18N convention for hand-rolled views.
+ */
+const MARRIAGE_SUMMARY_LABELS = { MARR: 'Marriage', DIV: 'Divorce', _NMR: 'Not married' };
+
+function buildMarriageSummaryHtml(familyFacts) {
+  const parts = [];
+
+  for (const fact of familyFacts) {
+    const tag = /^1 (\S+)/.exec(fact)?.[1];
+    const label = MARRIAGE_SUMMARY_LABELS[tag];
+
+    if (label === undefined) {
+      continue;
+    }
+
+    const dateMatch = /\n2 DATE (.+)/.exec(fact);
+    let part = label;
+
+    if (dateMatch) {
+      const gedcomDate = new GedcomDate(dateMatch[1]);
+
+      if (gedcomDate.isOK()) {
+        part += ` ${displayDate(gedcomDate)}`;
+      }
+    }
+
+    parts.push(part);
+  }
+
+  return parts.join(' — ');
+}
+
+/**
+ * Recursively resolves one node of the ancestors tree - mirrors
+ * resources/views/modules/ancestors-chart/tree.phtml's own recursive
+ * structure (see ancestors-chart-view.mjs's own renderAncestorsTreeNode()
+ * doc comment for the exact shape). `ctx` bundles everything constant
+ * across the whole recursion (tree/privacy/viewer context, the
+ * SHOW_PRIVATE_RELATIONSHIPS-aware traversalAccessLevel, a pre-loaded
+ * glideKey, siteUrlConfig) so each recursive call only needs to thread
+ * through what actually changes: the individual, their Sosa number,
+ * and how many generations remain.
+ */
+async function buildAncestorsNode(ctx, individualXref, sosaNumber, generationsRemaining) {
+  const individual = await loadIndividual(pool, ctx.gedcomId, individualXref);
+
+  if (individual === null) {
+    return { box: null, sosa: sosaNumber, parentFamily: null };
+  }
+
+  const defaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, individualXref);
+  const box = await buildChartBoxViewModel(
+    pool,
+    ctx.gedcomId,
+    ctx.treeName,
+    ctx.treePrivacyPrefs,
+    ctx.showHighlightImages,
+    individual,
+    ctx.viewerBase,
+    ctx.traversalAccessLevel,
+    defaultResnInfo,
+    ctx.glideKey,
+    ctx.siteUrlConfig,
+  );
+
+  let parentFamily = null;
+
+  if (generationsRemaining > 1) {
+    const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, individualXref);
+    const familyXref = related.parentFamilies[0] ?? null;
+
+    if (familyXref !== null) {
+      const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, familyXref);
+
+      if (shownFamily !== null) {
+        const spouseXrefs = [
+          spouseEntersChart(shownFamily.husband) ? shownFamily.family.husb : null,
+          spouseEntersChart(shownFamily.wife) ? shownFamily.family.wife : null,
+        ].filter((x) => x !== null);
+
+        const spouses = [];
+
+        for (const spouseXref of spouseXrefs) {
+          const spouseIndividual = await loadIndividual(pool, ctx.gedcomId, spouseXref);
+
+          if (spouseIndividual === null) {
+            continue;
+          }
+
+          const spouseSex = sex(spouseIndividual.gedcom);
+          const childSosa = sosaNumber * 2 + (spouseSex === 'F' ? 1 : 0);
+
+          spouses.push(await buildAncestorsNode(ctx, spouseXref, childSosa, generationsRemaining - 1));
+        }
+
+        if (spouses.length > 0) {
+          parentFamily = {
+            familyXref,
+            marriageSummaryHtml: buildMarriageSummaryHtml(shownFamily.facts),
+            childCount: numberOfChildren(shownFamily.facts),
+            spouses,
+          };
+        }
+      }
+    }
+  }
+
+  return { box, sosa: sosaNumber, parentFamily };
+}
+
+async function handleAncestorsChartPage(req, res, match, url) {
+  const { tree: treeName, style, generations, xref } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // Mirrors AncestorsChartModule::handle()'s own "Convert POST requests
+  // into GET requests for pretty URLs" - unlike every other POST->GET
+  // redirect in this migration so far, style/generations/xref are PATH
+  // segments here, not query params, so the redirect target is a
+  // different PATH, not just a different query string.
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedStyle = ['tree', 'individuals', 'families'].includes(formData.get('style')) ? formData.get('style') : 'tree';
+    const postedGenerations = Math.max(
+      ANCESTORS_CHART_MIN_GENERATIONS,
+      Math.min(parseInt(formData.get('generations'), 10) || 4, ANCESTORS_CHART_MAX_GENERATIONS),
+    );
+    const postedXref = formData.get('xref') ?? xref;
+
+    res.writeHead(302, {
+      Location: `/tree/${treeName}/ancestors-${postedStyle}-${postedGenerations}/${encodeURIComponent(postedXref)}`,
+    });
+    res.end();
+    return;
+  }
+
+  if (generations < ANCESTORS_CHART_MIN_GENERATIONS || generations > ANCESTORS_CHART_MAX_GENERATIONS) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'ancestors_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // AncestorsChartModule has no $access_level override of its own,
+    // same as every list module - AbstractModule's own class default,
+    // Auth::PRIV_PRIVATE = 2 ("visitor") - confirmed live: no
+    // wt_module_privacy override row for 'ancestors_chart' either.
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'ancestors_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+
+    const facts = parseFacts(individual.gedcom);
+    const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    // Mirrors Auth::checkIndividualAccess($individual, false, true)'s
+    // own `$chart` bypass (app/Auth.php:225-245): SHOW_PRIVATE_RELATIONSHIPS
+    // lets the chart's OWN subject individual be charted regardless of
+    // their personal canShow() - same preference, same bypass shape as
+    // chart relationship traversal itself, just applied once up front
+    // to the root individual rather than per-box.
+    const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, viewerBase);
+
+    if (!subjectShown) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const primaryName = extractPrimaryName(individual.gedcom);
+    const individualFullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+    const chartTitle = `Ancestors of ${individualFullNameHtml.replace(/<[^>]*>/g, '')}`;
+
+    if (url.searchParams.get('ajax') === '1') {
+      const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+      const glideKey = await loadGlideKey(pool);
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase,
+        traversalAccessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      let bodyHtml;
+
+      if (style === 'individuals' || style === 'families') {
+        // Simplified for v1 (documented, not silently dropped): these
+        // two alternate AJAX views reuse renderIndividualsTable()/
+        // renderFamiliesTable() unchanged, but with plain real dates
+        // only (no estimated-date heuristic) and no DataTables
+        // filter-button codes - the chart's own real value is the
+        // "tree" style; these two are a secondary convenience on the
+        // SAME underlying ancestor set, not this step's primary target.
+        const sosaRoot = await buildAncestorsNode(ctx, xref, 1, generations);
+        const flatNodes = [];
+        const collectNodes = (node) => {
+          flatNodes.push(node);
+
+          if (node.parentFamily !== null) {
+            node.parentFamily.spouses.forEach(collectNodes);
+          }
+        };
+        collectNodes(sosaRoot);
+
+        if (style === 'individuals') {
+          const individuals = flatNodes
+            .filter((node) => node.box !== null)
+            .map((node) => ({
+              xref: node.box.xref,
+              url: node.box.url,
+              isPendingAddition: false,
+              isPendingDeletion: false,
+              allNames: [{ type: 'NAME', full: node.box.fullNameHtml }],
+              primaryIndex: 0,
+              sex: node.box.sex,
+              sortName: node.box.fullNameHtml.replace(/<[^>]*>/g, ''),
+              birthDatesHtml: node.box.birthSummaryHtml !== '' ? [node.box.birthSummaryHtml] : [],
+              birthDateSortKey: 0,
+              birthAnniversaryAge: null,
+              birthPlaces: [],
+              birthPlaceSortKey: '',
+              numberOfChildren: 0,
+              deathDatesHtml: node.box.deathSummaryHtml !== '' ? [node.box.deathSummaryHtml] : [],
+              deathDateSortKey: 0,
+              deathAnniversaryAge: null,
+              ageAtDeath: null,
+              deathPlaces: [],
+              deathPlaceSortKey: '',
+              lastChange: null,
+              lastChangeSortKey: 0,
+              sexFilterCode: node.box.sex,
+              birthFilterCode: '',
+              deathFilterCode: '',
+              rootsLeavesFilterCode: '',
+            }));
+
+          bodyHtml = renderIndividualsTable({ individuals, showLastChange: false });
+        } else {
+          const families = flatNodes
+            .filter((node) => node.parentFamily !== null)
+            .map((node) => ({
+              xref: node.parentFamily.familyXref,
+              url: `/tree/${tree.name}/family/${node.parentFamily.familyXref}`,
+              isPendingAddition: false,
+              isPendingDeletion: false,
+              husband: node.parentFamily.spouses[0]
+                ? { allNames: [{ type: 'NAME', full: node.parentFamily.spouses[0].box.fullNameHtml }], primaryIndex: 0, sex: node.parentFamily.spouses[0].box.sex, url: node.parentFamily.spouses[0].box.url, sortName: '' }
+                : null,
+              wife: node.parentFamily.spouses[1]
+                ? { allNames: [{ type: 'NAME', full: node.parentFamily.spouses[1].box.fullNameHtml }], primaryIndex: 0, sex: node.parentFamily.spouses[1].box.sex, url: node.parentFamily.spouses[1].box.url, sortName: '' }
+                : null,
+              husbandAge: null,
+              wifeAge: null,
+              anniversaryAge: null,
+              marriageDatesHtml: [],
+              marriageDateSortKey: 0,
+              marriageYesNo: null,
+              marriagePlaces: [],
+              marriagePlaceSortKey: '',
+              numberOfChildren: node.parentFamily.childCount,
+              lastChange: null,
+              lastChangeSortKey: 0,
+              marriageFilterCode: '',
+              aliveDeadFilterCode: '',
+              rootsLeavesFilterCode: '',
+            }));
+
+          bodyHtml = renderFamiliesTable({ families, showLastChange: false });
+        }
+      } else {
+        const root = await buildAncestorsNode(ctx, xref, 1, generations);
+        bodyHtml = renderAncestorsTreeNode(root);
+      }
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = `/tree/${tree.name}/ancestors-${style}-${generations}/${encodeURIComponent(xref)}?ajax=1`;
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderAncestorsChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: chartTitle,
+      individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
+      generations,
+      minGenerations: ANCESTORS_CHART_MIN_GENERATIONS,
+      maxGenerations: ANCESTORS_CHART_MAX_GENERATIONS,
+      style,
+      ajaxUrl,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve ancestors chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -4733,6 +5161,13 @@ const server = createServer(async (req, res) => {
 
   if (mediaListTreeName !== null) {
     await handleMediaListPage(req, res, mediaListTreeName, url);
+    return;
+  }
+
+  const ancestorsChartMatch = matchAncestorsChartPagePath(url.pathname);
+
+  if (ancestorsChartMatch !== null) {
+    await handleAncestorsChartPage(req, res, ancestorsChartMatch, url);
     return;
   }
 
