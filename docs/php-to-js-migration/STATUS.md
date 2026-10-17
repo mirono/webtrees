@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-10-17 (step 26: `/tree/{tree}/media-list` (MediaListModule) served entirely by Node — the seventh and FINAL "list" route: a search form + paginated card grid, not a DataTables table. THE "LIST" FAMILY IS NOW COMPLETE). This is the entry point for "where are we" —
+**Last updated: 2026-10-17 (step 27: `/tree/{tree}/ancestors-{style}-{generations}/{xref}` (AncestorsChartModule) served entirely by Node — the FIRST chart route, a new category after the "list" family's completion. Built the reusable chart-box component every future chart will share). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -127,6 +127,7 @@ just adding latency.
 | 5.24 | `/tree/{tree}/family-list` (FamilyListModule) served entirely by Node — the fifth "list" route, extending AbstractIndividualListModule (surname index/given-name-sublist machinery); the FIRST full-fidelity list route (real families-table.phtml/surnames-table.phtml markup + DataTables filter buttons, not the plain-table simplification every prior list route used); visitor-level access (no module override) | **Done (2026-10-16)** — [phase5-family-list.md](phase5-family-list.md) |
 | 5.25 | `/tree/{tree}/individual-list` (IndividualListModule) served entirely by Node — the sixth "list" route, the second AbstractIndividualListModule-based one (fams=false surname queries, individuals-table.phtml's 16-column markup); includes a real birth/death-date ESTIMATION algorithm (family-graph-walking heuristic, ported exactly); visitor-level access (no module override). The "list" family is now COMPLETE except MediaListModule | **Done (2026-10-16)** — [phase5-individual-list.md](phase5-individual-list.md) |
 | 5.26 | `/tree/{tree}/media-list` (MediaListModule) served entirely by Node — the seventh and FINAL "list" route; a search form (folder/subdirs/max/format/filter) + paginated card grid with real image thumbnails (reusing mediaThumbnailUrl() unchanged), not a DataTables table; POST→GET pretty-URL redirect; visitor-level access (no module override). **THE "LIST" FAMILY IS NOW COMPLETE** | **Done (2026-10-17)** — [phase5-media-list.md](phase5-media-list.md) |
+| 5.27 | `/tree/{tree}/ancestors-{style}-{generations}/{xref}` (AncestorsChartModule) served entirely by Node — the FIRST chart route (a new category). Built the shared chart-box component (name/thumbnail/lifespan/birth-death card) every future chart reuses; a recursive Bootstrap-collapsible HTML tree, no new JS needed; fixed a real, confirmed-live SHOW_PRIVATE_RELATIONSHIPS divergence (this tree's own default has it ON) that would otherwise have made chart traversal MORE restrictive than real PHP | **Done (2026-10-17)** — [phase5-ancestors-chart.md](phase5-ancestors-chart.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
