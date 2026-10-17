@@ -28,6 +28,9 @@ import {
   displayableMediaFacts,
   mediaFactOtherAttributes,
   mediaCanShowRecord,
+  allFolders,
+  allMedia,
+  linkedRecordXrefsForMedia,
 } from '../pages-server/media.mjs';
 
 function mockPool(queryImpl) {
@@ -360,5 +363,137 @@ describe('loadGlideKey', () => {
     });
 
     expect(await loadGlideKey(pool)).toBe('existing-key-from-php');
+  });
+});
+
+describe('allFolders', () => {
+  test('always includes the empty (top-level) folder first after sort', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+    expect(await allFolders(pool, 1)).toEqual(['']);
+  });
+
+  test('extracts dirname() from real paths, deduplicated and sorted', async () => {
+    const pool = mockPool(async () => ({
+      rows: [
+        { multimedia_file_refn: 'photos/2020/a.jpg' },
+        { multimedia_file_refn: 'photos/2020/b.jpg' },
+        { multimedia_file_refn: 'documents/a.pdf' },
+      ],
+    }));
+
+    expect(await allFolders(pool, 1)).toEqual(['', 'documents', 'photos/2020']);
+  });
+
+  test('excludes external URLs and root-level files from the folder list query', async () => {
+    const pool = mockPool(async (sql) => {
+      expect(sql).toContain("NOT LIKE 'http:%'");
+      expect(sql).toContain("NOT LIKE 'https:%'");
+      expect(sql).toContain("LIKE '%/%'");
+      return { rows: [] };
+    });
+    await allFolders(pool, 1);
+  });
+});
+
+describe('allMedia', () => {
+  test('scopes to the tree', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(params[0]).toBe(1);
+      return { rows: [] };
+    });
+    await allMedia(pool, 1, '', false, '', '');
+  });
+
+  test('root folder, no subdirs: excludes files inside any subfolder but keeps external URLs', async () => {
+    const pool = mockPool(async (sql) => {
+      expect(sql).toContain("NOT LIKE '%/%'");
+      expect(sql).toContain("LIKE 'http:%'");
+      return { rows: [] };
+    });
+    await allMedia(pool, 1, '', false, '', '');
+  });
+
+  test('a specific folder, no subdirs: matches that folder only, not nested sub-subfolders', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('LIKE $2');
+      expect(params).toContain('photos/%');
+      expect(params).toContain('photos/%/%');
+      return { rows: [] };
+    });
+    await allMedia(pool, 1, 'photos', false, '', '');
+  });
+
+  test('a specific folder WITH subdirs: no "not like photos/%/%" exclusion', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(params).not.toContain('photos/%/%');
+      return { rows: [] };
+    });
+    await allMedia(pool, 1, 'photos', true, '', '');
+  });
+
+  test('filter matches file path OR descriptive title', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('multimedia_file_refn LIKE');
+      expect(sql).toContain('descriptive_title LIKE');
+      expect(params).toContain('%smith%');
+      return { rows: [] };
+    });
+    await allMedia(pool, 1, '', false, 'smith', '');
+  });
+
+  test('filter escapes LIKE special characters (%, _, backslash)', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(params.some((p) => typeof p === 'string' && p.includes('\\%'))).toBe(true);
+      return { rows: [] };
+    });
+    await allMedia(pool, 1, '', false, '100% done', '');
+  });
+
+  test('format filters by source_media_type', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain('source_media_type =');
+      expect(params).toContain('photo');
+      return { rows: [] };
+    });
+    await allMedia(pool, 1, '', false, '', 'photo');
+  });
+
+  test('returns distinct media xrefs', async () => {
+    const pool = mockPool(async () => ({ rows: [{ m_id: 'M1' }, { m_id: 'M2' }] }));
+    expect(await allMedia(pool, 1, '', false, '', '')).toEqual(['M1', 'M2']);
+  });
+});
+
+describe('linkedRecordXrefsForMedia', () => {
+  test('classifies each linking record by which table it belongs to', async () => {
+    const pool = mockPool(async (sql, params) => {
+      expect(sql).toContain("l_type = 'OBJE'");
+      expect(params).toEqual(['M1', 1]);
+      return {
+        rows: [
+          { l_from: 'I1', record_type: 'INDI' },
+          { l_from: 'F1', record_type: 'FAM' },
+          { l_from: 'S1', record_type: 'SOUR' },
+          { l_from: 'L1', record_type: '_LOC' },
+        ],
+      };
+    });
+
+    expect(await linkedRecordXrefsForMedia(pool, 1, 'M1')).toEqual({
+      individuals: ['I1'],
+      families: ['F1'],
+      sources: ['S1'],
+      locations: ['L1'],
+    });
+  });
+
+  test('no linking records at all -> every list empty', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+    expect(await linkedRecordXrefsForMedia(pool, 1, 'M1')).toEqual({
+      individuals: [],
+      families: [],
+      sources: [],
+      locations: [],
+    });
   });
 });

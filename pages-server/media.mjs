@@ -431,3 +431,175 @@ function defaultRecordCanShow(treeFactResn, viewer) {
 export function mediaCanShowRecord(tree, gedcom, viewer, treeFactResn, linkedRecordsShowable) {
   return canShowViaResnChain(tree, gedcom, viewer, () => linkedRecordsShowable && defaultRecordCanShow(treeFactResn, viewer));
 }
+
+// Data/query layer for /tree/{tree}/media-list (MediaListModule, phase 5
+// step 26) - a genuinely different shape from every prior list route: a
+// folder/filter/format-filtered, slice-paginated card grid, not a
+// DataTables table. Image thumbnails reuse mediaThumbnailUrl() unchanged
+// (the same "real signed URL pointing at PHP's still-unmodified
+// /media-thumbnail route, no Node-side image processing" decision
+// already made twice before - step 14a's IndividualPage photo box,
+// step 17's MediaPage itself).
+
+/**
+ * Mirrors MediaListModule::allFolders() (app/Module/MediaListModule.php:177-193):
+ * every distinct folder (dirname of multimedia_file_refn) that holds at
+ * least one real (non-URL) media file, sorted, plus an always-present
+ * empty string for "no folder" (the top level).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @returns {Promise<string[]>}
+ */
+export async function allFolders(pool, gedcomId) {
+  const result = await pool.query(
+    `SELECT DISTINCT multimedia_file_refn
+     FROM wt_media_file
+     WHERE m_file = $1
+       AND multimedia_file_refn NOT LIKE 'http:%'
+       AND multimedia_file_refn NOT LIKE 'https:%'
+       AND multimedia_file_refn LIKE '%/%'`,
+    [gedcomId],
+  );
+
+  const folders = new Set([
+    '',
+    ...result.rows.map((row) => {
+      const path = row.multimedia_file_refn;
+      const lastSlash = path.lastIndexOf('/');
+      // Mirrors PHP's dirname() for a path containing at least one
+      // slash (guaranteed by the WHERE clause above): everything
+      // before the LAST slash, or '' if that's the only one (a
+      // top-level file like "a/b.jpg" -> dirname "a").
+      return lastSlash === -1 ? '' : path.slice(0, lastSlash);
+    }),
+  ]);
+
+  return [...folders].sort();
+}
+
+/**
+ * Mirrors MediaListModule::allMedia() (app/Module/MediaListModule.php:203-260):
+ * every media xref matching the folder/subdirs/filter/format criteria,
+ * sorted by title (the only sort real PHP's own UI ever requests -
+ * `$sort = 'title'` is the ONLY call site, `'file'` is dead code in the
+ * real module). `filter` matches against EITHER the file path or the
+ * descriptive title (real PHP's own `orWhere`), as a plain SQL `LIKE`
+ * substring (real PHP's `addcslashes($filter, '\\%_')` escapes
+ * `%`/`_`/backslash before building the LIKE pattern - replicated here
+ * via manual escaping, not a parameterized LIKE operand that Postgres
+ * would otherwise treat those characters specially within).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @param {string} folder
+ * @param {boolean} subdirs
+ * @param {string} filter
+ * @param {string} format
+ * @returns {Promise<string[]>} distinct media xrefs, sorted by title
+ */
+export async function allMedia(pool, gedcomId, folder, subdirs, filter, format) {
+  const conditions = ['m_file = $1'];
+  const params = [gedcomId];
+
+  if (folder === '') {
+    if (!subdirs) {
+      conditions.push(
+        "(multimedia_file_refn NOT LIKE '%/%' OR multimedia_file_refn LIKE 'http:%' OR multimedia_file_refn LIKE 'https:%')",
+      );
+    }
+  } else {
+    params.push(`${folder}/%`);
+    conditions.push(`multimedia_file_refn LIKE $${params.length}`);
+    conditions.push("multimedia_file_refn NOT LIKE 'http:%'");
+    conditions.push("multimedia_file_refn NOT LIKE 'https:%'");
+
+    if (!subdirs) {
+      params.push(`${folder}/%/%`);
+      conditions.push(`multimedia_file_refn NOT LIKE $${params.length}`);
+    }
+  }
+
+  if (filter !== '') {
+    const escaped = filter.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+    params.push(`%${escaped}%`);
+    conditions.push(`(multimedia_file_refn LIKE $${params.length} OR descriptive_title LIKE $${params.length})`);
+  }
+
+  if (format !== '') {
+    params.push(format);
+    conditions.push(`source_media_type = $${params.length}`);
+  }
+
+  // Sort-order simplification: real PHP sorts the raw per-FILE rows
+  // (one media object can have several), then dedupes keeping the
+  // first occurrence - so a multi-file media object's position is
+  // whichever file's title happened to sort first, not necessarily
+  // its minimum. This queries by each media object's OWN minimum title
+  // across its files instead - identical result for the common
+  // single-file case (confirmed: this tree's own media are all
+  // single-file), a cosmetic ordering difference only for a
+  // hypothetical multi-file one, never affecting which media show or
+  // their content.
+  const result = await pool.query(
+    `SELECT DISTINCT m_id
+     FROM wt_media_file
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY (SELECT MIN(descriptive_title) FROM wt_media_file mf2 WHERE mf2.m_id = wt_media_file.m_id AND mf2.m_file = wt_media_file.m_file)`,
+    params,
+  );
+
+  return result.rows.map((row) => row.m_id);
+}
+
+/**
+ * Mirrors LinkedRecordService::linkedIndividuals()/linkedFamilies()/
+ * linkedSources() (app/Services/LinkedRecordService.php) scoped to
+ * `l_type = 'OBJE'` - every individual/family/source xref directly
+ * referencing this media object. Privacy filtering (real PHP's
+ * `GedcomRecord::accessFilter()`) is the caller's job, same convention
+ * as every other list-row resolver in this migration.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} gedcomId
+ * @param {string} mediaXref
+ * @returns {Promise<{individuals: string[], families: string[], sources: string[]}>}
+ */
+export async function linkedRecordXrefsForMedia(pool, gedcomId, mediaXref) {
+  const result = await pool.query(
+    `SELECT l_from,
+            CASE
+              WHEN i.i_id IS NOT NULL THEN 'INDI'
+              WHEN f.f_id IS NOT NULL THEN 'FAM'
+              WHEN s.s_id IS NOT NULL THEN 'SOUR'
+              WHEN o.o_id IS NOT NULL AND o.o_type = '_LOC' THEN '_LOC'
+              ELSE NULL
+            END AS record_type
+     FROM wt_link l
+     LEFT JOIN wt_individuals i ON i.i_id = l.l_from AND i.i_file = l.l_file
+     LEFT JOIN wt_families f ON f.f_id = l.l_from AND f.f_file = l.l_file
+     LEFT JOIN wt_sources s ON s.s_id = l.l_from AND s.s_file = l.l_file
+     LEFT JOIN wt_other o ON o.o_id = l.l_from AND o.o_file = l.l_file
+     WHERE l.l_to = $1 AND l.l_file = $2 AND l.l_type = 'OBJE'`,
+    [mediaXref, gedcomId],
+  );
+
+  const individuals = [];
+  const families = [];
+  const sources = [];
+  const locations = [];
+
+  for (const row of result.rows) {
+    if (row.record_type === 'INDI') {
+      individuals.push(row.l_from);
+    } else if (row.record_type === 'FAM') {
+      families.push(row.l_from);
+    } else if (row.record_type === 'SOUR') {
+      sources.push(row.l_from);
+    } else if (row.record_type === '_LOC') {
+      locations.push(row.l_from);
+    }
+  }
+
+  return { individuals, families, sources, locations };
+}
