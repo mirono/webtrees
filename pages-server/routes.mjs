@@ -355,3 +355,16 @@ export function matchIndividualListPagePath(pathname) {
 
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * PHP's route (MediaListModule::ROUTE_URL - `/tree/{tree}/media-list`) -
+ * same exact-match shape as the other list-page matchers above.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchMediaListPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/media-list\/?$/.exec(pathname);
+
+  return match ? decodeURIComponent(match[1]) : null;
+}

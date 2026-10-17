@@ -22,6 +22,7 @@ import {
   matchLocationListPagePath,
   matchFamilyListPagePath,
   matchIndividualListPagePath,
+  matchMediaListPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -521,5 +522,24 @@ describe('matchIndividualListPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchIndividualListPagePath('/tree/ophir')).toBeNull();
     expect(matchIndividualListPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchMediaListPagePath', () => {
+  test('extracts the tree name', () => {
+    expect(matchMediaListPagePath('/tree/ophir/media-list')).toBe('ophir');
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchMediaListPagePath('/tree/ophir/media-list/')).toBe('ophir');
+  });
+
+  test('a per-record media page does not match (no xref here)', () => {
+    expect(matchMediaListPagePath('/tree/ophir/media/M1')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchMediaListPagePath('/tree/ophir')).toBeNull();
+    expect(matchMediaListPagePath('/')).toBeNull();
   });
 });

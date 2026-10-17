@@ -16,6 +16,7 @@ import {
   isLocationListPagePath,
   isFamilyListPagePath,
   isIndividualListPagePath,
+  isMediaListPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -305,6 +306,16 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/tree/{tree}/individual-list', () => {
     const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Findividual-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/media-list is a Node route', () => {
+    const url = urlFor('/tree/ophir/media-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/media-list', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fmedia-list');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
@@ -626,6 +637,24 @@ describe('isIndividualListPagePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(isIndividualListPagePath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isMediaListPagePath', () => {
+  test('matches the exact path', () => {
+    expect(isMediaListPagePath('/tree/ophir/media-list')).toBe(true);
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(isMediaListPagePath('/tree/ophir/media-list/')).toBe(true);
+  });
+
+  test('the per-record media page does not match', () => {
+    expect(isMediaListPagePath('/tree/ophir/media/M1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isMediaListPagePath('/tree/ophir')).toBe(false);
   });
 });
 

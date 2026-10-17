@@ -172,6 +172,12 @@ export function isIndividualListPagePath(pathname) {
   return /^\/tree\/[^/]+\/individual-list\/?$/.test(pathname);
 }
 
+// /tree/{tree}/media-list: MediaListModule - same exact-match shape as
+// the other list-page matchers above.
+export function isMediaListPagePath(pathname) {
+  return /^\/tree\/[^/]+\/media-list\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -199,7 +205,8 @@ export function isNodeRoute(pathname, searchParams) {
     isNoteListPagePath(pathname) ||
     isLocationListPagePath(pathname) ||
     isFamilyListPagePath(pathname) ||
-    isIndividualListPagePath(pathname)
+    isIndividualListPagePath(pathname) ||
+    isMediaListPagePath(pathname)
   ) {
     return true;
   }
@@ -226,7 +233,8 @@ export function isNodeRoute(pathname, searchParams) {
     isNoteListPagePath(route) ||
     isLocationListPagePath(route) ||
     isFamilyListPagePath(route) ||
-    isIndividualListPagePath(route)
+    isIndividualListPagePath(route) ||
+    isMediaListPagePath(route)
   );
 }
 
