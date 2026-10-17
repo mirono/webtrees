@@ -178,6 +178,13 @@ export function isMediaListPagePath(pathname) {
   return /^\/tree\/[^/]+\/media-list\/?$/.test(pathname);
 }
 
+// /tree/{tree}/ancestors-{style}-{generations}/{xref}: AncestorsChartModule,
+// the FIRST chart route (phase 5 step 27) - style is tree|individuals|families,
+// generations is an integer, both path tokens (not query params).
+export function isAncestorsChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/ancestors-(tree|individuals|families)-\d+\/[^/]+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -206,7 +213,8 @@ export function isNodeRoute(pathname, searchParams) {
     isLocationListPagePath(pathname) ||
     isFamilyListPagePath(pathname) ||
     isIndividualListPagePath(pathname) ||
-    isMediaListPagePath(pathname)
+    isMediaListPagePath(pathname) ||
+    isAncestorsChartPagePath(pathname)
   ) {
     return true;
   }
@@ -234,7 +242,8 @@ export function isNodeRoute(pathname, searchParams) {
     isLocationListPagePath(route) ||
     isFamilyListPagePath(route) ||
     isIndividualListPagePath(route) ||
-    isMediaListPagePath(route)
+    isMediaListPagePath(route) ||
+    isAncestorsChartPagePath(route)
   );
 }
 

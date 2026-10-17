@@ -17,6 +17,7 @@ import {
   isFamilyListPagePath,
   isIndividualListPagePath,
   isMediaListPagePath,
+  isAncestorsChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -316,6 +317,16 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/tree/{tree}/media-list', () => {
     const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fmedia-list');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/ancestors-{style}-{generations}/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/ancestors-tree-4/I1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/ancestors-{style}-{generations}/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fancestors-tree-4%2FI1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
@@ -655,6 +666,29 @@ describe('isMediaListPagePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(isMediaListPagePath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isAncestorsChartPagePath', () => {
+  test('matches the real path shape', () => {
+    expect(isAncestorsChartPagePath('/tree/ophir/ancestors-tree-4/I1')).toBe(true);
+  });
+
+  test('accepts each real style value', () => {
+    expect(isAncestorsChartPagePath('/tree/ophir/ancestors-individuals-4/I1')).toBe(true);
+    expect(isAncestorsChartPagePath('/tree/ophir/ancestors-families-4/I1')).toBe(true);
+  });
+
+  test('rejects an unrecognized style value', () => {
+    expect(isAncestorsChartPagePath('/tree/ophir/ancestors-bogus-4/I1')).toBe(false);
+  });
+
+  test('the per-record individual page does not match', () => {
+    expect(isAncestorsChartPagePath('/tree/ophir/individual/I1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isAncestorsChartPagePath('/tree/ophir')).toBe(false);
   });
 });
 

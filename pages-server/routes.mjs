@@ -368,3 +368,30 @@ export function matchMediaListPagePath(pathname) {
 
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * PHP's route (AncestorsChartModule::ROUTE_URL -
+ * `/tree/{tree}/ancestors-{style}-{generations}/{xref}`) - unlike
+ * every list-page matcher above, this route carries 3 further path
+ * TOKENS (not query params): style (tree|individuals|families, same
+ * values the module's own tokens() call constrains it to -
+ * app/Module/AncestorsChartModule.php:70-75), generations (an
+ * integer), and the subject individual's own xref.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, style: 'tree'|'individuals'|'families', generations: number, xref: string}|null}
+ */
+export function matchAncestorsChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/ancestors-(tree|individuals|families)-(\d+)\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    style: match[2],
+    generations: parseInt(match[3], 10),
+    xref: decodeURIComponent(match[4]),
+  };
+}

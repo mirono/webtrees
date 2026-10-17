@@ -23,6 +23,7 @@ import {
   matchFamilyListPagePath,
   matchIndividualListPagePath,
   matchMediaListPagePath,
+  matchAncestorsChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -541,5 +542,43 @@ describe('matchMediaListPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchMediaListPagePath('/tree/ophir')).toBeNull();
     expect(matchMediaListPagePath('/')).toBeNull();
+  });
+});
+
+describe('matchAncestorsChartPagePath', () => {
+  test('extracts tree, style, generations, and xref', () => {
+    expect(matchAncestorsChartPagePath('/tree/ophir/ancestors-tree-4/I1')).toEqual({
+      tree: 'ophir',
+      style: 'tree',
+      generations: 4,
+      xref: 'I1',
+    });
+  });
+
+  test('accepts each real style value', () => {
+    expect(matchAncestorsChartPagePath('/tree/ophir/ancestors-individuals-4/I1')?.style).toBe('individuals');
+    expect(matchAncestorsChartPagePath('/tree/ophir/ancestors-families-4/I1')?.style).toBe('families');
+  });
+
+  test('rejects an unrecognized style value', () => {
+    expect(matchAncestorsChartPagePath('/tree/ophir/ancestors-bogus-4/I1')).toBeNull();
+  });
+
+  test('rejects a non-numeric generations segment', () => {
+    expect(matchAncestorsChartPagePath('/tree/ophir/ancestors-tree-four/I1')).toBeNull();
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchAncestorsChartPagePath('/tree/ophir/ancestors-tree-4/I1/')).toEqual({
+      tree: 'ophir',
+      style: 'tree',
+      generations: 4,
+      xref: 'I1',
+    });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchAncestorsChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchAncestorsChartPagePath('/tree/ophir/individual/I1')).toBeNull();
   });
 });
