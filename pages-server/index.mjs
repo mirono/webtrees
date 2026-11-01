@@ -78,6 +78,7 @@ import {
   matchIndividualListPagePath,
   matchMediaListPagePath,
   matchAncestorsChartPagePath,
+  matchDescendancyChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -143,6 +144,7 @@ import {
 import { renderMediaListPage } from './media-list-view.mjs';
 import { buildChartBoxViewModel, loadShowHighlightImagesPref, loadShowPrivateRelationshipsPref } from './chart-box.mjs';
 import { renderAncestorsTreeNode, renderAncestorsChartPage } from './ancestors-chart-view.mjs';
+import { renderDescendancyTreeNode, renderDescendancyChartPage } from './descendancy-chart-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -158,6 +160,7 @@ import {
   familyCanShowRecord,
   numberOfChildren,
   getAllMarriageDates,
+  getMarriageDate,
   hasMarriageFact,
   hasDivorceFact,
 } from './family.mjs';
@@ -5005,6 +5008,400 @@ async function handleAncestorsChartPage(req, res, match, url) {
   }
 }
 
+/**
+ * Mirrors Date::julianDay()-based comparators (Family::marriageDateComparator()/
+ * Individual::birthDateComparator()) to the degree this migration's
+ * established "date comparisons via julianDay(), no PHP Collection sort
+ * stability subtleties re-derived" simplification already covers
+ * elsewhere - a record with no usable date sorts LAST (Infinity),
+ * matching real PHP's own "unknown dates sort to the end" convention.
+ */
+function julianDayOrInfinity(dateOrNull) {
+  return dateOrNull !== null && dateOrNull.date.isOK() ? dateOrNull.date.julianDay() : Infinity;
+}
+
+/**
+ * Recursively resolves one node of the descendancy tree - mirrors
+ * resources/views/modules/descendancy_chart/tree.phtml's own recursive
+ * structure (see descendancy-chart-view.mjs's own renderDescendancyTreeNode()
+ * doc comment for the exact shape and the real differences from
+ * buildAncestorsNode() above: multiple families per node, a terminal
+ * (non-recursed) spouse box per family, and a single child-numbering
+ * counter shared across ALL of a node's own families, matching real
+ * PHP's own `$child_number` - declared once, outside the families
+ * loop, in tree.phtml).
+ */
+async function buildDescendancyNode(ctx, individualXref, daboville, generationsRemaining) {
+  const individual = await loadIndividual(pool, ctx.gedcomId, individualXref);
+
+  if (individual === null) {
+    return { box: null, daboville, families: [] };
+  }
+
+  const defaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, individualXref);
+  const box = await buildChartBoxViewModel(
+    pool,
+    ctx.gedcomId,
+    ctx.treeName,
+    ctx.treePrivacyPrefs,
+    ctx.showHighlightImages,
+    individual,
+    ctx.viewerBase,
+    ctx.traversalAccessLevel,
+    defaultResnInfo,
+    ctx.glideKey,
+    ctx.siteUrlConfig,
+  );
+
+  const families = [];
+
+  if (generationsRemaining > 1) {
+    const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, individualXref);
+    const resolvedFamilies = [];
+
+    for (const familyXref of related.spouseFamilies) {
+      const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, familyXref);
+
+      if (shownFamily !== null) {
+        resolvedFamilies.push(shownFamily);
+      }
+    }
+
+    resolvedFamilies.sort((a, b) => julianDayOrInfinity(getMarriageDate(a.facts)) - julianDayOrInfinity(getMarriageDate(b.facts)));
+
+    let childCounter = 0;
+
+    for (const shownFamily of resolvedFamilies) {
+      const isHusband = shownFamily.family.husb === individualXref;
+      const spouseResolved = isHusband ? shownFamily.wife : shownFamily.husband;
+
+      let spouseBox = null;
+
+      if (spouseEntersChart(spouseResolved)) {
+        const spouseDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, spouseResolved.individual.xref);
+
+        spouseBox = await buildChartBoxViewModel(
+          pool,
+          ctx.gedcomId,
+          ctx.treeName,
+          ctx.treePrivacyPrefs,
+          ctx.showHighlightImages,
+          spouseResolved.individual,
+          ctx.viewerBase,
+          ctx.traversalAccessLevel,
+          spouseDefaultResnInfo,
+          ctx.glideKey,
+          ctx.siteUrlConfig,
+        );
+      }
+
+      const showableChildren = shownFamily.children.filter(spouseEntersChart);
+      showableChildren.sort((a, b) => julianDayOrInfinity(getBirthDate(a.facts)) - julianDayOrInfinity(getBirthDate(b.facts)));
+
+      const childNodes = [];
+
+      for (const childResolved of showableChildren) {
+        childCounter += 1;
+        childNodes.push(
+          await buildDescendancyNode(ctx, childResolved.individual.xref, `${daboville}.${childCounter}`, generationsRemaining - 1),
+        );
+      }
+
+      families.push({
+        familyXref: shownFamily.family.xref,
+        marriageSummaryHtml: buildMarriageSummaryHtml(shownFamily.facts),
+        childCount: numberOfChildren(shownFamily.facts),
+        spouseBox,
+        children: childNodes,
+      });
+    }
+  }
+
+  return { box, daboville, families };
+}
+
+/**
+ * Flattens an already-resolved descendancy tree into every node/family
+ * it contains - used by the "individuals"/"families" AJAX styles below
+ * (same simplification already established for Ancestors: these two
+ * secondary views are built from the SAME resolved descendant set as
+ * the "tree" style, not a separately-queried flat BFS).
+ */
+function flattenDescendancyNodes(root) {
+  const nodes = [];
+
+  const visit = (node) => {
+    nodes.push(node);
+    node.families.forEach((family) => family.children.forEach(visit));
+  };
+
+  visit(root);
+
+  return nodes;
+}
+
+async function handleDescendancyChartPage(req, res, match, url) {
+  const { tree: treeName, style, generations, xref } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedStyle = ['tree', 'individuals', 'families'].includes(formData.get('style')) ? formData.get('style') : 'tree';
+    const postedGenerations = Math.max(
+      ANCESTORS_CHART_MIN_GENERATIONS,
+      Math.min(parseInt(formData.get('generations'), 10) || 3, ANCESTORS_CHART_MAX_GENERATIONS),
+    );
+    const postedXref = formData.get('xref') ?? xref;
+
+    res.writeHead(302, {
+      Location: `/tree/${treeName}/descendants-${postedStyle}-${postedGenerations}/${encodeURIComponent(postedXref)}`,
+    });
+    res.end();
+    return;
+  }
+
+  if (generations < ANCESTORS_CHART_MIN_GENERATIONS || generations > ANCESTORS_CHART_MAX_GENERATIONS) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'descendancy_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // DescendancyChartModule has no $access_level override of its own,
+    // same as every other chart/list module - confirmed live: no
+    // wt_module_privacy override row for 'descendancy_chart' either.
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'descendancy_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+
+    const facts = parseFacts(individual.gedcom);
+    const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, viewerBase);
+
+    if (!subjectShown) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const primaryName = extractPrimaryName(individual.gedcom);
+    const individualFullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+    const chartTitle = `Descendants of ${individualFullNameHtml.replace(/<[^>]*>/g, '')}`;
+
+    if (url.searchParams.get('ajax') === '1') {
+      const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+      const glideKey = await loadGlideKey(pool);
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase,
+        traversalAccessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      // Mirrors DescendancyChartModule::handle()'s own `$generations - 1`
+      // for the individuals/families AJAX styles (one fewer than the
+      // "tree" style's own generations count - real PHP's own
+      // chart_service calls pass this explicitly).
+      const root = await buildDescendancyNode(ctx, xref, '1', style === 'tree' ? generations : generations - 1);
+
+      let bodyHtml;
+
+      if (style === 'individuals' || style === 'families') {
+        const flatNodes = flattenDescendancyNodes(root);
+
+        if (style === 'individuals') {
+          const individuals = flatNodes
+            .filter((node) => node.box !== null)
+            .map((node) => ({
+              xref: node.box.xref,
+              url: node.box.url,
+              isPendingAddition: false,
+              isPendingDeletion: false,
+              allNames: [{ type: 'NAME', full: node.box.fullNameHtml }],
+              primaryIndex: 0,
+              sex: node.box.sex,
+              sortName: node.box.fullNameHtml.replace(/<[^>]*>/g, ''),
+              birthDatesHtml: node.box.birthSummaryHtml !== '' ? [node.box.birthSummaryHtml] : [],
+              birthDateSortKey: 0,
+              birthAnniversaryAge: null,
+              birthPlaces: [],
+              birthPlaceSortKey: '',
+              numberOfChildren: 0,
+              deathDatesHtml: node.box.deathSummaryHtml !== '' ? [node.box.deathSummaryHtml] : [],
+              deathDateSortKey: 0,
+              deathAnniversaryAge: null,
+              ageAtDeath: null,
+              deathPlaces: [],
+              deathPlaceSortKey: '',
+              lastChange: null,
+              lastChangeSortKey: 0,
+              sexFilterCode: node.box.sex,
+              birthFilterCode: '',
+              deathFilterCode: '',
+              rootsLeavesFilterCode: '',
+            }));
+
+          bodyHtml = renderIndividualsTable({ individuals, showLastChange: false });
+        } else {
+          const families = flatNodes
+            .flatMap((node) => node.families)
+            .map((family) => ({
+              xref: family.familyXref,
+              url: `/tree/${tree.name}/family/${family.familyXref}`,
+              isPendingAddition: false,
+              isPendingDeletion: false,
+              husband: null,
+              wife: family.spouseBox
+                ? { allNames: [{ type: 'NAME', full: family.spouseBox.fullNameHtml }], primaryIndex: 0, sex: family.spouseBox.sex, url: family.spouseBox.url, sortName: '' }
+                : null,
+              husbandAge: null,
+              wifeAge: null,
+              anniversaryAge: null,
+              marriageDatesHtml: [],
+              marriageDateSortKey: 0,
+              marriageYesNo: null,
+              marriagePlaces: [],
+              marriagePlaceSortKey: '',
+              numberOfChildren: family.childCount,
+              lastChange: null,
+              lastChangeSortKey: 0,
+              marriageFilterCode: '',
+              aliveDeadFilterCode: '',
+              rootsLeavesFilterCode: '',
+            }));
+
+          bodyHtml = renderFamiliesTable({ families, showLastChange: false });
+        }
+      } else {
+        bodyHtml = renderDescendancyTreeNode(root);
+      }
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = `/tree/${tree.name}/descendants-${style}-${generations}/${encodeURIComponent(xref)}?ajax=1`;
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderDescendancyChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: chartTitle,
+      individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
+      generations,
+      minGenerations: ANCESTORS_CHART_MIN_GENERATIONS,
+      maxGenerations: ANCESTORS_CHART_MAX_GENERATIONS,
+      style,
+      ajaxUrl,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve descendancy chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -5168,6 +5565,13 @@ const server = createServer(async (req, res) => {
 
   if (ancestorsChartMatch !== null) {
     await handleAncestorsChartPage(req, res, ancestorsChartMatch, url);
+    return;
+  }
+
+  const descendancyChartMatch = matchDescendancyChartPagePath(url.pathname);
+
+  if (descendancyChartMatch !== null) {
+    await handleDescendancyChartPage(req, res, descendancyChartMatch, url);
     return;
   }
 

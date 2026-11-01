@@ -1,6 +1,6 @@
 # webtrees PHP → JS Migration: Status
 
-**Last updated: 2026-10-17 (step 27: `/tree/{tree}/ancestors-{style}-{generations}/{xref}` (AncestorsChartModule) served entirely by Node — the FIRST chart route, a new category after the "list" family's completion. Built the reusable chart-box component every future chart will share). This is the entry point for "where are we" —
+**Last updated: 2026-11-01 (step 28: `/tree/{tree}/descendants-{style}-{generations}/{xref}` (DescendancyChartModule) served entirely by Node — the SECOND chart route, Ancestors's direct sibling, reusing the chart-box component with no new JS). This is the entry point for "where are we" —
 read this first, then follow links for detail.** Branch: `js-migration-1`
 (a long-lived dev branch off `main`; no branch is literally named
 `js-migration`).
@@ -128,6 +128,7 @@ just adding latency.
 | 5.25 | `/tree/{tree}/individual-list` (IndividualListModule) served entirely by Node — the sixth "list" route, the second AbstractIndividualListModule-based one (fams=false surname queries, individuals-table.phtml's 16-column markup); includes a real birth/death-date ESTIMATION algorithm (family-graph-walking heuristic, ported exactly); visitor-level access (no module override). The "list" family is now COMPLETE except MediaListModule | **Done (2026-10-16)** — [phase5-individual-list.md](phase5-individual-list.md) |
 | 5.26 | `/tree/{tree}/media-list` (MediaListModule) served entirely by Node — the seventh and FINAL "list" route; a search form (folder/subdirs/max/format/filter) + paginated card grid with real image thumbnails (reusing mediaThumbnailUrl() unchanged), not a DataTables table; POST→GET pretty-URL redirect; visitor-level access (no module override). **THE "LIST" FAMILY IS NOW COMPLETE** | **Done (2026-10-17)** — [phase5-media-list.md](phase5-media-list.md) |
 | 5.27 | `/tree/{tree}/ancestors-{style}-{generations}/{xref}` (AncestorsChartModule) served entirely by Node — the FIRST chart route (a new category). Built the shared chart-box component (name/thumbnail/lifespan/birth-death card) every future chart reuses; a recursive Bootstrap-collapsible HTML tree, no new JS needed; fixed a real, confirmed-live SHOW_PRIVATE_RELATIONSHIPS divergence (this tree's own default has it ON) that would otherwise have made chart traversal MORE restrictive than real PHP | **Done (2026-10-17)** — [phase5-ancestors-chart.md](phase5-ancestors-chart.md) |
+| 5.28 | `/tree/{tree}/descendants-{style}-{generations}/{xref}` (DescendancyChartModule) served entirely by Node — Ancestors's direct sibling, full reuse of chart-box/traversalAccessLevel/spouseEntersChart. Real differences ported: multiple spouse families per node (not one parent family), each family's other spouse shown as a terminal (non-recursed) box, children numbered with d'Aboville notation ("1.2.3") sequentially ACROSS all of a node's own families | **Done (2026-11-01)** — [phase5-descendancy-chart.md](phase5-descendancy-chart.md) |
 
 ## Phase 5: full PHP elimination (in progress)
 
