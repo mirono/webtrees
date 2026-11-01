@@ -24,6 +24,7 @@ import {
   matchIndividualListPagePath,
   matchMediaListPagePath,
   matchAncestorsChartPagePath,
+  matchDescendancyChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -580,5 +581,30 @@ describe('matchAncestorsChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchAncestorsChartPagePath('/tree/ophir')).toBeNull();
     expect(matchAncestorsChartPagePath('/tree/ophir/individual/I1')).toBeNull();
+  });
+});
+
+describe('matchDescendancyChartPagePath', () => {
+  test('extracts tree, style, generations, and xref', () => {
+    expect(matchDescendancyChartPagePath('/tree/ophir/descendants-tree-3/I1')).toEqual({
+      tree: 'ophir',
+      style: 'tree',
+      generations: 3,
+      xref: 'I1',
+    });
+  });
+
+  test('accepts each real style value', () => {
+    expect(matchDescendancyChartPagePath('/tree/ophir/descendants-individuals-3/I1')?.style).toBe('individuals');
+    expect(matchDescendancyChartPagePath('/tree/ophir/descendants-families-3/I1')?.style).toBe('families');
+  });
+
+  test('rejects an unrecognized style value', () => {
+    expect(matchDescendancyChartPagePath('/tree/ophir/descendants-bogus-3/I1')).toBeNull();
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchDescendancyChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchDescendancyChartPagePath('/tree/ophir/ancestors-tree-3/I1')).toBeNull();
   });
 });

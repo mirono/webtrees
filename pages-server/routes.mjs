@@ -395,3 +395,26 @@ export function matchAncestorsChartPagePath(pathname) {
     xref: decodeURIComponent(match[4]),
   };
 }
+
+/**
+ * PHP's route (DescendancyChartModule::ROUTE_URL -
+ * `/tree/{tree}/descendants-{style}-{generations}/{xref}`) - same
+ * shape as matchAncestorsChartPagePath() above.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, style: 'tree'|'individuals'|'families', generations: number, xref: string}|null}
+ */
+export function matchDescendancyChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/descendants-(tree|individuals|families)-(\d+)\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    style: match[2],
+    generations: parseInt(match[3], 10),
+    xref: decodeURIComponent(match[4]),
+  };
+}

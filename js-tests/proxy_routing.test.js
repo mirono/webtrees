@@ -18,6 +18,7 @@ import {
   isIndividualListPagePath,
   isMediaListPagePath,
   isAncestorsChartPagePath,
+  isDescendancyChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -327,6 +328,16 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/tree/{tree}/ancestors-{style}-{generations}/{xref}', () => {
     const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fancestors-tree-4%2FI1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/descendants-{style}-{generations}/{xref} is a Node route', () => {
+    const url = urlFor('/tree/ophir/descendants-tree-3/I1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/descendants-{style}-{generations}/{xref}', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fdescendants-tree-3%2FI1');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 
@@ -689,6 +700,21 @@ describe('isAncestorsChartPagePath', () => {
 
   test('an unrelated path does not match', () => {
     expect(isAncestorsChartPagePath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isDescendancyChartPagePath', () => {
+  test('matches the real path shape', () => {
+    expect(isDescendancyChartPagePath('/tree/ophir/descendants-tree-3/I1')).toBe(true);
+  });
+
+  test('rejects an unrecognized style value', () => {
+    expect(isDescendancyChartPagePath('/tree/ophir/descendants-bogus-3/I1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isDescendancyChartPagePath('/tree/ophir')).toBe(false);
+    expect(isDescendancyChartPagePath('/tree/ophir/ancestors-tree-3/I1')).toBe(false);
   });
 });
 

@@ -185,6 +185,12 @@ export function isAncestorsChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/ancestors-(tree|individuals|families)-\d+\/[^/]+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/descendants-{style}-{generations}/{xref}: DescendancyChartModule
+// (phase 5 step 28) - same shape as isAncestorsChartPagePath() above.
+export function isDescendancyChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/descendants-(tree|individuals|families)-\d+\/[^/]+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -214,7 +220,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFamilyListPagePath(pathname) ||
     isIndividualListPagePath(pathname) ||
     isMediaListPagePath(pathname) ||
-    isAncestorsChartPagePath(pathname)
+    isAncestorsChartPagePath(pathname) ||
+    isDescendancyChartPagePath(pathname)
   ) {
     return true;
   }
@@ -243,7 +250,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFamilyListPagePath(route) ||
     isIndividualListPagePath(route) ||
     isMediaListPagePath(route) ||
-    isAncestorsChartPagePath(route)
+    isAncestorsChartPagePath(route) ||
+    isDescendancyChartPagePath(route)
   );
 }
 
