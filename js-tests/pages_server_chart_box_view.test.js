@@ -22,6 +22,7 @@ function baseBox(overrides = {}) {
     url: '/tree/ophir/individual/I1',
     canShow: true,
     fullNameHtml: '<span>John Smith</span>',
+    alternateNameHtml: '',
     sex: 'M',
     lifespanText: '1900–1980',
     birthSummaryHtml: '',
@@ -61,13 +62,26 @@ describe('renderChartBox', () => {
     expect(html).toContain('<img class="wt-chart-box-thumbnail" src="/tree/ophir/media-thumbnail?s=abc" alt="">');
   });
 
-  test('birth/death fact rows only appear when their summary is non-empty', () => {
-    const neither = renderChartBox(baseBox());
-    const both = renderChartBox(baseBox({ birthSummaryHtml: 'born text', deathSummaryHtml: 'died text' }));
+  test('the wt-chart-box-fact wrapper is always present, even with no facts (matches real PHP - never conditional)', () => {
+    const html = renderChartBox(baseBox());
+    expect(html).toContain('<div class="wt-chart-box-fact small"></div>');
+  });
 
-    expect(neither).not.toContain('wt-chart-box-fact small');
-    expect(both).toContain('born text');
-    expect(both).toContain('died text');
+  test('birth/death fact summaries are concatenated INSIDE the same single wt-chart-box-fact wrapper', () => {
+    const html = renderChartBox(baseBox({ birthSummaryHtml: '<div class="fact_BIRT">born text</div>', deathSummaryHtml: '<div class="fact_DEAT">died text</div>' }));
+
+    expect(html).toContain('<div class="wt-chart-box-fact small"><div class="fact_BIRT">born text</div><div class="fact_DEAT">died text</div></div>');
+    expect(html.match(/wt-chart-box-fact small/g)).toHaveLength(1);
+  });
+
+  test('the alternate-name row is always rendered, raw (pre-escaped) HTML, empty when there is no alternate name', () => {
+    const html = renderChartBox(baseBox({ alternateNameHtml: '' }));
+    expect(html).toContain('<div class="wt-chart-box-name wt-chart-box-name-alt"></div>');
+  });
+
+  test('a real alternate name (e.g. Hebrew) renders in its own row', () => {
+    const html = renderChartBox(baseBox({ alternateNameHtml: '<span dir="auto">משה כנרי</span>' }));
+    expect(html).toContain('<div class="wt-chart-box-name wt-chart-box-name-alt"><span dir="auto">משה כנרי</span></div>');
   });
 
   test('the lifespan text is escaped', () => {

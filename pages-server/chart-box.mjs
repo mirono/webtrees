@@ -34,8 +34,10 @@ import {
   parseFacts,
   isDead,
   canShowRecord,
+  canShowName,
   extractAllNameFacts,
   getPrimaryNameIndex,
+  extractAlternateName,
   sex,
   getBirthDate,
   getDeathDate,
@@ -96,18 +98,34 @@ export async function loadShowPrivateRelationshipsPref(pool, gedcomId) {
   return value === '1';
 }
 
+// Mirrors Fact::label()'s element-factory fallback for the small, fixed
+// set of tags factSummaryHtml() below is ever called with (BIRTH_EVENT_TAGS/
+// DEATH_EVENT_TAGS) - verified against app/Gedcom.php's real 'INDI:TAG'
+// element definitions, same convention as individual-view.mjs's own
+// (unexported, per-file) FACT_LABELS map.
+const FACT_LABELS = {
+  BIRT: 'Birth',
+  CHR: 'Christening',
+  BAPM: 'Baptism',
+  DEAT: 'Death',
+  BURI: 'Burial',
+  CREM: 'Cremation',
+};
+
 /**
  * Mirrors Fact::summary()'s simplified shape (app/Fact.php:388-420) for
  * a plain dated/placed event fact (no linked-record target, the only
- * case BIRT/DEAT facts are) - value (if not 'Y'), date, place, each
- * already-escaped/HTML as appropriate. SHOW_PARENTS_AGE's extra
- * parents'-age annotation is not ported (see this file's own doc
- * comment).
+ * case BIRT/DEAT facts are) - a `<div class="fact_TAG">` wrapping a
+ * bold `<span class="label">Birth</span>: ` prefix plus value (if not
+ * 'Y'), date, place, each already-escaped/HTML as appropriate.
+ * SHOW_PARENTS_AGE's extra parents'-age annotation is not ported (see
+ * this file's own doc comment).
  *
  * @param {string} fact
  * @returns {string} already-safe HTML, '' if the fact has nothing to summarize
  */
 function factSummaryHtml(fact) {
+  const tag = factTag(fact);
   const valueMatch = /^1 \S+ (.+)/.exec(fact);
   const value = valueMatch ? valueMatch[1] : '';
   const dateMatch = /\n2 DATE (.+)/.exec(fact);
@@ -131,7 +149,13 @@ function factSummaryHtml(fact) {
     parts.push(escapeHtml(placeMatch[1]));
   }
 
-  return parts.join(' — ');
+  if (parts.length === 0) {
+    return '';
+  }
+
+  const label = FACT_LABELS[tag] ?? tag;
+
+  return `<div class="fact_${escapeHtml(tag)}"><span class="label">${escapeHtml(label)}</span>: <span class="field" dir="auto">${parts.join(' — ')}</span></div>`;
 }
 
 function escapeHtml(value) {
@@ -241,6 +265,13 @@ export async function buildChartBoxViewModel(
   // the box itself still renders (just without a link or thumbnail).
   const fullNameHtml = canShow && primaryName !== null ? primaryName.full : '<span class="NAME" dir="auto" translate="no">Private</span>';
 
+  // Mirrors alternateName()'s own (weaker) canShowName() gate - not
+  // canShow() - same distinction already established for family-member
+  // name resolution elsewhere in this migration (see canShowName()'s
+  // own doc comment in individual.mjs).
+  const canShowNameOnly = canShowName(treeForPrivacy, individual.gedcom, facts, viewer);
+  const alternateNameHtml = extractAlternateName(individual.gedcom, canShowNameOnly) ?? '';
+
   const birthDate = getBirthDate(facts);
   const deathDate = getDeathDate(facts);
   const lifespanText = lifespan({ birthDate, deathDate, isDead: dead });
@@ -278,6 +309,7 @@ export async function buildChartBoxViewModel(
     url: `/tree/${treeName}/individual/${individual.xref}`,
     canShow,
     fullNameHtml,
+    alternateNameHtml,
     sex: sex(individual.gedcom),
     lifespanText,
     birthSummaryHtml,

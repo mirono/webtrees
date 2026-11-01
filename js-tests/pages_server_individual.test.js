@@ -26,6 +26,8 @@ import {
   nameSubTagAttributes,
   extractPrimaryName,
   extractAllNameFacts,
+  extractAllNameFactsWithSubtagNames,
+  extractAlternateName,
   getPrimaryNameIndex,
   getBirthDate,
   getDeathDate,
@@ -325,6 +327,67 @@ describe('getPrimaryNameIndex', () => {
 
   test('defaults to 0 for an empty array', () => {
     expect(getPrimaryNameIndex([])).toBe(0);
+  });
+});
+
+describe('extractAllNameFactsWithSubtagNames', () => {
+  test('a plain NAME fact with no sub-tags yields exactly one entry', () => {
+    const names = extractAllNameFactsWithSubtagNames('1 NAME John /Smith/');
+    expect(names).toHaveLength(1);
+    expect(names[0].type).toBe('NAME');
+  });
+
+  test('a _HEB sub-tag becomes its OWN separate name entry, type "_HEB"', () => {
+    const names = extractAllNameFactsWithSubtagNames('1 NAME Moshe /Kanari/\n2 _HEB משה /כנרי/');
+    expect(names).toHaveLength(2);
+    expect(names[0].type).toBe('NAME');
+    expect(names[0].full).toContain('Moshe');
+    expect(names[1].type).toBe('_HEB');
+    expect(names[1].full).toContain('כנרי');
+  });
+
+  test('ROMN and FONE sub-tags also become separate entries', () => {
+    const names = extractAllNameFactsWithSubtagNames('1 NAME Moshe /Kanari/\n2 ROMN Moshe Kanari\n2 FONE Moshe Kanari');
+    expect(names.map((n) => n.type)).toEqual(['NAME', 'ROMN', 'FONE']);
+  });
+
+  test('_RUFNAME is excluded (not a displayable alternate name)', () => {
+    const names = extractAllNameFactsWithSubtagNames('1 NAME Moshe /Kanari/\n2 _RUFNAME Moshe');
+    expect(names).toHaveLength(1);
+  });
+
+  test('a MARRIED-type NAME is tagged _MARNM, same as a plain NAME fact', () => {
+    const names = extractAllNameFactsWithSubtagNames('1 NAME Jane /Smith/\n2 TYPE married');
+    expect(names[0].type).toBe('_MARNM');
+  });
+
+  test('multiple NAME facts each contribute their own sub-tags independently', () => {
+    const names = extractAllNameFactsWithSubtagNames('1 NAME Moshe /Kanari/\n2 _HEB משה /כנרי/\n1 NAME Rita /Keidan/');
+    expect(names.map((n) => n.type)).toEqual(['NAME', '_HEB', 'NAME']);
+  });
+});
+
+describe('extractAlternateName', () => {
+  test('null when canShow is false', () => {
+    expect(extractAlternateName('1 NAME Moshe /Kanari/\n2 _HEB משה /כנרי/', false)).toBeNull();
+  });
+
+  test('null when every name shares the primary script', () => {
+    expect(extractAlternateName('1 NAME John /Smith/\n1 NAME Johnny /Smith/', true)).toBeNull();
+  });
+
+  test('the Hebrew sub-tag name when it is the first different-script entry', () => {
+    const alt = extractAlternateName('1 NAME Moshe /Kanari/\n2 _HEB משה /כנרי/', true);
+    expect(alt).toContain('כנרי');
+  });
+
+  test('a _MARNM entry is skipped even if it is a different script', () => {
+    const alt = extractAlternateName('1 NAME Moshe /Kanari/\n1 NAME משה /כנרי/\n2 TYPE married', true);
+    expect(alt).toBeNull();
+  });
+
+  test('null for an individual with no NAME fact at all', () => {
+    expect(extractAlternateName('1 SEX M', true)).toBeNull();
   });
 });
 

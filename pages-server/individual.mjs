@@ -397,6 +397,98 @@ export function getPrimaryNameIndex(allNames) {
   return 0;
 }
 
+/**
+ * Mirrors GedcomRecord::extractNamesFromFacts()'s own sub-tag handling
+ * (app/GedcomRecord.php:894-899): a NAME fact's own ROMN/FONE/_<custom>
+ * sub-tag (e.g. "2 _HEB ..." - a Hebrew transliteration) becomes a FULL
+ * SEPARATE name entry in getAllNames(), not just a Names-tab attribute
+ * row (see nameSubTagAttributes() above, a different, display-only
+ * purpose). Reproduces the same real quirk this entails: every sub-tag
+ * entry is built via addName(value, remainder) where `remainder` is
+ * the SAME "everything after the name's own value line" text for every
+ * sub-tag found in this NAME fact (not each sub-tag's own trailing
+ * lines) - since `remainder` always starts with "\n", addName()'s own
+ * `1 + Number(gedcom[0])` sublevel calculation always comes out as 1,
+ * so GIVN/SURN never match for a sub-tag entry (real PHP has the exact
+ * same `(int) substr($gedcom, 0, 1)` quirk for the same reason) -
+ * replicated exactly, not fixed, per this migration's established
+ * "match real PHP's quirks, don't improve on them" convention.
+ *
+ * @param {string} gedcom the individual's raw record text
+ * @returns {{full: string, fullNN: string, sort: string, givn: string, surn: string, surname: string, type: string}[]}
+ */
+export function extractAllNameFactsWithSubtagNames(gedcom) {
+  const facts = parseFacts(gedcom);
+  const results = [];
+
+  for (const nameFact of facts) {
+    if (factTag(nameFact) !== 'NAME') {
+      continue;
+    }
+
+    const lineMatch = /^1 NAME (.+)/.exec(nameFact);
+
+    if (!lineMatch) {
+      continue;
+    }
+
+    const remainder = nameFact.slice(lineMatch[0].length);
+    const type = /\n2 TYPE MARRIED/i.test(nameFact) ? '_MARNM' : 'NAME';
+
+    results.push({ ...addName(lineMatch[1], nameFact), type });
+
+    for (const subMatch of remainder.matchAll(/^2 (ROMN|FONE|_\w+) (.+)/gm)) {
+      const [, subTag, subValue] = subMatch;
+
+      if (subTag === '_RUFNAME') {
+        continue;
+      }
+
+      results.push({ ...addName(subValue, remainder), type: subTag });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Mirrors GedcomRecord::alternateName() (app/GedcomRecord.php:437-446):
+ * the full name of the first OTHER name entry (via getAllNames(),
+ * including ROMN/FONE/_<custom> sub-tag entries - see
+ * extractAllNameFactsWithSubtagNames() above) whose SORT text is in a
+ * DIFFERENT script than the primary name's own, excluding `_MARNM` -
+ * or null if every name entry shares the primary's script (the common
+ * case). Used by chart-box's own `wt-chart-box-name-alt` line.
+ *
+ * @param {string} gedcom the individual's raw record text
+ * @param {boolean} canShow GedcomRecord::alternateName()'s own canShowName() gate
+ * @returns {string|null} pre-escaped safe HTML (same convention as `full`), or null
+ */
+export function extractAlternateName(gedcom, canShow) {
+  if (!canShow) {
+    return null;
+  }
+
+  const allNames = extractAllNameFactsWithSubtagNames(gedcom);
+
+  if (allNames.length === 0) {
+    return null;
+  }
+
+  const primaryIndex = getPrimaryNameIndex(allNames);
+  const primaryScript = textScript(allNames[primaryIndex].sort);
+  let secondaryIndex = primaryIndex;
+
+  for (let n = 0; n < allNames.length; n += 1) {
+    if (n !== primaryIndex && allNames[n].type !== '_MARNM' && textScript(allNames[n].sort) !== primaryScript) {
+      secondaryIndex = n;
+      break;
+    }
+  }
+
+  return secondaryIndex !== primaryIndex ? allNames[secondaryIndex].full : null;
+}
+
 function dateForTagList(facts, tagList) {
   for (const tag of tagList) {
     for (const fact of facts) {

@@ -23,6 +23,7 @@ const baseTreePrivacyPrefs = {
   maxAliveAge: 120,
   showDeadPeople: 2,
   showNoWatermark: 1,
+  showLivingNames: 1,
 };
 const baseViewerBase = { accessLevel: 2, isSelfRecord: false, relationshipGateBlocked: false };
 const baseSiteUrlConfig = { baseUrl: '', rewriteUrls: false };
@@ -108,6 +109,81 @@ describe('buildChartBoxViewModel', () => {
     expect(box.lifespanText).toBe('1900–1980');
     expect(box.birthSummaryHtml).toContain('London');
     expect(box.deathSummaryHtml).toContain('Paris');
+  });
+
+  test('birth/death summaries carry the real bold label prefix and fact_TAG wrapper (Fact::summary())', async () => {
+    const box = await buildChartBoxViewModel(
+      null,
+      1,
+      'ophir',
+      baseTreePrivacyPrefs,
+      false,
+      individualWith('1 NAME John /Smith/\n1 SEX M\n1 BIRT\n2 DATE 1 JAN 1900\n2 PLAC London\n1 DEAT\n2 DATE 1 JAN 1980\n2 PLAC Paris'),
+      baseViewerBase,
+      2,
+      noDefaultResn,
+      null,
+      baseSiteUrlConfig,
+    );
+
+    expect(box.birthSummaryHtml).toContain('<div class="fact_BIRT">');
+    expect(box.birthSummaryHtml).toContain('<span class="label">Birth</span>');
+    expect(box.deathSummaryHtml).toContain('<div class="fact_DEAT">');
+    expect(box.deathSummaryHtml).toContain('<span class="label">Death</span>');
+  });
+
+  test('no alternate name when every NAME fact shares the same script', async () => {
+    const box = await buildChartBoxViewModel(
+      null,
+      1,
+      'ophir',
+      baseTreePrivacyPrefs,
+      false,
+      individualWith('1 NAME John /Smith/\n1 SEX M'),
+      baseViewerBase,
+      2,
+      noDefaultResn,
+      null,
+      baseSiteUrlConfig,
+    );
+
+    expect(box.alternateNameHtml).toBe('');
+  });
+
+  test('a NAME fact\'s own _HEB sub-tag becomes a real alternate name (different script)', async () => {
+    const box = await buildChartBoxViewModel(
+      null,
+      1,
+      'ophir',
+      baseTreePrivacyPrefs,
+      false,
+      individualWith('1 NAME Moshe /Kanari/\n2 _HEB משה /כנרי/\n1 SEX M'),
+      baseViewerBase,
+      2,
+      noDefaultResn,
+      null,
+      baseSiteUrlConfig,
+    );
+
+    expect(box.alternateNameHtml).toContain('כנרי');
+  });
+
+  test('no alternate name when the individual cannot be shown even by name', async () => {
+    const box = await buildChartBoxViewModel(
+      null,
+      1,
+      'ophir',
+      { ...baseTreePrivacyPrefs, hideLivePeople: true, showLivingNames: 0 },
+      false,
+      individualWith('1 NAME Moshe /Kanari/\n2 _HEB משה /כנרי/\n1 SEX M\n1 RESN confidential'),
+      baseViewerBase,
+      2,
+      noDefaultResn,
+      null,
+      baseSiteUrlConfig,
+    );
+
+    expect(box.alternateNameHtml).toBe('');
   });
 
   test('no thumbnail when glideKey is null (no displayable image expected)', async () => {

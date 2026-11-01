@@ -28,8 +28,9 @@ function escapeHtml(value) {
 /**
  * @param {{
  *   xref: string, url: string, canShow: boolean, fullNameHtml: string,
- *   sex: string, lifespanText: string, birthSummaryHtml: string,
- *   deathSummaryHtml: string, thumbnailUrl: string|null,
+ *   alternateNameHtml: string, sex: string, lifespanText: string,
+ *   birthSummaryHtml: string, deathSummaryHtml: string,
+ *   thumbnailUrl: string|null,
  * }|null} box null renders an empty placeholder box, matching real
  *   PHP's own `if ($individual === null) { echo '<div class="wt-chart-box"></div>'; }`
  *   - used for a family with no resolvable husband/wife.
@@ -50,14 +51,19 @@ export function renderChartBox(box) {
     </div>`
       : '';
 
-  const birthHtml = box.birthSummaryHtml !== '' ? `<div class="wt-chart-box-fact small">${box.birthSummaryHtml}</div>` : '';
-  const deathHtml = box.deathSummaryHtml !== '' ? `<div class="wt-chart-box-fact small">${box.deathSummaryHtml}</div>` : '';
+  // Mirrors chart-box.phtml's own single `wt-chart-box-fact` wrapper
+  // around BOTH fact summaries (each already its own `<div class="fact_TAG">`
+  // from Fact::summary(), built in chart-box.mjs's factSummaryHtml()) -
+  // not one `wt-chart-box-fact` div per fact.
+  const factsHtml = `${box.birthSummaryHtml}${box.deathSummaryHtml}`;
 
   return `
     <div class="wt-chart-box wt-chart-box-${escapeHtml(box.sex.toLowerCase())} overflow-hidden" data-wt-chart-xref="${escapeHtml(box.xref)}">${thumbnailHtml}
         <div class="wt-chart-box-name">${nameHtml}</div>
+        <div class="wt-chart-box-name wt-chart-box-name-alt">${box.alternateNameHtml}</div>
         <div class="wt-chart-box-lifespan">${escapeHtml(box.lifespanText)}</div>
-        <div class="wt-chart-box-facts">${birthHtml}${deathHtml}
+        <div class="wt-chart-box-facts">
+        <div class="wt-chart-box-fact small">${factsHtml}</div>
         </div>
     </div>`;
 }
