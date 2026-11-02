@@ -191,6 +191,23 @@ export function isDescendancyChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/descendants-(tree|individuals|families)-\d+\/[^/]+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/hourglass-{generations}-{spouses}/{xref}: HourglassChartModule
+// - no "style" token, a boolean "0"/"1" token in its place.
+export function isHourglassChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/hourglass-\d+-[01]\/[^/]+\/?$/.test(pathname);
+}
+
+// /module/hourglass_chart/{Ancestors|Descendants}/{tree}: the lazy-load
+// "expand one more generation" arrow endpoints behind HourglassChartModule's
+// own getAncestorsAction()/getDescendantsAction() - the first (deliberately
+// narrow) use of PHP's generic `/module/{module}/{action}/{tree}` route
+// shape in this migration. See pages-server/routes.mjs's
+// matchHourglassChartActionPath() doc comment for why it's scoped to just
+// this one module's two actions.
+export function isHourglassChartActionPath(pathname) {
+  return /^\/module\/hourglass_chart\/(Ancestors|Descendants)\/[^/]+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -221,7 +238,9 @@ export function isNodeRoute(pathname, searchParams) {
     isIndividualListPagePath(pathname) ||
     isMediaListPagePath(pathname) ||
     isAncestorsChartPagePath(pathname) ||
-    isDescendancyChartPagePath(pathname)
+    isDescendancyChartPagePath(pathname) ||
+    isHourglassChartPagePath(pathname) ||
+    isHourglassChartActionPath(pathname)
   ) {
     return true;
   }
@@ -251,7 +270,9 @@ export function isNodeRoute(pathname, searchParams) {
     isIndividualListPagePath(route) ||
     isMediaListPagePath(route) ||
     isAncestorsChartPagePath(route) ||
-    isDescendancyChartPagePath(route)
+    isDescendancyChartPagePath(route) ||
+    isHourglassChartPagePath(route) ||
+    isHourglassChartActionPath(route)
   );
 }
 

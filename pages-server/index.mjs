@@ -79,6 +79,8 @@ import {
   matchMediaListPagePath,
   matchAncestorsChartPagePath,
   matchDescendancyChartPagePath,
+  matchHourglassChartPagePath,
+  matchHourglassChartActionPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -145,6 +147,12 @@ import { renderMediaListPage } from './media-list-view.mjs';
 import { buildChartBoxViewModel, loadShowHighlightImagesPref, loadShowPrivateRelationshipsPref } from './chart-box.mjs';
 import { renderAncestorsTreeNode, renderAncestorsChartPage } from './ancestors-chart-view.mjs';
 import { renderDescendancyTreeNode, renderDescendancyChartPage } from './descendancy-chart-view.mjs';
+import {
+  renderHourglassChart,
+  renderHourglassChartPage,
+  renderHourglassAncestorsNode,
+  renderHourglassDescendantsNode,
+} from './hourglass-chart-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -5402,6 +5410,674 @@ async function handleDescendancyChartPage(req, res, match, url) {
   }
 }
 
+// Mirrors HourglassChartModule::MINIMUM_GENERATIONS/MAXIMUM_GENERATIONS
+// (app/Module/HourglassChartModule.php:53,55) - same values as
+// AncestorsChartModule/DescendancyChartModule, kept as its own pair of
+// constants (not reused) since real PHP defines them separately too.
+const HOURGLASS_CHART_MIN_GENERATIONS = 2;
+const HOURGLASS_CHART_MAX_GENERATIONS = 63;
+
+/**
+ * Recursively resolves one "parents" node of the hourglass chart -
+ * mirrors resources/views/modules/hourglass-chart/parents.phtml's own
+ * recursive structure exactly (see hourglass-chart-view.mjs's own
+ * renderHourglassAncestorsNode() doc comment for the shape): a family,
+ * each side (husband/wife) with its own box (null if that side fails
+ * its own canShowName() gate - Family::husband()/wife()'s own weaker
+ * gate, same as spouseEntersChart() elsewhere in this file) and, only
+ * when that side HAS a box AND has its own parent family, either a
+ * nested recursive call (generations remain) or a lazy-load arrow
+ * (they don't - mirrors getAncestorsAction(), which always resolves
+ * exactly one more generation, generations=1 fixed).
+ *
+ * Returns null when there's no parent family at all (same condition
+ * real PHP checks before calling this view in the first place -
+ * chart.phtml's own `$individual->childFamilies()->first() !== null`),
+ * so this same function serves BOTH the main chart's own first call
+ * (on the root individual) and every recursive call (on a parent) and
+ * the lazy-load action's own entry point (on a specific family xref)
+ * without the caller needing to special-case any of the three.
+ */
+async function buildHourglassAncestorsNode(ctx, individualXref, generationsRemaining) {
+  const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, individualXref);
+  const familyXref = related.parentFamilies[0] ?? null;
+
+  if (familyXref === null) {
+    return null;
+  }
+
+  const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, familyXref);
+
+  if (shownFamily === null) {
+    return null;
+  }
+
+  const buildSide = async (resolvedMember) => {
+    if (!spouseEntersChart(resolvedMember)) {
+      return { box: null, further: null };
+    }
+
+    const memberDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, resolvedMember.individual.xref);
+    const box = await buildChartBoxViewModel(
+      pool,
+      ctx.gedcomId,
+      ctx.treeName,
+      ctx.treePrivacyPrefs,
+      ctx.showHighlightImages,
+      resolvedMember.individual,
+      ctx.viewerBase,
+      ctx.traversalAccessLevel,
+      memberDefaultResnInfo,
+      ctx.glideKey,
+      ctx.siteUrlConfig,
+    );
+
+    const memberRelated = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, resolvedMember.individual.xref);
+    const ownParentFamilyXref = memberRelated.parentFamilies[0] ?? null;
+
+    if (ownParentFamilyXref === null) {
+      return { box, further: null };
+    }
+
+    if (generationsRemaining > 1) {
+      const nested = await buildHourglassAncestorsNode(ctx, resolvedMember.individual.xref, generationsRemaining - 1);
+
+      return { box, further: nested !== null ? { kind: 'nested', node: nested } : null };
+    }
+
+    return { box, further: { kind: 'arrow', familyXref: ownParentFamilyXref } };
+  };
+
+  const husband = await buildSide(shownFamily.husband);
+  const wife = await buildSide(shownFamily.wife);
+
+  return { familyXref, husband, wife };
+}
+
+/**
+ * Recursively resolves one "children" node of the hourglass chart -
+ * mirrors resources/views/modules/hourglass-chart/children.phtml's own
+ * recursive structure exactly (see hourglass-chart-view.mjs's own
+ * renderHourglassDescendantsNode() doc comment for the shape). Unlike
+ * buildHourglassAncestorsNode() above, a child's own box is NEVER null
+ * here - `children` is already every member of `resolvedChildren` that
+ * passed Family::children()'s own canShowName() filter (the same
+ * `.filter(spouseEntersChart)` convention established by
+ * buildDescendancyNode() above), so the box always gets built; only
+ * the FURTHER-descent decision (nested vs. lazy-load arrow) depends on
+ * whether grandchildren exist and whether generations remain - mirrors
+ * getDescendantsAction(), which always resolves exactly one more
+ * generation, generations=1 fixed.
+ *
+ * @param {object} ctx
+ * @param {Array<{individual: object, facts: string[]}>} resolvedChildren already canShowName()-filtered
+ * @param {number} generationsRemaining
+ * @param {boolean} spouses
+ */
+async function buildHourglassDescendantsNode(ctx, resolvedChildren, generationsRemaining, spouses) {
+  const items = [];
+
+  for (const childResolved of resolvedChildren) {
+    const childXref = childResolved.individual.xref;
+    const childDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, childXref);
+    const box = await buildChartBoxViewModel(
+      pool,
+      ctx.gedcomId,
+      ctx.treeName,
+      ctx.treePrivacyPrefs,
+      ctx.showHighlightImages,
+      childResolved.individual,
+      ctx.viewerBase,
+      ctx.traversalAccessLevel,
+      childDefaultResnInfo,
+      ctx.glideKey,
+      ctx.siteUrlConfig,
+    );
+
+    const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, childXref);
+    const resolvedSpouseFamilies = [];
+
+    for (const spouseFamilyXref of related.spouseFamilies) {
+      const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, spouseFamilyXref);
+
+      if (shownFamily !== null) {
+        resolvedSpouseFamilies.push(shownFamily);
+      }
+    }
+
+    const grandchildren = resolvedSpouseFamilies.flatMap((shownFamily) => shownFamily.children.filter(spouseEntersChart));
+
+    let further = null;
+
+    if (grandchildren.length > 0) {
+      if (generationsRemaining > 1) {
+        further = { kind: 'nested', items: await buildHourglassDescendantsNode(ctx, grandchildren, generationsRemaining - 1, spouses) };
+      } else {
+        further = { kind: 'arrow', xref: childXref };
+      }
+    }
+
+    const spouseBoxes = [];
+
+    if (spouses) {
+      for (const shownFamily of resolvedSpouseFamilies) {
+        const isHusband = shownFamily.family.husb === childXref;
+        const spouseResolved = isHusband ? shownFamily.wife : shownFamily.husband;
+
+        if (spouseEntersChart(spouseResolved)) {
+          const spouseDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, spouseResolved.individual.xref);
+          spouseBoxes.push(
+            await buildChartBoxViewModel(
+              pool,
+              ctx.gedcomId,
+              ctx.treeName,
+              ctx.treePrivacyPrefs,
+              ctx.showHighlightImages,
+              spouseResolved.individual,
+              ctx.viewerBase,
+              ctx.traversalAccessLevel,
+              spouseDefaultResnInfo,
+              ctx.glideKey,
+              ctx.siteUrlConfig,
+            ),
+          );
+        } else {
+          spouseBoxes.push(null);
+        }
+      }
+    }
+
+    items.push({ box, spouseBoxes, further });
+  }
+
+  return items;
+}
+
+async function handleHourglassChartPage(req, res, match, url) {
+  const { tree: treeName, generations, spouses, xref } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // Mirrors HourglassChartModule::handle()'s own "Convert POST requests
+  // into GET requests for pretty URLs" - same path-segment redirect
+  // shape as Ancestors/Descendancy above.
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedGenerations = Math.max(
+      HOURGLASS_CHART_MIN_GENERATIONS,
+      Math.min(parseInt(formData.get('generations'), 10) || 3, HOURGLASS_CHART_MAX_GENERATIONS),
+    );
+    const postedSpouses = formData.get('spouses') !== null ? '1' : '0';
+    const postedXref = formData.get('xref') ?? xref;
+
+    res.writeHead(302, {
+      Location: `/tree/${treeName}/hourglass-${postedGenerations}-${postedSpouses}/${encodeURIComponent(postedXref)}`,
+    });
+    res.end();
+    return;
+  }
+
+  if (generations < HOURGLASS_CHART_MIN_GENERATIONS || generations > HOURGLASS_CHART_MAX_GENERATIONS) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'hourglass_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // HourglassChartModule has no $access_level override of its own,
+    // same as every other chart/list module.
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'hourglass_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+
+    const facts = parseFacts(individual.gedcom);
+    const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, viewerBase);
+
+    if (!subjectShown) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const primaryName = extractPrimaryName(individual.gedcom);
+    const individualFullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+    const chartTitle = `Hourglass chart of ${individualFullNameHtml.replace(/<[^>]*>/g, '')}`;
+
+    if (url.searchParams.get('ajax') === '1') {
+      const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+      const glideKey = await loadGlideKey(pool);
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase,
+        traversalAccessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      const individualBox = await buildChartBoxViewModel(
+        pool,
+        ctx.gedcomId,
+        ctx.treeName,
+        ctx.treePrivacyPrefs,
+        ctx.showHighlightImages,
+        individual,
+        ctx.viewerBase,
+        ctx.traversalAccessLevel,
+        defaultResnInfo,
+        ctx.glideKey,
+        ctx.siteUrlConfig,
+      );
+
+      const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, xref);
+      const resolvedSpouseFamilies = [];
+
+      for (const spouseFamilyXref of related.spouseFamilies) {
+        const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, spouseFamilyXref);
+
+        if (shownFamily !== null) {
+          resolvedSpouseFamilies.push(shownFamily);
+        }
+      }
+
+      const spouseBoxes = [];
+
+      if (spouses) {
+        for (const shownFamily of resolvedSpouseFamilies) {
+          const isHusband = shownFamily.family.husb === xref;
+          const spouseResolved = isHusband ? shownFamily.wife : shownFamily.husband;
+
+          if (spouseEntersChart(spouseResolved)) {
+            const spouseDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, spouseResolved.individual.xref);
+            spouseBoxes.push(
+              await buildChartBoxViewModel(
+                pool,
+                ctx.gedcomId,
+                ctx.treeName,
+                ctx.treePrivacyPrefs,
+                ctx.showHighlightImages,
+                spouseResolved.individual,
+                ctx.viewerBase,
+                ctx.traversalAccessLevel,
+                spouseDefaultResnInfo,
+                ctx.glideKey,
+                ctx.siteUrlConfig,
+              ),
+            );
+          } else {
+            spouseBoxes.push(null);
+          }
+        }
+      }
+
+      const rootChildren = resolvedSpouseFamilies.flatMap((shownFamily) => shownFamily.children.filter(spouseEntersChart));
+      const descendantsItems = await buildHourglassDescendantsNode(ctx, rootChildren, generations - 1, spouses);
+      const ancestorsNode = await buildHourglassAncestorsNode(ctx, xref, generations - 1);
+
+      const bodyHtml = renderHourglassChart({
+        individualBox,
+        spouseBoxes,
+        descendantsItems,
+        ancestorsNode,
+        treeName: tree.name,
+        spouses,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = `/tree/${tree.name}/hourglass-${generations}-${spouses ? '1' : '0'}/${encodeURIComponent(xref)}?ajax=1`;
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderHourglassChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: chartTitle,
+      individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
+      generations,
+      minGenerations: HOURGLASS_CHART_MIN_GENERATIONS,
+      maxGenerations: HOURGLASS_CHART_MAX_GENERATIONS,
+      spouses,
+      ajaxUrl,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve hourglass chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * The lazy-load "expand one more generation" arrow endpoints behind
+ * HourglassChartModule::getAncestorsAction()/getDescendantsAction() -
+ * /module/hourglass_chart/Ancestors/{tree}?xref={familyXref} and
+ * /module/hourglass_chart/Descendants/{tree}?xref={individualXref}&spouses={0|1}.
+ * Each always resolves exactly one more generation (generations=1
+ * fixed, same as real PHP) and returns a bare HTML fragment (no page
+ * shell, no wt-chart-hourglass wrapper, no <script> - those only exist
+ * in the main chart's own AJAX response) to be `.load()`-ed into the
+ * clicked arrow's own parent element.
+ *
+ * Access is deliberately NOT given the chart's own SHOW_PRIVATE_RELATIONSHIPS
+ * traversal bypass for the Ancestors action - mirrors
+ * Auth::checkFamilyAccess()'s own unconditional `$family->canShow()`
+ * check (app/Auth.php:180-199), which (unlike checkIndividualAccess())
+ * has no `$chart` bypass parameter at all. The Descendants action,
+ * however, mirrors checkIndividualAccess($individual, false, true)'s
+ * OWN bypass (same shape as the main chart's root individual above) -
+ * a real, deliberate asymmetry in webtrees' own HourglassChartModule.
+ */
+async function handleHourglassChartAction(req, res, match, url) {
+  const { action, tree: treeName } = match;
+
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'hourglass_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const xref = url.searchParams.get('xref');
+
+    if (xref === null) {
+      res.writeHead(400, { 'content-type': 'text/plain' });
+      res.end('Bad Request');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+    const glideKey = await loadGlideKey(pool);
+
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead: false,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+
+    if (action === 'Ancestors') {
+      // checkFamilyAccess() has no SHOW_PRIVATE_RELATIONSHIPS bypass -
+      // resolve at the viewer's own plain accessLevel.
+      const shownFamily = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, xref);
+
+      if (shownFamily === null) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+      }
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase,
+        traversalAccessLevel: accessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      const buildSide = async (resolvedMember) => {
+        if (!spouseEntersChart(resolvedMember)) {
+          return { box: null, further: null };
+        }
+
+        const memberDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, resolvedMember.individual.xref);
+        const box = await buildChartBoxViewModel(
+          pool,
+          ctx.gedcomId,
+          ctx.treeName,
+          ctx.treePrivacyPrefs,
+          ctx.showHighlightImages,
+          resolvedMember.individual,
+          ctx.viewerBase,
+          ctx.traversalAccessLevel,
+          memberDefaultResnInfo,
+          ctx.glideKey,
+          ctx.siteUrlConfig,
+        );
+
+        const memberRelated = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, resolvedMember.individual.xref);
+        const ownParentFamilyXref = memberRelated.parentFamilies[0] ?? null;
+
+        return { box, further: ownParentFamilyXref !== null ? { kind: 'arrow', familyXref: ownParentFamilyXref } : null };
+      };
+
+      const node = {
+        familyXref: xref,
+        husband: await buildSide(shownFamily.husband),
+        wife: await buildSide(shownFamily.wife),
+      };
+
+      const bodyHtml = renderHourglassAncestorsNode(node, tree.name);
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    if (action === 'Descendants') {
+      const spouses = url.searchParams.get('spouses') === '1';
+      // checkIndividualAccess($individual, false, true)'s own $chart
+      // bypass - same traversalAccessLevel convention as the main
+      // chart's root individual above.
+      const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+
+      const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+      if (individual === null) {
+        res.writeHead(404, { 'content-type': 'text/plain' });
+        res.end('Not Found');
+        return;
+      }
+
+      const facts = parseFacts(individual.gedcom);
+      const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+      const individualViewerBase = { ...viewerBase, isSelfRecord: relPrefs.gedcomid === xref, dead };
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, xref);
+      const treeForPrivacy = {
+        hideLivePeople: treePrivacyPrefs.hideLivePeople,
+        defaultResn: defaultResnInfo.individualResn,
+        keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+        keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+      };
+
+      const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, individualViewerBase);
+
+      if (!subjectShown) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+      }
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase: individualViewerBase,
+        traversalAccessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, xref);
+      const resolvedSpouseFamilies = [];
+
+      for (const spouseFamilyXref of related.spouseFamilies) {
+        const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, spouseFamilyXref);
+
+        if (shownFamily !== null) {
+          resolvedSpouseFamilies.push(shownFamily);
+        }
+      }
+
+      const children = resolvedSpouseFamilies.flatMap((shownFamily) => shownFamily.children.filter(spouseEntersChart));
+      const items = await buildHourglassDescendantsNode(ctx, children, 1, spouses);
+      const bodyHtml = renderHourglassDescendantsNode(items, tree.name, spouses);
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+  } catch (error) {
+    console.error('Failed to resolve hourglass chart action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -5572,6 +6248,20 @@ const server = createServer(async (req, res) => {
 
   if (descendancyChartMatch !== null) {
     await handleDescendancyChartPage(req, res, descendancyChartMatch, url);
+    return;
+  }
+
+  const hourglassChartMatch = matchHourglassChartPagePath(url.pathname);
+
+  if (hourglassChartMatch !== null) {
+    await handleHourglassChartPage(req, res, hourglassChartMatch, url);
+    return;
+  }
+
+  const hourglassChartActionMatch = matchHourglassChartActionPath(url.pathname);
+
+  if (hourglassChartActionMatch !== null) {
+    await handleHourglassChartAction(req, res, hourglassChartActionMatch, url);
     return;
   }
 

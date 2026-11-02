@@ -25,6 +25,8 @@ import {
   matchMediaListPagePath,
   matchAncestorsChartPagePath,
   matchDescendancyChartPagePath,
+  matchHourglassChartPagePath,
+  matchHourglassChartActionPath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -606,5 +608,74 @@ describe('matchDescendancyChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchDescendancyChartPagePath('/tree/ophir')).toBeNull();
     expect(matchDescendancyChartPagePath('/tree/ophir/ancestors-tree-3/I1')).toBeNull();
+  });
+});
+
+describe('matchHourglassChartPagePath', () => {
+  test('extracts tree, generations, spouses, and xref', () => {
+    expect(matchHourglassChartPagePath('/tree/ophir/hourglass-3-0/I1')).toEqual({
+      tree: 'ophir',
+      generations: 3,
+      spouses: false,
+      xref: 'I1',
+    });
+  });
+
+  test('spouses=1 is a real boolean, not the string "1"', () => {
+    expect(matchHourglassChartPagePath('/tree/ophir/hourglass-3-1/I1')?.spouses).toBe(true);
+  });
+
+  test('rejects a spouses value other than 0 or 1', () => {
+    expect(matchHourglassChartPagePath('/tree/ophir/hourglass-3-2/I1')).toBeNull();
+    expect(matchHourglassChartPagePath('/tree/ophir/hourglass-3-true/I1')).toBeNull();
+  });
+
+  test('rejects a non-numeric generations segment', () => {
+    expect(matchHourglassChartPagePath('/tree/ophir/hourglass-three-0/I1')).toBeNull();
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchHourglassChartPagePath('/tree/ophir/hourglass-3-0/I1/')).toEqual({
+      tree: 'ophir',
+      generations: 3,
+      spouses: false,
+      xref: 'I1',
+    });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchHourglassChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchHourglassChartPagePath('/tree/ophir/ancestors-tree-3/I1')).toBeNull();
+  });
+});
+
+describe('matchHourglassChartActionPath', () => {
+  test('matches the Ancestors action', () => {
+    expect(matchHourglassChartActionPath('/module/hourglass_chart/Ancestors/ophir')).toEqual({
+      action: 'Ancestors',
+      tree: 'ophir',
+    });
+  });
+
+  test('matches the Descendants action', () => {
+    expect(matchHourglassChartActionPath('/module/hourglass_chart/Descendants/ophir')).toEqual({
+      action: 'Descendants',
+      tree: 'ophir',
+    });
+  });
+
+  test('rejects an unrecognized action', () => {
+    expect(matchHourglassChartActionPath('/module/hourglass_chart/Bogus/ophir')).toBeNull();
+  });
+
+  test('rejects a different module', () => {
+    expect(matchHourglassChartActionPath('/module/relationships_chart/Ancestors/ophir')).toBeNull();
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchHourglassChartActionPath('/module/hourglass_chart/Ancestors/ophir/')).toEqual({
+      action: 'Ancestors',
+      tree: 'ophir',
+    });
   });
 });

@@ -418,3 +418,54 @@ export function matchDescendancyChartPagePath(pathname) {
     xref: decodeURIComponent(match[4]),
   };
 }
+
+/**
+ * PHP's route (HourglassChartModule::ROUTE_URL -
+ * `/tree/{tree}/hourglass-{generations}-{spouses}/{xref}`) - no
+ * "style" token (unlike Ancestors/Descendancy, Hourglass has only one
+ * layout), but a boolean "spouses" token in its place, literally "0"
+ * or "1" in the URL (Validator::boolean()'s own accepted string forms
+ * for a path token - app/Validator.php:201-215).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, generations: number, spouses: boolean, xref: string}|null}
+ */
+export function matchHourglassChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/hourglass-(\d+)-([01])\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    generations: parseInt(match[2], 10),
+    spouses: match[3] === '1',
+    xref: decodeURIComponent(match[4]),
+  };
+}
+
+/**
+ * PHP's generic module-action route (`/module/{module}/{action}/{tree}`
+ * - app/Http/Routes/WebRoutes.php:718, dispatched by ModuleAction -
+ * app/Http/RequestHandlers/ModuleAction.php) - the FIRST use of this
+ * generic pattern in the migration, needed for HourglassChartModule's
+ * own lazy-load "expand one more generation" arrows
+ * (getAncestorsAction()/getDescendantsAction()). Deliberately scoped
+ * to ONLY the hourglass_chart module's two known actions, not a
+ * general `/module/{module}/{action}/{tree}` matcher - every other
+ * module's own get*Action() methods are still PHP's job until each is
+ * individually ported.
+ *
+ * @param {string} pathname
+ * @returns {{action: 'Ancestors'|'Descendants', tree: string}|null}
+ */
+export function matchHourglassChartActionPath(pathname) {
+  const match = /^\/module\/hourglass_chart\/(Ancestors|Descendants)\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return { action: match[1], tree: decodeURIComponent(match[2]) };
+}

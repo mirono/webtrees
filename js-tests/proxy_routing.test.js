@@ -19,6 +19,8 @@ import {
   isMediaListPagePath,
   isAncestorsChartPagePath,
   isDescendancyChartPagePath,
+  isHourglassChartPagePath,
+  isHourglassChartActionPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -715,6 +717,34 @@ describe('isDescendancyChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(isDescendancyChartPagePath('/tree/ophir')).toBe(false);
     expect(isDescendancyChartPagePath('/tree/ophir/ancestors-tree-3/I1')).toBe(false);
+  });
+});
+
+describe('isHourglassChartPagePath', () => {
+  test('matches the real path shape', () => {
+    expect(isHourglassChartPagePath('/tree/ophir/hourglass-3-0/I1')).toBe(true);
+    expect(isHourglassChartPagePath('/tree/ophir/hourglass-3-1/I1')).toBe(true);
+  });
+
+  test('rejects a spouses value other than 0 or 1', () => {
+    expect(isHourglassChartPagePath('/tree/ophir/hourglass-3-2/I1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isHourglassChartPagePath('/tree/ophir')).toBe(false);
+    expect(isHourglassChartPagePath('/tree/ophir/ancestors-tree-3/I1')).toBe(false);
+  });
+});
+
+describe('isHourglassChartActionPath', () => {
+  test('matches both real actions', () => {
+    expect(isHourglassChartActionPath('/module/hourglass_chart/Ancestors/ophir')).toBe(true);
+    expect(isHourglassChartActionPath('/module/hourglass_chart/Descendants/ophir')).toBe(true);
+  });
+
+  test('rejects an unrecognized action or a different module', () => {
+    expect(isHourglassChartActionPath('/module/hourglass_chart/Bogus/ophir')).toBe(false);
+    expect(isHourglassChartActionPath('/module/relationships_chart/Ancestors/ophir')).toBe(false);
   });
 });
 
