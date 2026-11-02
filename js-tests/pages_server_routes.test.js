@@ -27,6 +27,7 @@ import {
   matchDescendancyChartPagePath,
   matchHourglassChartPagePath,
   matchHourglassChartActionPath,
+  matchFamilyBookChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -677,5 +678,46 @@ describe('matchHourglassChartActionPath', () => {
       action: 'Ancestors',
       tree: 'ophir',
     });
+  });
+});
+
+describe('matchFamilyBookChartPagePath', () => {
+  test('extracts tree, bookSize, generations, spouses, and xref', () => {
+    expect(matchFamilyBookChartPagePath('/tree/ophir/family-book-3-5-0/I1')).toEqual({
+      tree: 'ophir',
+      bookSize: 3,
+      generations: 5,
+      spouses: false,
+      xref: 'I1',
+    });
+  });
+
+  test('spouses=1 is a real boolean, not the string "1"', () => {
+    expect(matchFamilyBookChartPagePath('/tree/ophir/family-book-3-5-1/I1')?.spouses).toBe(true);
+  });
+
+  test('rejects a spouses value other than 0 or 1', () => {
+    expect(matchFamilyBookChartPagePath('/tree/ophir/family-book-3-5-2/I1')).toBeNull();
+    expect(matchFamilyBookChartPagePath('/tree/ophir/family-book-3-5-true/I1')).toBeNull();
+  });
+
+  test('rejects non-numeric bookSize/generations segments', () => {
+    expect(matchFamilyBookChartPagePath('/tree/ophir/family-book-three-5-0/I1')).toBeNull();
+    expect(matchFamilyBookChartPagePath('/tree/ophir/family-book-3-five-0/I1')).toBeNull();
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchFamilyBookChartPagePath('/tree/ophir/family-book-3-5-0/I1/')).toEqual({
+      tree: 'ophir',
+      bookSize: 3,
+      generations: 5,
+      spouses: false,
+      xref: 'I1',
+    });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchFamilyBookChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchFamilyBookChartPagePath('/tree/ophir/hourglass-3-0/I1')).toBeNull();
   });
 });

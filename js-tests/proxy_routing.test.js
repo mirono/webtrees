@@ -21,6 +21,7 @@ import {
   isDescendancyChartPagePath,
   isHourglassChartPagePath,
   isHourglassChartActionPath,
+  isFamilyBookChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -745,6 +746,22 @@ describe('isHourglassChartActionPath', () => {
   test('rejects an unrecognized action or a different module', () => {
     expect(isHourglassChartActionPath('/module/hourglass_chart/Bogus/ophir')).toBe(false);
     expect(isHourglassChartActionPath('/module/relationships_chart/Ancestors/ophir')).toBe(false);
+  });
+});
+
+describe('isFamilyBookChartPagePath', () => {
+  test('matches the real path shape', () => {
+    expect(isFamilyBookChartPagePath('/tree/ophir/family-book-3-5-0/I1')).toBe(true);
+    expect(isFamilyBookChartPagePath('/tree/ophir/family-book-3-5-1/I1')).toBe(true);
+  });
+
+  test('rejects a spouses value other than 0 or 1', () => {
+    expect(isFamilyBookChartPagePath('/tree/ophir/family-book-3-5-2/I1')).toBe(false);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isFamilyBookChartPagePath('/tree/ophir')).toBe(false);
+    expect(isFamilyBookChartPagePath('/tree/ophir/hourglass-3-0/I1')).toBe(false);
   });
 });
 

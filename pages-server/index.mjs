@@ -81,6 +81,7 @@ import {
   matchDescendancyChartPagePath,
   matchHourglassChartPagePath,
   matchHourglassChartActionPath,
+  matchFamilyBookChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -153,6 +154,7 @@ import {
   renderHourglassAncestorsNode,
   renderHourglassDescendantsNode,
 } from './hourglass-chart-view.mjs';
+import { renderFamilyBookChart, renderFamilyBookChartPage } from './family-book-chart-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -6078,6 +6080,441 @@ async function handleHourglassChartAction(req, res, match, url) {
   }
 }
 
+// Mirrors FamilyBookChartModule's own limits (app/Module/FamilyBookChartModule.php:52,53,55,56)
+// - MAXIMUM_GENERATIONS is the same 63 as Ancestors/Descendancy/Hourglass
+// (always 64-bit on Node's build), kept as its own constant since real
+// PHP defines it separately per module too.
+const FAMILY_BOOK_CHART_MIN_BOOK_SIZE = 2;
+const FAMILY_BOOK_CHART_MAX_BOOK_SIZE = 5;
+const FAMILY_BOOK_CHART_MIN_GENERATIONS = 2;
+const FAMILY_BOOK_CHART_MAX_GENERATIONS = 63;
+
+/**
+ * Recursively resolves one "parents" node of the family book chart -
+ * mirrors resources/views/modules/family-book-chart/parents.phtml's
+ * own recursive structure exactly (see family-book-chart-view.mjs's
+ * own renderFamilyBookParentsNode() doc comment for the shape and for
+ * why - unlike Hourglass's ancestors node - this ALWAYS recurses one
+ * level deeper per side while `radiusRemaining > 1`, producing empty
+ * placeholder boxes once the real chain runs out rather than stopping
+ * early or offering a lazy-load arrow).
+ *
+ * @param {object} ctx
+ * @param {string|null} familyXref
+ * @param {number} radiusRemaining
+ */
+async function buildFamilyBookParentsNode(ctx, familyXref, radiusRemaining) {
+  let husbandBox = null;
+  let wifeBox = null;
+  let husbandNextFamilyXref = null;
+  let wifeNextFamilyXref = null;
+
+  if (familyXref !== null) {
+    const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, familyXref);
+
+    if (shownFamily !== null) {
+      if (spouseEntersChart(shownFamily.husband)) {
+        const husbandDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, shownFamily.husband.individual.xref);
+        husbandBox = await buildChartBoxViewModel(
+          pool,
+          ctx.gedcomId,
+          ctx.treeName,
+          ctx.treePrivacyPrefs,
+          ctx.showHighlightImages,
+          shownFamily.husband.individual,
+          ctx.viewerBase,
+          ctx.traversalAccessLevel,
+          husbandDefaultResnInfo,
+          ctx.glideKey,
+          ctx.siteUrlConfig,
+        );
+
+        const husbandRelated = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, shownFamily.husband.individual.xref);
+        husbandNextFamilyXref = husbandRelated.parentFamilies[0] ?? null;
+      }
+
+      if (spouseEntersChart(shownFamily.wife)) {
+        const wifeDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, shownFamily.wife.individual.xref);
+        wifeBox = await buildChartBoxViewModel(
+          pool,
+          ctx.gedcomId,
+          ctx.treeName,
+          ctx.treePrivacyPrefs,
+          ctx.showHighlightImages,
+          shownFamily.wife.individual,
+          ctx.viewerBase,
+          ctx.traversalAccessLevel,
+          wifeDefaultResnInfo,
+          ctx.glideKey,
+          ctx.siteUrlConfig,
+        );
+
+        const wifeRelated = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, shownFamily.wife.individual.xref);
+        wifeNextFamilyXref = wifeRelated.parentFamilies[0] ?? null;
+      }
+    }
+  }
+
+  const husband = { box: husbandBox, nested: null };
+  const wife = { box: wifeBox, nested: null };
+
+  if (radiusRemaining > 1) {
+    husband.nested = await buildFamilyBookParentsNode(ctx, husbandNextFamilyXref, radiusRemaining - 1);
+    wife.nested = await buildFamilyBookParentsNode(ctx, wifeNextFamilyXref, radiusRemaining - 1);
+  }
+
+  return { husband, wife };
+}
+
+/**
+ * Recursively resolves one "children" node of the family book chart -
+ * mirrors resources/views/modules/family-book-chart/children.phtml's
+ * own recursive structure exactly (see family-book-chart-view.mjs's
+ * own renderFamilyBookChildrenNode() doc comment for the shape). No
+ * spouse boxes here (only the block's own center individual gets
+ * those) and no lazy-load arrow (a radius that runs out before
+ * grandchildren simply omits them).
+ *
+ * @param {object} ctx
+ * @param {Array<{individual: object, facts: string[]}>} resolvedChildren already canShowName()-filtered
+ * @param {number} radiusRemaining
+ */
+async function buildFamilyBookChildrenNode(ctx, resolvedChildren, radiusRemaining) {
+  const items = [];
+
+  for (const childResolved of resolvedChildren) {
+    const childXref = childResolved.individual.xref;
+    const childDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, childXref);
+    const box = await buildChartBoxViewModel(
+      pool,
+      ctx.gedcomId,
+      ctx.treeName,
+      ctx.treePrivacyPrefs,
+      ctx.showHighlightImages,
+      childResolved.individual,
+      ctx.viewerBase,
+      ctx.traversalAccessLevel,
+      childDefaultResnInfo,
+      ctx.glideKey,
+      ctx.siteUrlConfig,
+    );
+
+    const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, childXref);
+    const resolvedSpouseFamilies = [];
+
+    for (const spouseFamilyXref of related.spouseFamilies) {
+      const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, spouseFamilyXref);
+
+      if (shownFamily !== null) {
+        resolvedSpouseFamilies.push(shownFamily);
+      }
+    }
+
+    const grandchildren = resolvedSpouseFamilies.flatMap((shownFamily) => shownFamily.children.filter(spouseEntersChart));
+
+    const nested =
+      radiusRemaining > 1 && grandchildren.length > 0 ? await buildFamilyBookChildrenNode(ctx, grandchildren, radiusRemaining - 1) : null;
+
+    items.push({ box, nested });
+  }
+
+  return items;
+}
+
+/**
+ * Builds the flat, pre-order sequence of "family of X" blocks that
+ * make up the whole family book - see family-book-chart-view.mjs's own
+ * top-of-file doc comment for why this is flattened rather than a tree
+ * (mirrors chart.phtml's own "render self, then `<hr>` + recurse into
+ * chart.phtml again for EACH child" structure exactly: this individual's
+ * own block first, then every one of ITS children's own whole
+ * sub-sequence, in order, appended after).
+ *
+ * @param {object} ctx
+ * @param {{xref: string, gedcom: string}} individual already canShowName()-cleared
+ * @param {number} generationsRemaining
+ * @param {number} bookSize
+ * @param {boolean} spouses
+ * @returns {Promise<Array<object>>}
+ */
+async function buildFamilyBookBlocks(ctx, individual, generationsRemaining, bookSize, spouses) {
+  const defaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, individual.xref);
+  const individualBox = await buildChartBoxViewModel(
+    pool,
+    ctx.gedcomId,
+    ctx.treeName,
+    ctx.treePrivacyPrefs,
+    ctx.showHighlightImages,
+    individual,
+    ctx.viewerBase,
+    ctx.traversalAccessLevel,
+    defaultResnInfo,
+    ctx.glideKey,
+    ctx.siteUrlConfig,
+  );
+
+  const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, individual.xref);
+  const resolvedSpouseFamilies = [];
+
+  for (const spouseFamilyXref of related.spouseFamilies) {
+    const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, spouseFamilyXref);
+
+    if (shownFamily !== null) {
+      resolvedSpouseFamilies.push(shownFamily);
+    }
+  }
+
+  const spouseBoxes = [];
+
+  if (spouses) {
+    for (const shownFamily of resolvedSpouseFamilies) {
+      const isHusband = shownFamily.family.husb === individual.xref;
+      const spouseResolved = isHusband ? shownFamily.wife : shownFamily.husband;
+
+      if (spouseEntersChart(spouseResolved)) {
+        const spouseDefaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, spouseResolved.individual.xref);
+        spouseBoxes.push(
+          await buildChartBoxViewModel(
+            pool,
+            ctx.gedcomId,
+            ctx.treeName,
+            ctx.treePrivacyPrefs,
+            ctx.showHighlightImages,
+            spouseResolved.individual,
+            ctx.viewerBase,
+            ctx.traversalAccessLevel,
+            spouseDefaultResnInfo,
+            ctx.glideKey,
+            ctx.siteUrlConfig,
+          ),
+        );
+      } else {
+        spouseBoxes.push(null);
+      }
+    }
+  }
+
+  const children = resolvedSpouseFamilies.flatMap((shownFamily) => shownFamily.children.filter(spouseEntersChart));
+  const childrenNode = await buildFamilyBookChildrenNode(ctx, children, bookSize - 1);
+  const parentFamilyXref = related.parentFamilies[0] ?? null;
+  const parentsNode = await buildFamilyBookParentsNode(ctx, parentFamilyXref, bookSize - 1);
+
+  const primaryName = extractPrimaryName(individual.gedcom);
+  const fullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+
+  const blocks = [{ fullNameHtml, individualBox, spouseBoxes, childrenNode, parentsNode }];
+
+  if (generationsRemaining > 1) {
+    for (const childResolved of children) {
+      const childBlocks = await buildFamilyBookBlocks(ctx, childResolved.individual, generationsRemaining - 1, bookSize, spouses);
+      blocks.push(...childBlocks);
+    }
+  }
+
+  return blocks;
+}
+
+async function handleFamilyBookChartPage(req, res, match, url) {
+  const { tree: treeName, bookSize, generations, spouses, xref } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // Mirrors FamilyBookChartModule::handle()'s own "Convert POST
+  // requests into GET requests for pretty URLs" - same path-segment
+  // redirect shape as Ancestors/Descendancy/Hourglass above.
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedBookSize = Math.max(
+      FAMILY_BOOK_CHART_MIN_BOOK_SIZE,
+      Math.min(parseInt(formData.get('book_size'), 10) || 2, FAMILY_BOOK_CHART_MAX_BOOK_SIZE),
+    );
+    const postedGenerations = Math.max(
+      FAMILY_BOOK_CHART_MIN_GENERATIONS,
+      Math.min(parseInt(formData.get('generations'), 10) || 5, FAMILY_BOOK_CHART_MAX_GENERATIONS),
+    );
+    const postedSpouses = formData.get('spouses') !== null ? '1' : '0';
+    const postedXref = formData.get('xref') ?? xref;
+
+    res.writeHead(302, {
+      Location: `/tree/${treeName}/family-book-${postedBookSize}-${postedGenerations}-${postedSpouses}/${encodeURIComponent(postedXref)}`,
+    });
+    res.end();
+    return;
+  }
+
+  if (
+    bookSize < FAMILY_BOOK_CHART_MIN_BOOK_SIZE ||
+    bookSize > FAMILY_BOOK_CHART_MAX_BOOK_SIZE ||
+    generations < FAMILY_BOOK_CHART_MIN_GENERATIONS ||
+    generations > FAMILY_BOOK_CHART_MAX_GENERATIONS
+  ) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'family_book_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // FamilyBookChartModule has no $access_level override of its own,
+    // same as every other chart/list module.
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'family_book_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+
+    const facts = parseFacts(individual.gedcom);
+    const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, viewerBase);
+
+    if (!subjectShown) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const primaryName = extractPrimaryName(individual.gedcom);
+    const individualFullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+    const chartTitle = `Family book of ${individualFullNameHtml.replace(/<[^>]*>/g, '')}`;
+
+    if (url.searchParams.get('ajax') === '1') {
+      const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+      const glideKey = await loadGlideKey(pool);
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase,
+        traversalAccessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      const blocks = await buildFamilyBookBlocks(ctx, individual, generations, bookSize, spouses);
+      const bodyHtml = renderFamilyBookChart(blocks);
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = `/tree/${tree.name}/family-book-${bookSize}-${generations}-${spouses ? '1' : '0'}/${encodeURIComponent(xref)}?ajax=1`;
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderFamilyBookChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: chartTitle,
+      individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
+      bookSize,
+      minBookSize: FAMILY_BOOK_CHART_MIN_BOOK_SIZE,
+      maxBookSize: FAMILY_BOOK_CHART_MAX_BOOK_SIZE,
+      generations,
+      minGenerations: FAMILY_BOOK_CHART_MIN_GENERATIONS,
+      maxGenerations: FAMILY_BOOK_CHART_MAX_GENERATIONS,
+      spouses,
+      ajaxUrl,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve family book chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -6262,6 +6699,13 @@ const server = createServer(async (req, res) => {
 
   if (hourglassChartActionMatch !== null) {
     await handleHourglassChartAction(req, res, hourglassChartActionMatch, url);
+    return;
+  }
+
+  const familyBookChartMatch = matchFamilyBookChartPagePath(url.pathname);
+
+  if (familyBookChartMatch !== null) {
+    await handleFamilyBookChartPage(req, res, familyBookChartMatch, url);
     return;
   }
 

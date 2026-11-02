@@ -208,6 +208,14 @@ export function isHourglassChartActionPath(pathname) {
   return /^\/module\/hourglass_chart\/(Ancestors|Descendants)\/[^/]+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/family-book-{book_size}-{generations}-{spouses}/{xref}:
+// FamilyBookChartModule - two numeric generation tokens (book_size,
+// generations), the same boolean "0"/"1" spouses token as Hourglass, no
+// module-action route (this module has no lazy-load arrows at all).
+export function isFamilyBookChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/family-book-\d+-\d+-[01]\/[^/]+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -240,7 +248,8 @@ export function isNodeRoute(pathname, searchParams) {
     isAncestorsChartPagePath(pathname) ||
     isDescendancyChartPagePath(pathname) ||
     isHourglassChartPagePath(pathname) ||
-    isHourglassChartActionPath(pathname)
+    isHourglassChartActionPath(pathname) ||
+    isFamilyBookChartPagePath(pathname)
   ) {
     return true;
   }
@@ -272,7 +281,8 @@ export function isNodeRoute(pathname, searchParams) {
     isAncestorsChartPagePath(route) ||
     isDescendancyChartPagePath(route) ||
     isHourglassChartPagePath(route) ||
-    isHourglassChartActionPath(route)
+    isHourglassChartActionPath(route) ||
+    isFamilyBookChartPagePath(route)
   );
 }
 

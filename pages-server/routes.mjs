@@ -469,3 +469,33 @@ export function matchHourglassChartActionPath(pathname) {
 
   return { action: match[1], tree: decodeURIComponent(match[2]) };
 }
+
+/**
+ * PHP's route (FamilyBookChartModule::ROUTE_URL -
+ * `/tree/{tree}/family-book-{book_size}-{generations}-{spouses}/{xref}`)
+ * - the FOURTH chart route. Two numeric generation tokens instead of
+ * one: "book_size" (2-5, how many ancestor/descendant generations each
+ * individual block in the book radiates) and "generations" (2-63, how
+ * many descendant generations get their own whole block). No "style"
+ * token, same boolean "0"/"1" "spouses" token as Hourglass. Unlike
+ * Hourglass, this module defines no get*Action() methods at all - no
+ * lazy-load arrows, so no module-action route needed here.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, bookSize: number, generations: number, spouses: boolean, xref: string}|null}
+ */
+export function matchFamilyBookChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/family-book-(\d+)-(\d+)-([01])\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    bookSize: parseInt(match[2], 10),
+    generations: parseInt(match[3], 10),
+    spouses: match[4] === '1',
+    xref: decodeURIComponent(match[5]),
+  };
+}
