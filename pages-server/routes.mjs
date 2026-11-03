@@ -499,3 +499,26 @@ export function matchFamilyBookChartPagePath(pathname) {
     xref: decodeURIComponent(match[5]),
   };
 }
+
+/**
+ * PHP's route (CompactTreeChartModule::ROUTE_URL -
+ * `/tree/{tree}/compact/{xref}`) - the FIFTH chart route, and the
+ * simplest: no generations/style/spouses tokens at all (always exactly
+ * 5 generations of ancestors, fixed by ChartService::sosaStradonitzAncestors()'s
+ * own hardcoded argument - app/Module/CompactTreeChartModule.php:135).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, xref: string}|null}
+ */
+export function matchCompactTreeChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/compact\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    xref: decodeURIComponent(match[2]),
+  };
+}

@@ -22,6 +22,7 @@ import {
   isHourglassChartPagePath,
   isHourglassChartActionPath,
   isFamilyBookChartPagePath,
+  isCompactTreeChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -762,6 +763,17 @@ describe('isFamilyBookChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(isFamilyBookChartPagePath('/tree/ophir')).toBe(false);
     expect(isFamilyBookChartPagePath('/tree/ophir/hourglass-3-0/I1')).toBe(false);
+  });
+});
+
+describe('isCompactTreeChartPagePath', () => {
+  test('matches the real path shape', () => {
+    expect(isCompactTreeChartPagePath('/tree/ophir/compact/I1')).toBe(true);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isCompactTreeChartPagePath('/tree/ophir')).toBe(false);
+    expect(isCompactTreeChartPagePath('/tree/ophir/hourglass-3-0/I1')).toBe(false);
   });
 });
 

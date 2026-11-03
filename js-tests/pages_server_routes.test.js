@@ -28,6 +28,7 @@ import {
   matchHourglassChartPagePath,
   matchHourglassChartActionPath,
   matchFamilyBookChartPagePath,
+  matchCompactTreeChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -719,5 +720,26 @@ describe('matchFamilyBookChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchFamilyBookChartPagePath('/tree/ophir')).toBeNull();
     expect(matchFamilyBookChartPagePath('/tree/ophir/hourglass-3-0/I1')).toBeNull();
+  });
+});
+
+describe('matchCompactTreeChartPagePath', () => {
+  test('extracts tree and xref', () => {
+    expect(matchCompactTreeChartPagePath('/tree/ophir/compact/I1')).toEqual({
+      tree: 'ophir',
+      xref: 'I1',
+    });
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchCompactTreeChartPagePath('/tree/ophir/compact/I1/')).toEqual({
+      tree: 'ophir',
+      xref: 'I1',
+    });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchCompactTreeChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchCompactTreeChartPagePath('/tree/ophir/hourglass-3-0/I1')).toBeNull();
   });
 });

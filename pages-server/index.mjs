@@ -82,6 +82,7 @@ import {
   matchHourglassChartPagePath,
   matchHourglassChartActionPath,
   matchFamilyBookChartPagePath,
+  matchCompactTreeChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -155,6 +156,7 @@ import {
   renderHourglassDescendantsNode,
 } from './hourglass-chart-view.mjs';
 import { renderFamilyBookChart, renderFamilyBookChartPage } from './family-book-chart-view.mjs';
+import { renderCompactTreeChart, renderCompactTreeChartPage } from './compact-tree-chart-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -6515,6 +6517,285 @@ async function handleFamilyBookChartPage(req, res, match, url) {
   }
 }
 
+// Mirrors ChartService::sosaStradonitzAncestors()'s own hardcoded
+// generations=5 argument (app/Module/CompactTreeChartModule.php:135) -
+// not configurable via the URL at all, unlike every other chart. Sosa
+// numbers 1-31 (2^5 - 1), max = 2^(generations-1) = 16: the loop stops
+// expanding once a Sosa number reaches 16, so numbers 16-31 (the 5th
+// generation) are recorded but never themselves expanded further.
+const COMPACT_TREE_CHART_GENERATIONS = 5;
+const COMPACT_TREE_CHART_MAX_SOSA = 2 ** (COMPACT_TREE_CHART_GENERATIONS - 1);
+
+/**
+ * Mirrors ChartService::sosaStradonitzAncestors() exactly - a
+ * breadth-first walk assigning each resolved ancestor its real
+ * Sosa-Stradonitz number (1 = subject, 2/3 = parents, 4-7 =
+ * grandparents, ...). Reuses resolveShownFamily()/spouseEntersChart()
+ * unchanged - husband()/wife()'s own canShowName() gate already
+ * applies the SHOW_PRIVATE_RELATIONSHIPS override internally
+ * (forcing PRIV_HIDE) regardless of what access level a caller passes
+ * in, so there's no asymmetry to special-case here even though real
+ * PHP's own call site passes no explicit access level at all.
+ *
+ * @param {object} ctx
+ * @param {{xref: string, gedcom: string}} individual the subject, Sosa 1
+ * @returns {Promise<Map<number, {xref: string, gedcom: string}>>}
+ */
+async function buildCompactTreeAncestors(ctx, individual) {
+  const ancestors = new Map([[1, individual]]);
+  const queue = [1];
+
+  while (queue.length > 0) {
+    const sosa = queue.shift();
+
+    if (sosa >= COMPACT_TREE_CHART_MAX_SOSA) {
+      break;
+    }
+
+    const current = ancestors.get(sosa);
+    const related = await loadRelatedFamilyXrefs(pool, ctx.gedcomId, current.xref);
+    const parentFamilyXref = related.parentFamilies[0] ?? null;
+
+    if (parentFamilyXref === null) {
+      continue;
+    }
+
+    const shownFamily = await resolveShownFamily(ctx.tree, ctx.treePrivacyPrefs, ctx.traversalAccessLevel, ctx.relPrefs, parentFamilyXref);
+
+    if (shownFamily === null) {
+      continue;
+    }
+
+    if (spouseEntersChart(shownFamily.husband)) {
+      ancestors.set(sosa * 2, shownFamily.husband.individual);
+      queue.push(sosa * 2);
+    }
+
+    if (spouseEntersChart(shownFamily.wife)) {
+      ancestors.set(sosa * 2 + 1, shownFamily.wife.individual);
+      queue.push(sosa * 2 + 1);
+    }
+  }
+
+  return ancestors;
+}
+
+/**
+ * Builds the per-Sosa-number cell data the view layer plugs into its
+ * fixed table layout - a chart-box view model plus the arrow link's
+ * own href/title, for every Sosa number 1-31 present in `ancestors`.
+ *
+ * @param {object} ctx
+ * @param {Map<number, {xref: string, gedcom: string}>} ancestors
+ * @returns {Promise<Array<{box: object, href: string, title: string}|null>>} indexed 1-31
+ */
+async function buildCompactTreeChartCells(ctx, ancestors) {
+  const cells = [];
+
+  for (const [sosa, ancestorIndividual] of ancestors) {
+    const defaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, ancestorIndividual.xref);
+    const box = await buildChartBoxViewModel(
+      pool,
+      ctx.gedcomId,
+      ctx.treeName,
+      ctx.treePrivacyPrefs,
+      ctx.showHighlightImages,
+      ancestorIndividual,
+      ctx.viewerBase,
+      ctx.traversalAccessLevel,
+      defaultResnInfo,
+      ctx.glideKey,
+      ctx.siteUrlConfig,
+    );
+
+    const primaryName = extractPrimaryName(ancestorIndividual.gedcom);
+    const plainFullName =
+      primaryName !== null ? primaryName.full.replace(/<[^>]*>/g, '') : ancestorIndividual.xref;
+
+    cells[sosa] = {
+      box,
+      href: `/tree/${ctx.treeName}/compact/${encodeURIComponent(ancestorIndividual.xref)}`,
+      title: `Compact tree of ${plainFullName}`,
+    };
+  }
+
+  return cells;
+}
+
+async function handleCompactTreeChartPage(req, res, match, url) {
+  const { tree: treeName, xref } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // Mirrors CompactTreeChartModule::handle()'s own "Convert POST
+  // requests into GET requests for pretty URLs" - same shape as every
+  // other chart above, but with only one path segment (xref) to carry
+  // forward.
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedXref = formData.get('xref') ?? xref;
+
+    res.writeHead(302, { Location: `/tree/${treeName}/compact/${encodeURIComponent(postedXref)}` });
+    res.end();
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'compact-chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // CompactTreeChartModule has no $access_level override of its own,
+    // same as every other chart/list module.
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'compact-chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+
+    const facts = parseFacts(individual.gedcom);
+    const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, viewerBase);
+
+    if (!subjectShown) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const primaryName = extractPrimaryName(individual.gedcom);
+    const individualFullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+    const chartTitle = `Compact tree of ${individualFullNameHtml.replace(/<[^>]*>/g, '')}`;
+
+    if (url.searchParams.get('ajax') === '1') {
+      const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+      const glideKey = await loadGlideKey(pool);
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase,
+        traversalAccessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      const ancestors = await buildCompactTreeAncestors(ctx, individual);
+      const cells = await buildCompactTreeChartCells(ctx, ancestors);
+      const bodyHtml = renderCompactTreeChart(cells);
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = `/tree/${tree.name}/compact/${encodeURIComponent(xref)}?ajax=1`;
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderCompactTreeChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: chartTitle,
+      individual: { xref: individual.xref },
+      ajaxUrl,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve compact tree chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -6706,6 +6987,13 @@ const server = createServer(async (req, res) => {
 
   if (familyBookChartMatch !== null) {
     await handleFamilyBookChartPage(req, res, familyBookChartMatch, url);
+    return;
+  }
+
+  const compactTreeChartMatch = matchCompactTreeChartPagePath(url.pathname);
+
+  if (compactTreeChartMatch !== null) {
+    await handleCompactTreeChartPage(req, res, compactTreeChartMatch, url);
     return;
   }
 

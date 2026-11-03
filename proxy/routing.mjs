@@ -216,6 +216,13 @@ export function isFamilyBookChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/family-book-\d+-\d+-[01]\/[^/]+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/compact/{xref}: CompactTreeChartModule - the FIFTH
+// chart route, the simplest (no generations/style/spouses tokens at
+// all - always exactly 5 fixed generations).
+export function isCompactTreeChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/compact\/[^/]+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -249,7 +256,8 @@ export function isNodeRoute(pathname, searchParams) {
     isDescendancyChartPagePath(pathname) ||
     isHourglassChartPagePath(pathname) ||
     isHourglassChartActionPath(pathname) ||
-    isFamilyBookChartPagePath(pathname)
+    isFamilyBookChartPagePath(pathname) ||
+    isCompactTreeChartPagePath(pathname)
   ) {
     return true;
   }
@@ -282,7 +290,8 @@ export function isNodeRoute(pathname, searchParams) {
     isDescendancyChartPagePath(route) ||
     isHourglassChartPagePath(route) ||
     isHourglassChartActionPath(route) ||
-    isFamilyBookChartPagePath(route)
+    isFamilyBookChartPagePath(route) ||
+    isCompactTreeChartPagePath(route)
   );
 }
 
