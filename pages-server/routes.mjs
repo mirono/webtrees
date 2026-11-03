@@ -522,3 +522,34 @@ export function matchCompactTreeChartPagePath(pathname) {
     xref: decodeURIComponent(match[2]),
   };
 }
+
+/**
+ * PHP's route (FanChartModule::ROUTE_URL -
+ * `/tree/{tree}/fan-chart-{style}-{generations}-{width}/{xref}`) - the
+ * SIXTH chart route, and the first whose real PHP output is a
+ * server-side-rendered GD bitmap (PNG pie-slice wedges + rotated TTF
+ * text) rather than HTML. The Node port renders the same wedge
+ * geometry/colors/text as inline SVG instead (no native canvas/font
+ * dependency, crisp at any zoom) - not a pixel-identical bitmap, but
+ * the same visual chart. `style` is 2 (half circle), 3 (three-quarter
+ * circle), or 4 (full circle); `generations` 2-9; `width` a zoom
+ * percentage 50-500.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, style: number, generations: number, width: number, xref: string}|null}
+ */
+export function matchFanChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/fan-chart-(\d+)-(\d+)-(\d+)\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    style: parseInt(match[2], 10),
+    generations: parseInt(match[3], 10),
+    width: parseInt(match[4], 10),
+    xref: decodeURIComponent(match[5]),
+  };
+}

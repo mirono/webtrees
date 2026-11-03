@@ -83,6 +83,7 @@ import {
   matchHourglassChartActionPath,
   matchFamilyBookChartPagePath,
   matchCompactTreeChartPagePath,
+  matchFanChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -157,6 +158,7 @@ import {
 } from './hourglass-chart-view.mjs';
 import { renderFamilyBookChart, renderFamilyBookChartPage } from './family-book-chart-view.mjs';
 import { renderCompactTreeChart, renderCompactTreeChartPage } from './compact-tree-chart-view.mjs';
+import { buildFanWedges, renderFanChart, renderFanChartPage } from './fan-chart-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -6541,14 +6543,15 @@ const COMPACT_TREE_CHART_MAX_SOSA = 2 ** (COMPACT_TREE_CHART_GENERATIONS - 1);
  * @param {{xref: string, gedcom: string}} individual the subject, Sosa 1
  * @returns {Promise<Map<number, {xref: string, gedcom: string}>>}
  */
-async function buildCompactTreeAncestors(ctx, individual) {
+async function buildSosaStradonitzAncestors(ctx, individual, generations) {
+  const maxSosa = 2 ** (generations - 1);
   const ancestors = new Map([[1, individual]]);
   const queue = [1];
 
   while (queue.length > 0) {
     const sosa = queue.shift();
 
-    if (sosa >= COMPACT_TREE_CHART_MAX_SOSA) {
+    if (sosa >= maxSosa) {
       break;
     }
 
@@ -6578,6 +6581,10 @@ async function buildCompactTreeAncestors(ctx, individual) {
   }
 
   return ancestors;
+}
+
+async function buildCompactTreeAncestors(ctx, individual) {
+  return buildSosaStradonitzAncestors(ctx, individual, COMPACT_TREE_CHART_GENERATIONS);
 }
 
 /**
@@ -6796,6 +6803,291 @@ async function handleCompactTreeChartPage(req, res, match, url) {
   }
 }
 
+// Mirrors FanChartModule's own Chart styles/Defaults/Limits constants
+// (app/Module/FanChartModule.php:76-100).
+const FAN_CHART_STYLE_HALF_CIRCLE = 2;
+const FAN_CHART_STYLE_THREE_QUARTER_CIRCLE = 3;
+const FAN_CHART_STYLE_FULL_CIRCLE = 4;
+const FAN_CHART_DEFAULT_STYLE = FAN_CHART_STYLE_THREE_QUARTER_CIRCLE;
+const FAN_CHART_DEFAULT_GENERATIONS = 4;
+const FAN_CHART_DEFAULT_WIDTH = 100;
+const FAN_CHART_MIN_GENERATIONS = 2;
+const FAN_CHART_MAX_GENERATIONS = 9;
+const FAN_CHART_MIN_WIDTH = 50;
+const FAN_CHART_MAX_WIDTH = 500;
+const FAN_CHART_WIDTH_PIXELS = 800;
+const FAN_CHART_STYLES = {
+  [FAN_CHART_STYLE_HALF_CIRCLE]: 'half circle',
+  [FAN_CHART_STYLE_THREE_QUARTER_CIRCLE]: 'three-quarter circle',
+  [FAN_CHART_STYLE_FULL_CIRCLE]: 'full circle',
+};
+
+/**
+ * Mirrors FanChartModule::chart()'s own per-style angle/height choice
+ * (app/Module/FanChartModule.php:234-253).
+ *
+ * @param {number} style
+ * @param {number} widthPx
+ * @returns {{chartStartAngle: number, chartEndAngle: number, heightPx: number}}
+ */
+function fanChartLayout(style, widthPx) {
+  switch (style) {
+    case FAN_CHART_STYLE_HALF_CIRCLE:
+      return { chartStartAngle: 180, chartEndAngle: 360, heightPx: Math.trunc(widthPx / 2) };
+    case FAN_CHART_STYLE_THREE_QUARTER_CIRCLE:
+      return { chartStartAngle: 135, chartEndAngle: 405, heightPx: Math.trunc((widthPx * 86) / 100) };
+    case FAN_CHART_STYLE_FULL_CIRCLE:
+    default:
+      return { chartStartAngle: 90, chartEndAngle: 450, heightPx: widthPx };
+  }
+}
+
+/**
+ * Resolves each Sosa-numbered ancestor to a chart-box view model,
+ * reusing buildChartBoxViewModel() exactly as every other chart does.
+ *
+ * @param {object} ctx
+ * @param {Map<number, {xref: string, gedcom: string}>} ancestors
+ * @returns {Promise<Map<number, {box: object}>>}
+ */
+async function buildFanChartAncestorBoxes(ctx, ancestors) {
+  const boxes = new Map();
+
+  for (const [sosa, ancestorIndividual] of ancestors) {
+    const defaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, ancestorIndividual.xref);
+    const box = await buildChartBoxViewModel(
+      pool,
+      ctx.gedcomId,
+      ctx.treeName,
+      ctx.treePrivacyPrefs,
+      ctx.showHighlightImages,
+      ancestorIndividual,
+      ctx.viewerBase,
+      ctx.traversalAccessLevel,
+      defaultResnInfo,
+      ctx.glideKey,
+      ctx.siteUrlConfig,
+    );
+
+    boxes.set(sosa, { box });
+  }
+
+  return boxes;
+}
+
+async function handleFanChartPage(req, res, match, url) {
+  const { tree: treeName, xref } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let style = match.style;
+  let generations = match.generations;
+  let width = match.width;
+
+  // Mirrors FanChartModule::handle()'s own "Convert POST requests into
+  // GET requests for pretty URLs" - same shape as every other chart.
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedXref = formData.get('xref') ?? xref;
+    const postedStyle = parseInt(formData.get('style'), 10);
+    const postedGenerations = parseInt(formData.get('generations'), 10);
+    const postedWidth = parseInt(formData.get('width'), 10);
+
+    const redirectStyle = Object.keys(FAN_CHART_STYLES).map(Number).includes(postedStyle) ? postedStyle : FAN_CHART_DEFAULT_STYLE;
+    const redirectGenerations =
+      Number.isInteger(postedGenerations) && postedGenerations >= FAN_CHART_MIN_GENERATIONS && postedGenerations <= FAN_CHART_MAX_GENERATIONS
+        ? postedGenerations
+        : FAN_CHART_DEFAULT_GENERATIONS;
+    const redirectWidth =
+      Number.isInteger(postedWidth) && postedWidth >= FAN_CHART_MIN_WIDTH && postedWidth <= FAN_CHART_MAX_WIDTH ? postedWidth : FAN_CHART_DEFAULT_WIDTH;
+
+    res.writeHead(302, {
+      Location: `/tree/${treeName}/fan-chart-${redirectStyle}-${redirectGenerations}-${redirectWidth}/${encodeURIComponent(postedXref)}`,
+    });
+    res.end();
+    return;
+  }
+
+  if (
+    !Object.keys(FAN_CHART_STYLES).map(Number).includes(style) ||
+    !Number.isInteger(generations) ||
+    generations < FAN_CHART_MIN_GENERATIONS ||
+    generations > FAN_CHART_MAX_GENERATIONS ||
+    !Number.isInteger(width) ||
+    width < FAN_CHART_MIN_WIDTH ||
+    width > FAN_CHART_MAX_WIDTH
+  ) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'fan_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'fan_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+
+    const facts = parseFacts(individual.gedcom);
+    const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, viewerBase);
+
+    if (!subjectShown) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const primaryName = extractPrimaryName(individual.gedcom);
+    const individualFullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+    const chartTitle = `Fan chart of ${individualFullNameHtml.replace(/<[^>]*>/g, '')}`;
+
+    if (url.searchParams.get('ajax') === '1') {
+      const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+      const glideKey = await loadGlideKey(pool);
+
+      const ctx = {
+        gedcomId: tree.gedcomId,
+        treeName: tree.name,
+        tree,
+        treePrivacyPrefs,
+        showHighlightImages,
+        viewerBase,
+        traversalAccessLevel,
+        relPrefs,
+        glideKey,
+        siteUrlConfig,
+      };
+
+      const ancestors = await buildSosaStradonitzAncestors(ctx, individual, generations);
+      const boxes = await buildFanChartAncestorBoxes(ctx, ancestors);
+
+      const widthPx = Math.trunc((FAN_CHART_WIDTH_PIXELS * width) / 100);
+      const { chartStartAngle, chartEndAngle, heightPx } = fanChartLayout(style, widthPx);
+      const wedges = buildFanWedges(boxes, generations, widthPx, chartStartAngle, chartEndAngle, heightPx);
+      const bodyHtml = renderFanChart(wedges, [...boxes.values()], chartTitle);
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = `/tree/${tree.name}/fan-chart-${style}-${generations}-${width}/${encodeURIComponent(xref)}?ajax=1`;
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderFanChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: chartTitle,
+      individual: { xref: individual.xref },
+      style,
+      styles: FAN_CHART_STYLES,
+      generations,
+      minGenerations: FAN_CHART_MIN_GENERATIONS,
+      maxGenerations: FAN_CHART_MAX_GENERATIONS,
+      width,
+      minWidth: FAN_CHART_MIN_WIDTH,
+      maxWidth: FAN_CHART_MAX_WIDTH,
+      ajaxUrl,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve fan chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -6994,6 +7286,13 @@ const server = createServer(async (req, res) => {
 
   if (compactTreeChartMatch !== null) {
     await handleCompactTreeChartPage(req, res, compactTreeChartMatch, url);
+    return;
+  }
+
+  const fanChartMatch = matchFanChartPagePath(url.pathname);
+
+  if (fanChartMatch !== null) {
+    await handleFanChartPage(req, res, fanChartMatch, url);
     return;
   }
 

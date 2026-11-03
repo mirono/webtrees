@@ -223,6 +223,14 @@ export function isCompactTreeChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/compact\/[^/]+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/fan-chart-{style}-{generations}-{width}/{xref}:
+// FanChartModule - the SIXTH chart route. Real PHP renders a GD PNG
+// bitmap; the Node port renders the same wedge geometry as inline SVG
+// instead, so no module-action route is needed here either.
+export function isFanChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/fan-chart-\d+-\d+-\d+\/[^/]+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -257,7 +265,8 @@ export function isNodeRoute(pathname, searchParams) {
     isHourglassChartPagePath(pathname) ||
     isHourglassChartActionPath(pathname) ||
     isFamilyBookChartPagePath(pathname) ||
-    isCompactTreeChartPagePath(pathname)
+    isCompactTreeChartPagePath(pathname) ||
+    isFanChartPagePath(pathname)
   ) {
     return true;
   }
@@ -291,7 +300,8 @@ export function isNodeRoute(pathname, searchParams) {
     isHourglassChartPagePath(route) ||
     isHourglassChartActionPath(route) ||
     isFamilyBookChartPagePath(route) ||
-    isCompactTreeChartPagePath(route)
+    isCompactTreeChartPagePath(route) ||
+    isFanChartPagePath(route)
   );
 }
 
