@@ -184,7 +184,7 @@ function renderFact({ tag, value, date, time, author, otherAttributes = [] }) {
  * }} params.media `fullNameHtml` is PRE-ESCAPED SAFE HTML - inserted
  *   RAW, never passed through escapeHtml() again.
  */
-export function renderMediaPage({ tree, user, csrfToken, media }) {
+export function renderMediaPage({ tree, user, csrfToken, media , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -236,6 +236,7 @@ export function renderMediaPage({ tree, user, csrfToken, media }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

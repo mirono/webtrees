@@ -87,7 +87,7 @@ function renderLastChange(lastChange) {
  *   table in .table-responsive (which only turned "columns missing" into
  *   "columns require scrolling to reach", not a real fix).
  */
-export function renderSourceListPage({ tree, user, csrfToken, title, sources, showLastChange }) {
+export function renderSourceListPage({ tree, user, csrfToken, title, sources, showLastChange , genealogyMenuHtml = '' }) {
   // Mirrors sources-table.phtml's own `array_sum($count_xxx) > 0` checks
   // - each derived from the rows themselves (every source already
   // carries its own resolved counts), not a separate tree preference
@@ -213,6 +213,7 @@ export function renderSourceListPage({ tree, user, csrfToken, title, sources, sh
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

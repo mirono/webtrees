@@ -173,7 +173,7 @@ function renderFact({ tag, date, time, place, address, author }) {
  *   null-or-Individual return shape) - the view can't tell the two
  *   cases apart and doesn't need to, same as PHP's own template.
  */
-export function renderFamilyPage({ tree, user, csrfToken, family }) {
+export function renderFamilyPage({ tree, user, csrfToken, family , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -247,6 +247,7 @@ export function renderFamilyPage({ tree, user, csrfToken, family }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

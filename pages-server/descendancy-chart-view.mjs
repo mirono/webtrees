@@ -108,7 +108,7 @@ export function renderDescendancyTreeNode(node) {
  * @param {object} params same shape as renderAncestorsChartPage()'s own params
  * @returns {string}
  */
-export function renderDescendancyChartPage({ tree, user, csrfToken, title, individual, generations, minGenerations, maxGenerations, style, ajaxUrl }) {
+export function renderDescendancyChartPage({ tree, user, csrfToken, title, individual, generations, minGenerations, maxGenerations, style, ajaxUrl , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -165,6 +165,7 @@ export function renderDescendancyChartPage({ tree, user, csrfToken, title, indiv
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

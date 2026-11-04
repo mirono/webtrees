@@ -369,6 +369,7 @@ export function renderFanChartPage({
   minWidth,
   maxWidth,
   ajaxUrl,
+  genealogyMenuHtml = '',
 }) {
   const csrfMetaTag =
     user !== null
@@ -422,6 +423,7 @@ export function renderFanChartPage({
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

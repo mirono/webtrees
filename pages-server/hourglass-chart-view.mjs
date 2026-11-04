@@ -238,7 +238,7 @@ export function renderHourglassChart({ individualBox, spouseBoxes, descendantsIt
  * @param {string} params.ajaxUrl
  * @returns {string}
  */
-export function renderHourglassChartPage({ tree, user, csrfToken, title, individual, generations, minGenerations, maxGenerations, spouses, ajaxUrl }) {
+export function renderHourglassChartPage({ tree, user, csrfToken, title, individual, generations, minGenerations, maxGenerations, spouses, ajaxUrl , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -278,6 +278,7 @@ export function renderHourglassChartPage({ tree, user, csrfToken, title, individ
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

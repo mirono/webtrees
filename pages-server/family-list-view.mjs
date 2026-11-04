@@ -533,6 +533,7 @@ export function renderFamilyListPage({
   tree,
   user,
   csrfToken,
+  genealogyMenuHtml = '',
   title,
   legendHtml,
   surnameInitials,
@@ -616,6 +617,7 @@ export function renderFamilyListPage({
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

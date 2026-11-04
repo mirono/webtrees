@@ -159,6 +159,8 @@ import {
 import { renderFamilyBookChart, renderFamilyBookChartPage } from './family-book-chart-view.mjs';
 import { renderCompactTreeChart, renderCompactTreeChartPage } from './compact-tree-chart-view.mjs';
 import { buildFanWedges, renderFanChart, renderFanChartPage } from './fan-chart-view.mjs';
+import { buildGenealogyMenu } from './genealogy-menu.mjs';
+import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
 import { loadSubmitter, submitterCanShowRecord, displayableSubmitterFacts, submitterFactOtherAttributes } from './submitter.mjs';
 import { renderSubmitterPage } from './submitter-view.mjs';
@@ -849,8 +851,12 @@ async function handleTreePage(req, res, treeName) {
     return;
   }
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderTreePage({ tree, user, csrfToken, welcomeBlock });
+  const html = renderTreePage({ tree, user, csrfToken, welcomeBlock, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -1288,8 +1294,12 @@ async function handleIndividualPage(req, res, treeName, xref) {
     mediaImages,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderIndividualPage({ tree, user, csrfToken, individual: individualViewModel });
+  const html = renderIndividualPage({ tree, user, csrfToken, individual: individualViewModel, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -2093,8 +2103,12 @@ async function handleFamilyPage(req, res, treeName, xref) {
     facts: visibleFacts,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderFamilyPage({ tree, user, csrfToken, family: familyViewModel });
+  const html = renderFamilyPage({ tree, user, csrfToken, family: familyViewModel, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -2261,8 +2275,12 @@ async function handleSourcePage(req, res, treeName, xref) {
     facts: visibleFacts,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderSourcePage({ tree, user, csrfToken, source: sourceViewModel });
+  const html = renderSourcePage({ tree, user, csrfToken, source: sourceViewModel, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -2384,8 +2402,12 @@ async function handleRepositoryPage(req, res, treeName, xref) {
     facts: visibleFacts,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderRepositoryPage({ tree, user, csrfToken, repository: repositoryViewModel });
+  const html = renderRepositoryPage({ tree, user, csrfToken, repository: repositoryViewModel, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -2530,8 +2552,12 @@ async function handleNotePage(req, res, treeName, xref) {
     facts: visibleFacts,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderNotePage({ tree, user, csrfToken, note: noteViewModel });
+  const html = renderNotePage({ tree, user, csrfToken, note: noteViewModel, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -2681,8 +2707,12 @@ async function handleMediaPage(req, res, treeName, xref) {
     facts: visibleFacts,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderMediaPage({ tree, user, csrfToken, media: mediaViewModel });
+  const html = renderMediaPage({ tree, user, csrfToken, media: mediaViewModel, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -2813,8 +2843,12 @@ async function handleSubmitterPage(req, res, treeName, xref) {
     facts: visibleFacts,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderSubmitterPage({ tree, user, csrfToken, submitter: submitterViewModel });
+  const html = renderSubmitterPage({ tree, user, csrfToken, submitter: submitterViewModel, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -2970,8 +3004,12 @@ async function handleHeaderPage(req, res, treeName, xref) {
     facts: visibleFacts,
   };
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderHeaderPage({ tree, user, csrfToken, header: headerViewModel });
+  const html = renderHeaderPage({ tree, user, csrfToken, header: headerViewModel, genealogyMenuHtml });
 
   const responseHeaders = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -3105,8 +3143,12 @@ async function handleRepositoryListPage(req, res, treeName) {
     return;
   }
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderRepositoryListPage({ tree, user, csrfToken, title: 'Repositories', repositories, showLastChange });
+  const html = renderRepositoryListPage({ tree, user, csrfToken, title: 'Repositories', repositories, showLastChange, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -3249,8 +3291,12 @@ async function handleSourceListPage(req, res, treeName) {
     return;
   }
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderSourceListPage({ tree, user, csrfToken, title: 'Sources', sources, showLastChange });
+  const html = renderSourceListPage({ tree, user, csrfToken, title: 'Sources', sources, showLastChange, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -3378,8 +3424,12 @@ async function handleNoteListPage(req, res, treeName) {
     return;
   }
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderNoteListPage({ tree, user, csrfToken, title: 'Notes', notes, showLastChange });
+  const html = renderNoteListPage({ tree, user, csrfToken, title: 'Notes', notes, showLastChange, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -3499,8 +3549,12 @@ async function handleLocationListPage(req, res, treeName) {
     return;
   }
 
+  const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+  const genealogyMenuHtml = renderGenealogyMenuNav(
+    await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+  );
   const csrfToken = user !== null ? generateCsrfToken() : null;
-  const html = renderLocationListPage({ tree, user, csrfToken, title: 'Locations', locations, showLastChange });
+  const html = renderLocationListPage({ tree, user, csrfToken, title: 'Locations', locations, showLastChange, genealogyMenuHtml });
 
   const headers = { 'content-type': 'text/html; charset=utf-8' };
 
@@ -3847,12 +3901,17 @@ async function handleFamilyListPage(req, res, treeName, url) {
         }
       }
 
+      const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+      const genealogyMenuHtml = renderGenealogyMenuNav(
+        await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+      );
       const csrfToken = user !== null ? generateCsrfToken() : null;
       const html = renderFamilyListPage({
         routeSegment: resolved.routeSegment,
         tree,
         user,
         csrfToken,
+        genealogyMenuHtml,
         title: resolved.title,
         legendHtml: resolved.legendHtml,
         surnameInitials: initials,
@@ -4163,12 +4222,17 @@ async function handleIndividualListPage(req, res, treeName, url) {
         }
       }
 
+      const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+      const genealogyMenuHtml = renderGenealogyMenuNav(
+        await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+      );
       const csrfToken = user !== null ? generateCsrfToken() : null;
       const html = renderFamilyListPage({
         routeSegment: resolved.routeSegment,
         tree,
         user,
         csrfToken,
+        genealogyMenuHtml,
         title: resolved.title,
         legendHtml: resolved.legendHtml,
         surnameInitials: initials,
@@ -4565,11 +4629,16 @@ async function handleMediaListPage(req, res, treeName, url) {
       });
     }
 
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: null }),
+    );
     const csrfToken = user !== null ? generateCsrfToken() : null;
     const html = renderMediaListPage({
       tree,
       user,
       csrfToken,
+      genealogyMenuHtml,
       folders,
       folder,
       subdirs,
@@ -4993,11 +5062,16 @@ async function handleAncestorsChartPage(req, res, match, url) {
 
     const ajaxUrl = `/tree/${tree.name}/ancestors-${style}-${generations}/${encodeURIComponent(xref)}?ajax=1`;
 
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+    );
     const csrfToken = user !== null ? generateCsrfToken() : null;
     const html = renderAncestorsChartPage({
       tree,
       user,
       csrfToken,
+      genealogyMenuHtml,
       title: chartTitle,
       individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
       generations,
@@ -5387,11 +5461,16 @@ async function handleDescendancyChartPage(req, res, match, url) {
 
     const ajaxUrl = `/tree/${tree.name}/descendants-${style}-${generations}/${encodeURIComponent(xref)}?ajax=1`;
 
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+    );
     const csrfToken = user !== null ? generateCsrfToken() : null;
     const html = renderDescendancyChartPage({
       tree,
       user,
       csrfToken,
+      genealogyMenuHtml,
       title: chartTitle,
       individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
       generations,
@@ -5824,11 +5903,16 @@ async function handleHourglassChartPage(req, res, match, url) {
 
     const ajaxUrl = `/tree/${tree.name}/hourglass-${generations}-${spouses ? '1' : '0'}/${encodeURIComponent(xref)}?ajax=1`;
 
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+    );
     const csrfToken = user !== null ? generateCsrfToken() : null;
     const html = renderHourglassChartPage({
       tree,
       user,
       csrfToken,
+      genealogyMenuHtml,
       title: chartTitle,
       individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
       generations,
@@ -6487,11 +6571,16 @@ async function handleFamilyBookChartPage(req, res, match, url) {
 
     const ajaxUrl = `/tree/${tree.name}/family-book-${bookSize}-${generations}-${spouses ? '1' : '0'}/${encodeURIComponent(xref)}?ajax=1`;
 
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+    );
     const csrfToken = user !== null ? generateCsrfToken() : null;
     const html = renderFamilyBookChartPage({
       tree,
       user,
       csrfToken,
+      genealogyMenuHtml,
       title: chartTitle,
       individual: { xref: individual.xref, fullNameHtml: individualFullNameHtml },
       bookSize,
@@ -6778,11 +6867,16 @@ async function handleCompactTreeChartPage(req, res, match, url) {
 
     const ajaxUrl = `/tree/${tree.name}/compact/${encodeURIComponent(xref)}?ajax=1`;
 
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+    );
     const csrfToken = user !== null ? generateCsrfToken() : null;
     const html = renderCompactTreeChartPage({
       tree,
       user,
       csrfToken,
+      genealogyMenuHtml,
       title: chartTitle,
       individual: { xref: individual.xref },
       ajaxUrl,
@@ -7055,11 +7149,16 @@ async function handleFanChartPage(req, res, match, url) {
 
     const ajaxUrl = `/tree/${tree.name}/fan-chart-${style}-${generations}-${width}/${encodeURIComponent(xref)}?ajax=1`;
 
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+    );
     const csrfToken = user !== null ? generateCsrfToken() : null;
     const html = renderFanChartPage({
       tree,
       user,
       csrfToken,
+      genealogyMenuHtml,
       title: chartTitle,
       individual: { xref: individual.xref },
       style,

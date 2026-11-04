@@ -70,7 +70,7 @@ function renderLastChange(lastChange) {
  *   the caller from the tree's own preference (source.mjs's
  *   loadShowLastChangePref()).
  */
-export function renderLocationListPage({ tree, user, csrfToken, title, locations, showLastChange }) {
+export function renderLocationListPage({ tree, user, csrfToken, title, locations, showLastChange , genealogyMenuHtml = '' }) {
   // Mirrors locations-table.phtml's own `array_sum($count_xxx) > 0` checks -
   // each derived from the rows themselves (every location already carries
   // its own resolved counts), not a separate tree preference like
@@ -169,6 +169,7 @@ export function renderLocationListPage({ tree, user, csrfToken, title, locations
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

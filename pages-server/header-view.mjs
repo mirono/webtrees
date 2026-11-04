@@ -111,7 +111,7 @@ function renderFact({ tag, value, date, time, author, submUrl, submNameHtml, oth
  *   PRE-ESCAPED SAFE HTML - inserted RAW, never passed through
  *   escapeHtml() again.
  */
-export function renderHeaderPage({ tree, user, csrfToken, header }) {
+export function renderHeaderPage({ tree, user, csrfToken, header , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -166,6 +166,7 @@ export function renderHeaderPage({ tree, user, csrfToken, header }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

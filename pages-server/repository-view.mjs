@@ -109,7 +109,7 @@ function renderFact({ tag, value, date, time, author, otherAttributes = [] }) {
  *   pages-server/individual.mjs's extractNameFromFact()) - inserted
  *   RAW, never passed through escapeHtml() again.
  */
-export function renderRepositoryPage({ tree, user, csrfToken, repository }) {
+export function renderRepositoryPage({ tree, user, csrfToken, repository , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -164,6 +164,7 @@ export function renderRepositoryPage({ tree, user, csrfToken, repository }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

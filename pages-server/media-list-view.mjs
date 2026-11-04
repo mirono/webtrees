@@ -187,7 +187,7 @@ function mediaCardHtml(media) {
  * @param {object[]} params.media see mediaCardHtml()'s own param doc
  * @returns {string}
  */
-export function renderMediaListPage({ tree, user, csrfToken, folders, folder, subdirs, max, format, filter, count, page, pages, media }) {
+export function renderMediaListPage({ tree, user, csrfToken, folders, folder, subdirs, max, format, filter, count, page, pages, media , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -253,6 +253,7 @@ export function renderMediaListPage({ tree, user, csrfToken, folders, folder, su
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

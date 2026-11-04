@@ -112,7 +112,7 @@ function renderFact({ tag, value, date, time, author, otherAttributes = [] }) {
  * }} params.submitter `fullNameHtml` is PRE-ESCAPED SAFE HTML - inserted
  *   RAW, never passed through escapeHtml() again.
  */
-export function renderSubmitterPage({ tree, user, csrfToken, submitter }) {
+export function renderSubmitterPage({ tree, user, csrfToken, submitter , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -167,6 +167,7 @@ export function renderSubmitterPage({ tree, user, csrfToken, submitter }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

@@ -291,7 +291,7 @@ export function renderCompactTreeChart(cells) {
  * @param {string} params.ajaxUrl
  * @returns {string}
  */
-export function renderCompactTreeChartPage({ tree, user, csrfToken, title, individual, ajaxUrl }) {
+export function renderCompactTreeChartPage({ tree, user, csrfToken, title, individual, ajaxUrl , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -331,6 +331,7 @@ export function renderCompactTreeChartPage({ tree, user, csrfToken, title, indiv
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

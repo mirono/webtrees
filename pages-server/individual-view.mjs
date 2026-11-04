@@ -854,7 +854,7 @@ function renderSidebar({ extraInformationHtml, familyNavigatorHtml }) {
  *   in each family entry is likewise pre-escaped (built from two such
  *   fullNameHtml values in pages-server/index.mjs).
  */
-export function renderIndividualPage({ tree, user, csrfToken, individual }) {
+export function renderIndividualPage({ tree, user, csrfToken, individual , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -924,6 +924,7 @@ export function renderIndividualPage({ tree, user, csrfToken, individual }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

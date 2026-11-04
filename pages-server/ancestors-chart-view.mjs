@@ -119,7 +119,7 @@ export function renderAncestorsTreeNode(node) {
  * @param {string} params.ajaxUrl
  * @returns {string}
  */
-export function renderAncestorsChartPage({ tree, user, csrfToken, title, individual, generations, minGenerations, maxGenerations, style, ajaxUrl }) {
+export function renderAncestorsChartPage({ tree, user, csrfToken, title, individual, generations, minGenerations, maxGenerations, style, ajaxUrl , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -176,6 +176,7 @@ export function renderAncestorsChartPage({ tree, user, csrfToken, title, individ
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

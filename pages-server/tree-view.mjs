@@ -88,7 +88,7 @@ function renderWelcomeBlock({ blockId, title, links }) {
  *   null if the block should not render at all (disabled, not visible
  *   at the viewer's access level, or no significant individual found)
  */
-export function renderTreePage({ tree, user, csrfToken, welcomeBlock }) {
+export function renderTreePage({ tree, user, csrfToken, welcomeBlock , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -139,6 +139,7 @@ export function renderTreePage({ tree, user, csrfToken, welcomeBlock }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

@@ -72,7 +72,7 @@ function renderLastChange(lastChange) {
  *   the caller from the tree's own preference (source.mjs's
  *   loadShowLastChangePref()).
  */
-export function renderNoteListPage({ tree, user, csrfToken, title, notes, showLastChange }) {
+export function renderNoteListPage({ tree, user, csrfToken, title, notes, showLastChange , genealogyMenuHtml = '' }) {
   // Mirrors notes-table.phtml's own `array_sum($count_xxx) > 0` checks -
   // each derived from the rows themselves (every note already carries
   // its own resolved counts), not a separate tree preference like
@@ -177,6 +177,7 @@ export function renderNoteListPage({ tree, user, csrfToken, title, notes, showLa
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

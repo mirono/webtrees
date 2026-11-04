@@ -230,6 +230,7 @@ export function renderFamilyBookChartPage({
   maxGenerations,
   spouses,
   ajaxUrl,
+  genealogyMenuHtml = '',
 }) {
   const csrfMetaTag =
     user !== null
@@ -270,6 +271,7 @@ export function renderFamilyBookChartPage({
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

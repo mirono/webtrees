@@ -72,7 +72,7 @@ function renderLastChange(lastChange) {
  *   (source.mjs's loadShowLastChangePref()), not derived from the rows
  *   themselves like the "Sources" column below.
  */
-export function renderRepositoryListPage({ tree, user, csrfToken, title, repositories, showLastChange }) {
+export function renderRepositoryListPage({ tree, user, csrfToken, title, repositories, showLastChange , genealogyMenuHtml = '' }) {
   // Mirrors repositories-table.phtml's own `array_sum($count_sources) > 0`
   // check - unlike showLastChange above, this is derived from the rows
   // themselves (every repository already carries its own resolved
@@ -160,6 +160,7 @@ export function renderRepositoryListPage({ tree, user, csrfToken, title, reposit
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

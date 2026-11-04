@@ -96,7 +96,7 @@ function renderFact({ tag, value, date, time, author, otherAttributes = [] }) {
  *   never passed through escapeHtml() again. `text` is plain (NOT
  *   pre-escaped) - escaped here.
  */
-export function renderNotePage({ tree, user, csrfToken, note }) {
+export function renderNotePage({ tree, user, csrfToken, note , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -154,6 +154,7 @@ export function renderNotePage({ tree, user, csrfToken, note }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>

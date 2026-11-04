@@ -120,7 +120,7 @@ function renderFact({ tag, value, date, time, author, repoUrl, repoNameHtml, oth
  *   escapeHtml() again. `repoUrl`/`repoNameHtml` are present only for
  *   a REPO fact whose referenced repository still exists.
  */
-export function renderSourcePage({ tree, user, csrfToken, source }) {
+export function renderSourcePage({ tree, user, csrfToken, source , genealogyMenuHtml = '' }) {
   const csrfMetaTag =
     user !== null
       ? `
@@ -175,6 +175,7 @@ export function renderSourcePage({ tree, user, csrfToken, source }) {
                     <ul class="nav wt-user-menu">${userMenuHtml}
                     </ul>
                 </div>
+                ${genealogyMenuHtml}
             </div>
         </div>
     </header>
