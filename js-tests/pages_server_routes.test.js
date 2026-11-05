@@ -32,6 +32,7 @@ import {
   matchFanChartPagePath,
   matchLifespansChartPagePath,
   matchTimelineChartPagePath,
+  matchRelationshipsChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -801,5 +802,42 @@ describe('matchTimelineChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchTimelineChartPagePath('/tree/ophir')).toBeNull();
     expect(matchTimelineChartPagePath('/tree/ophir/lifespans')).toBeNull();
+  });
+});
+
+describe('matchRelationshipsChartPagePath', () => {
+  test('extracts tree, ancestors, recursion, xref - xref2 defaults to empty', () => {
+    expect(matchRelationshipsChartPagePath('/tree/ophir/relationships-0-99/I1')).toEqual({
+      tree: 'ophir',
+      ancestors: 0,
+      recursion: 99,
+      xref: 'I1',
+      xref2: '',
+    });
+  });
+
+  test('extracts xref2 when present', () => {
+    expect(matchRelationshipsChartPagePath('/tree/ophir/relationships-1-3/I1/I2')).toEqual({
+      tree: 'ophir',
+      ancestors: 1,
+      recursion: 3,
+      xref: 'I1',
+      xref2: 'I2',
+    });
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchRelationshipsChartPagePath('/tree/ophir/relationships-0-99/I1/I2/')).toEqual({
+      tree: 'ophir',
+      ancestors: 0,
+      recursion: 99,
+      xref: 'I1',
+      xref2: 'I2',
+    });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchRelationshipsChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchRelationshipsChartPagePath('/tree/ophir/timeline-10')).toBeNull();
   });
 });

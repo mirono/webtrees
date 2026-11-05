@@ -26,6 +26,7 @@ import {
   isFanChartPagePath,
   isLifespansChartPagePath,
   isTimelineChartPagePath,
+  isRelationshipsChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -810,6 +811,18 @@ describe('isTimelineChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(isTimelineChartPagePath('/tree/ophir')).toBe(false);
     expect(isTimelineChartPagePath('/tree/ophir/lifespans')).toBe(false);
+  });
+});
+
+describe('isRelationshipsChartPagePath', () => {
+  test('matches with and without xref2', () => {
+    expect(isRelationshipsChartPagePath('/tree/ophir/relationships-0-99/I1')).toBe(true);
+    expect(isRelationshipsChartPagePath('/tree/ophir/relationships-0-99/I1/I2')).toBe(true);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isRelationshipsChartPagePath('/tree/ophir')).toBe(false);
+    expect(isRelationshipsChartPagePath('/tree/ophir/timeline-10')).toBe(false);
   });
 });
 

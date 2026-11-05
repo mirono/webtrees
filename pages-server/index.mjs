@@ -86,6 +86,7 @@ import {
   matchFanChartPagePath,
   matchLifespansChartPagePath,
   matchTimelineChartPagePath,
+  matchRelationshipsChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -150,6 +151,7 @@ import {
 } from './media.mjs';
 import { renderMediaListPage } from './media-list-view.mjs';
 import { buildChartBoxViewModel, loadShowHighlightImagesPref, loadShowPrivateRelationshipsPref } from './chart-box.mjs';
+import { renderChartBox } from './chart-box-view.mjs';
 import { renderAncestorsTreeNode, renderAncestorsChartPage } from './ancestors-chart-view.mjs';
 import { renderDescendancyTreeNode, renderDescendancyChartPage } from './descendancy-chart-view.mjs';
 import {
@@ -182,6 +184,17 @@ import {
   timelineZoomOut,
 } from './timeline-chart.mjs';
 import { renderTimelineChart, renderTimelineChartPage } from './timeline-chart-view.mjs';
+import {
+  loadLinkGraphRows,
+  buildLinkGraph,
+  collectAncestors,
+  collectExcludedFamilies,
+  calculateRelationshipPaths,
+  relationshipCodesForPath,
+  loadPathRecords,
+} from './relationship-chart.mjs';
+import { legacyNameAlgorithm } from './relationship-names.mjs';
+import { renderRelationshipsChart, renderRelationshipsChartPage, buildRelationshipGrid, renderRelationshipPath } from './relationship-chart-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -7788,6 +7801,353 @@ async function handleTimelineChartPage(req, res, match, url) {
   }
 }
 
+// Mirrors RelationshipsChartModule's own Defaults (app/Module/RelationshipsChartModule.php:71-77).
+const RELATIONSHIPS_CHART_DEFAULT_ANCESTORS = 0;
+const RELATIONSHIPS_CHART_DEFAULT_RECURSION = 99;
+
+/**
+ * Mirrors `$tree->getPreference('RELATIONSHIP_ANCESTORS'/'RELATIONSHIP_RECURSION', <default>)` -
+ * only used for the options-page UI (whether to show a fixed value or
+ * a choice) and to clamp the URL's own `recursion` - the URL's own
+ * `ancestors` flag always drives the actual search, unclamped.
+ */
+async function loadRelationshipChartPrefs(gedcomId) {
+  const result = await pool.query(
+    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('RELATIONSHIP_ANCESTORS', 'RELATIONSHIP_RECURSION')",
+    [gedcomId],
+  );
+  const byName = Object.fromEntries(result.rows.map((row) => [row.setting_name, row.setting_value]));
+
+  return {
+    ancestorsOnly: (byName.RELATIONSHIP_ANCESTORS ?? String(RELATIONSHIPS_CHART_DEFAULT_ANCESTORS)) === '1',
+    maxRecursion: parseInt(byName.RELATIONSHIP_RECURSION ?? String(RELATIONSHIPS_CHART_DEFAULT_RECURSION), 10),
+  };
+}
+
+function reflexivePronoun(sex) {
+  if (sex === 'M') {
+    return 'himself';
+  }
+
+  if (sex === 'F') {
+    return 'herself';
+  }
+
+  return 'themself';
+}
+
+async function handleRelationshipsChartPage(req, res, match, url) {
+  const { tree: treeName, ancestors, recursion, xref, xref2 } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  // Mirrors RelationshipsChartModule::handle()'s own "Convert POST
+  // requests into GET requests for pretty URLs".
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedAncestors = formData.get('ancestors') ?? '';
+    const postedRecursion = formData.get('recursion') ?? '';
+    const postedXref = formData.get('xref') ?? '';
+    const postedXref2 = formData.get('xref2') ?? '';
+
+    const xref2Segment = postedXref2 !== '' ? `/${encodeURIComponent(postedXref2)}` : '';
+
+    res.writeHead(302, {
+      Location: `/tree/${tree.name}/relationships-${postedAncestors}-${postedRecursion}/${encodeURIComponent(postedXref)}${xref2Segment}`,
+    });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'relationships_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'relationships_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+    const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+    const glideKey = await loadGlideKey(pool);
+    const { ancestorsOnly, maxRecursion } = await loadRelationshipChartPrefs(tree.gedcomId);
+    const clampedRecursion = Math.min(recursion, maxRecursion);
+
+    const relationshipGateBlocked = relPrefs.gedcomid !== null && relPrefs.pathLength > 0;
+    const viewerBaseFor = (xrefForBase) => ({
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === xrefForBase,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead: false,
+      relationshipGateBlocked,
+    });
+
+    // Mirrors `Auth::checkIndividualAccess($individualN, false, true)` -
+    // a 403 for the WHOLE page if either individual exists but isn't
+    // accessible; a nonexistent xref (no such record at all) is NOT a
+    // 404 here, unlike every other chart - $individual1/2 simply stay
+    // null and the options page still renders (just with no chart).
+    async function resolveTargetIndividual(xrefToResolve) {
+      if (xrefToResolve === '') {
+        return null;
+      }
+
+      const individual = await loadIndividual(pool, tree.gedcomId, xrefToResolve);
+
+      if (individual === null) {
+        return null;
+      }
+
+      const facts = parseFacts(individual.gedcom);
+      const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, xrefToResolve);
+      const viewer = viewerBaseFor(xrefToResolve);
+      const treeForPrivacy = {
+        hideLivePeople: treePrivacyPrefs.hideLivePeople,
+        defaultResn: defaultResnInfo.individualResn,
+        keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+        keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+      };
+      const shown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, { ...viewer, dead });
+
+      return { individual, shown };
+    }
+
+    const resolved1 = await resolveTargetIndividual(xref);
+    const resolved2 = await resolveTargetIndividual(xref2);
+
+    if ((resolved1 !== null && !resolved1.shown) || (resolved2 !== null && !resolved2.shown)) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual1 = resolved1?.individual ?? null;
+    const individual2 = resolved2?.individual ?? null;
+
+    const primaryName1 = individual1 !== null ? extractPrimaryName(individual1.gedcom) : null;
+    const primaryName2 = individual2 !== null ? extractPrimaryName(individual2.gedcom) : null;
+    const fullNameHtml1 = individual1 !== null ? (primaryName1 !== null ? primaryName1.full : `<span class="NAME" dir="auto" translate="no">${individual1.xref}</span>`) : '';
+    const fullNameHtml2 = individual2 !== null ? (primaryName2 !== null ? primaryName2.full : `<span class="NAME" dir="auto" translate="no">${individual2.xref}</span>`) : '';
+
+    const bothPresent = individual1 !== null && individual2 !== null;
+    const chartTitle = bothPresent
+      ? `Relationships between ${fullNameHtml1.replace(/<[^>]*>/g, '')} and ${fullNameHtml2.replace(/<[^>]*>/g, '')}`
+      : 'Relationships';
+
+    if (url.searchParams.get('ajax') === '1' && bothPresent) {
+      const typedRows = await loadLinkGraphRows(pool, tree.gedcomId);
+
+      let allowedFrom = null;
+      let excludedTo = null;
+
+      if (ancestors === 1) {
+        allowedFrom = collectAncestors(typedRows, individual1.xref, individual2.xref);
+        excludedTo = collectExcludedFamilies(typedRows, individual1.xref, individual2.xref);
+      }
+
+      const graph = buildLinkGraph(typedRows, allowedFrom, excludedTo);
+      const paths = calculateRelationshipPaths(graph, individual1.xref, individual2.xref, clampedRecursion);
+      const { familyGedcomByXref, sexByIndividualXref, individualGedcomByXref } = await loadPathRecords(pool, tree.gedcomId, paths);
+
+      const birthDateCache = new Map();
+
+      const personInfo = (xref3) => {
+        if (!birthDateCache.has(xref3)) {
+          const gedcom = individualGedcomByXref.get(xref3);
+          birthDateCache.set(xref3, {
+            sex: sexByIndividualXref.get(xref3) ?? 'U',
+            birthDate: gedcom !== undefined ? getBirthDate(parseFacts(gedcom)) : null,
+          });
+        }
+
+        return birthDateCache.get(xref3);
+      };
+
+      const boxCache = new Map();
+
+      const boxFor = async (xref3) => {
+        if (boxCache.has(xref3)) {
+          return boxCache.get(xref3);
+        }
+
+        const individual = await loadIndividual(pool, tree.gedcomId, xref3);
+        const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, xref3);
+        const box =
+          individual !== null
+            ? await buildChartBoxViewModel(
+                pool,
+                tree.gedcomId,
+                tree.name,
+                treePrivacyPrefs,
+                false,
+                individual,
+                viewerBaseFor(xref3),
+                traversalAccessLevel,
+                defaultResnInfo,
+                glideKey,
+                siteUrlConfig,
+              )
+            : null;
+
+        boxCache.set(xref3, box);
+
+        return box;
+      };
+
+      const renderedPaths = [];
+
+      for (const path of paths) {
+        if (path.length === 1) {
+          const info = personInfo(path[0]);
+          const box = await boxFor(path[0]);
+          const grid = buildRelationshipGrid(path, [], () => '', () => (box !== null ? renderChartBox(box) : ''));
+          renderedPaths.push(renderRelationshipPath(reflexivePronoun(info.sex), grid));
+          continue;
+        }
+
+        const codes = relationshipCodesForPath(path, familyGedcomByXref, sexByIndividualXref);
+
+        if (codes === null) {
+          continue;
+        }
+
+        // Pre-resolve every box this path needs before building the
+        // grid (buildRelationshipGrid()'s own callbacks are
+        // synchronous, matching chart.phtml's own plain PHP loop).
+        const boxes = new Map();
+
+        for (let n = 0; n < path.length; n += 2) {
+          boxes.set(path[n], await boxFor(path[n]));
+        }
+
+        const grid = buildRelationshipGrid(
+          path,
+          codes,
+          (n) => {
+            const code = codes[n];
+            const linkingFamilyFacts = parseFacts(familyGedcomByXref.get(path[n]) ?? '');
+
+            return legacyNameAlgorithm(code, personInfo(path[n - 1]), personInfo(path[n + 1]), linkingFamilyFacts);
+          },
+          (n) => {
+            const box = boxes.get(path[n]);
+
+            return box !== null ? renderChartBox(box) : '';
+          },
+        );
+
+        let concatenatedCodes = '';
+
+        for (let n = 1; n < path.length; n += 2) {
+          concatenatedCodes += codes[n];
+        }
+
+        const titleLinkingFamilyFacts = path.length === 3 ? parseFacts(familyGedcomByXref.get(path[1]) ?? '') : null;
+        const relationshipLabel = legacyNameAlgorithm(concatenatedCodes, personInfo(path[0]), personInfo(path[path.length - 1]), titleLinkingFamilyFacts);
+
+        renderedPaths.push(renderRelationshipPath(relationshipLabel, grid));
+      }
+
+      const bodyHtml = renderRelationshipsChart(renderedPaths);
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = bothPresent
+      ? `/tree/${tree.name}/relationships-${ancestors}-${clampedRecursion}/${encodeURIComponent(individual1.xref)}/${encodeURIComponent(individual2.xref)}?ajax=1`
+      : '';
+
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel, xrefParam: individual1?.xref ?? null }),
+    );
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderRelationshipsChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: chartTitle,
+      xref1: individual1?.xref ?? xref,
+      xref2: individual2?.xref ?? xref2,
+      ancestors,
+      ancestorsOnly,
+      recursion: clampedRecursion,
+      maxRecursion,
+      ajaxUrl,
+      genealogyMenuHtml,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve relationships chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -8007,6 +8367,13 @@ const server = createServer(async (req, res) => {
 
   if (timelineChartMatch !== null) {
     await handleTimelineChartPage(req, res, timelineChartMatch, url);
+    return;
+  }
+
+  const relationshipsChartMatch = matchRelationshipsChartPagePath(url.pathname);
+
+  if (relationshipsChartMatch !== null) {
+    await handleRelationshipsChartPage(req, res, relationshipsChartMatch, url);
     return;
   }
 

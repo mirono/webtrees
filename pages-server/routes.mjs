@@ -599,3 +599,31 @@ export function matchTimelineChartPagePath(pathname) {
     scale: parseInt(match[2], 10),
   };
 }
+
+/**
+ * PHP's route (RelationshipsChartModule::ROUTE_URL -
+ * `/tree/{tree}/relationships-{ancestors}-{recursion}/{xref}{/xref2}`) -
+ * the NINTH chart route, and the first that's a graph search between
+ * TWO individuals rather than a traversal from one root. `{/xref2}`
+ * is a real PHP "optional trailing segment" token - `xref2` can be
+ * entirely absent from the URL (not just empty), matching real PHP's
+ * own `Validator::attributes($request)->isXref()->string('xref2', '')` default.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, ancestors: number, recursion: number, xref: string, xref2: string}|null}
+ */
+export function matchRelationshipsChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/relationships-(\d+)-(\d+)\/([^/]+)(?:\/([^/]+))?\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    ancestors: parseInt(match[2], 10),
+    recursion: parseInt(match[3], 10),
+    xref: decodeURIComponent(match[4]),
+    xref2: match[5] ? decodeURIComponent(match[5]) : '',
+  };
+}

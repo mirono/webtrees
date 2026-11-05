@@ -244,6 +244,12 @@ export function isTimelineChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/timeline-\d+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/relationships-{ancestors}-{recursion}/{xref}{/xref2}:
+// RelationshipsChartModule - the NINTH chart route.
+export function isRelationshipsChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/relationships-\d+-\d+\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -281,7 +287,8 @@ export function isNodeRoute(pathname, searchParams) {
     isCompactTreeChartPagePath(pathname) ||
     isFanChartPagePath(pathname) ||
     isLifespansChartPagePath(pathname) ||
-    isTimelineChartPagePath(pathname)
+    isTimelineChartPagePath(pathname) ||
+    isRelationshipsChartPagePath(pathname)
   ) {
     return true;
   }
@@ -318,7 +325,8 @@ export function isNodeRoute(pathname, searchParams) {
     isCompactTreeChartPagePath(route) ||
     isFanChartPagePath(route) ||
     isLifespansChartPagePath(route) ||
-    isTimelineChartPagePath(route)
+    isTimelineChartPagePath(route) ||
+    isRelationshipsChartPagePath(route)
   );
 }
 
