@@ -231,6 +231,13 @@ export function isFanChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/fan-chart-\d+-\d+-\d+\/[^/]+\/?$/.test(pathname);
 }
 
+// /tree/{tree}/lifespans: LifespansChartModule - the SEVENTH chart
+// route, with no {xref} path segment (the accumulated individual list
+// lives in the `xrefs` query string).
+export function isLifespansChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/lifespans\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -266,7 +273,8 @@ export function isNodeRoute(pathname, searchParams) {
     isHourglassChartActionPath(pathname) ||
     isFamilyBookChartPagePath(pathname) ||
     isCompactTreeChartPagePath(pathname) ||
-    isFanChartPagePath(pathname)
+    isFanChartPagePath(pathname) ||
+    isLifespansChartPagePath(pathname)
   ) {
     return true;
   }
@@ -301,7 +309,8 @@ export function isNodeRoute(pathname, searchParams) {
     isHourglassChartActionPath(route) ||
     isFamilyBookChartPagePath(route) ||
     isCompactTreeChartPagePath(route) ||
-    isFanChartPagePath(route)
+    isFanChartPagePath(route) ||
+    isLifespansChartPagePath(route)
   );
 }
 

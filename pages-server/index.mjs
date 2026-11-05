@@ -84,6 +84,7 @@ import {
   matchFamilyBookChartPagePath,
   matchCompactTreeChartPagePath,
   matchFanChartPagePath,
+  matchLifespansChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -159,6 +160,18 @@ import {
 import { renderFamilyBookChart, renderFamilyBookChartPage } from './family-book-chart-view.mjs';
 import { renderCompactTreeChart, renderCompactTreeChartPage } from './compact-tree-chart-view.mjs';
 import { buildFanWedges, renderFanChart, renderFanChartPage } from './fan-chart-view.mjs';
+import {
+  parseLifespansXrefs,
+  joinLifespansXrefs,
+  closeFamilyXrefs,
+  resolvePlaceId,
+  findIndividualsByDate,
+  findIndividualsByPlace,
+  lifespansMinYear,
+  lifespansMaxYear,
+  layoutIndividuals,
+} from './lifespans-chart.mjs';
+import { renderLifespansChart, renderLifespansChartPage } from './lifespans-chart-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -7187,6 +7200,283 @@ async function handleFanChartPage(req, res, match, url) {
   }
 }
 
+/**
+ * Mirrors LifespansChartModule::handle()'s own xrefs-resolution
+ * pipeline EXACTLY (app/Module/LifespansChartModule.php:128-184),
+ * including a real surprise found reading it closely: a place/date
+ * search REPLACES the accumulated xref list rather than adding to
+ * it (a straight `$xrefs = ...` reassignment, not a merge) - even an
+ * `addxref` from the SAME request gets discarded if a place/date
+ * search also fires. Runs identically for GET and POST (POST just
+ * also has addxref/addfam/place/start/end body fields to apply) -
+ * real PHP always runs this whole pipeline before ever checking the
+ * method, which is also why the privacy filter below applies even to
+ * the POST->GET redirect's own carried-forward xref list.
+ *
+ * @param {object} ctx
+ * @param {string[]} initialXrefs from the request's own query string
+ * @param {{addXref: string, addFamily: boolean, place: string, start: string, end: string}} formFields blank/false for a GET request, matching real PHP's own Validator defaults
+ * @returns {Promise<string[]>}
+ */
+async function resolveLifespansXrefs(ctx, initialXrefs, formFields) {
+  let xrefs = [...new Set(initialXrefs)];
+
+  const addIndividual = formFields.addXref !== '' ? await loadIndividual(pool, ctx.gedcomId, formFields.addXref) : null;
+
+  if (addIndividual !== null) {
+    xrefs.push(addIndividual.xref);
+
+    if (formFields.addFamily) {
+      xrefs.push(...(await closeFamilyXrefs(pool, ctx.gedcomId, addIndividual.xref)));
+    }
+  }
+
+  const startDate = formFields.start !== '' ? new GedcomDate(formFields.start) : new GedcomDate('');
+  const endDate = formFields.end !== '' ? new GedcomDate(formFields.end) : new GedcomDate('');
+  const placeId = formFields.place !== '' ? await resolvePlaceId(pool, ctx.gedcomId, formFields.place) : 0;
+
+  if (placeId !== 0 && startDate.isOK() && endDate.isOK()) {
+    const dateXrefs = await findIndividualsByDate(pool, ctx.gedcomId, startDate, endDate);
+    const placeXrefs = new Set(await findIndividualsByPlace(pool, ctx.gedcomId, placeId));
+    xrefs = dateXrefs.filter((xref) => placeXrefs.has(xref));
+  } else if (startDate.isOK() && endDate.isOK()) {
+    xrefs = await findIndividualsByDate(pool, ctx.gedcomId, startDate, endDate);
+  } else if (placeId !== 0) {
+    xrefs = await findIndividualsByPlace(pool, ctx.gedcomId, placeId);
+  }
+
+  xrefs = [...new Set(xrefs)];
+
+  const visibleXrefs = [];
+
+  for (const xref of xrefs) {
+    const individual = await loadIndividual(pool, ctx.gedcomId, xref);
+
+    if (individual === null) {
+      continue;
+    }
+
+    const defaultResnInfo = await loadDefaultResn(pool, ctx.gedcomId, xref);
+    const box = await buildChartBoxViewModel(
+      pool,
+      ctx.gedcomId,
+      ctx.treeName,
+      ctx.treePrivacyPrefs,
+      false,
+      individual,
+      ctx.viewerBaseFor(xref),
+      ctx.traversalAccessLevel,
+      defaultResnInfo,
+      ctx.glideKey,
+      ctx.siteUrlConfig,
+    );
+
+    if (box.canShow) {
+      visibleXrefs.push(xref);
+    }
+  }
+
+  return visibleXrefs;
+}
+
+async function handleLifespansChartPage(req, res, match, url) {
+  const { tree: treeName } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+    const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+    const glideKey = await loadGlideKey(pool);
+
+    // Unlike every single-root chart (Compact/Fan/...), Lifespans has no
+    // "root individual" to build one shared viewerBase around - its own
+    // individuals are an arbitrary accumulated set, so isSelfRecord
+    // (the viewer's own linked-record privacy bypass) is computed FRESH
+    // per individual below, not reused from one shared object.
+    const relationshipGateBlocked = relPrefs.gedcomid !== null && relPrefs.pathLength > 0;
+    const viewerBaseFor = (xref) => ({
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead: false,
+      relationshipGateBlocked,
+    });
+
+    const ctx = {
+      gedcomId: tree.gedcomId,
+      treeName: tree.name,
+      treePrivacyPrefs,
+      viewerBaseFor,
+      traversalAccessLevel,
+      glideKey,
+      siteUrlConfig,
+    };
+
+    let formFields = { addXref: '', addFamily: false, place: '', start: '', end: '' };
+
+    if (req.method === 'POST') {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      formFields = {
+        addXref: formData.get('addxref') ?? '',
+        addFamily: formData.get('addfam') !== null,
+        place: formData.get('place') ?? '',
+        start: formData.get('start') ?? '',
+        end: formData.get('end') ?? '',
+      };
+    }
+
+    const initialXrefs = parseLifespansXrefs(url.searchParams);
+    const xrefs = await resolveLifespansXrefs(ctx, initialXrefs, formFields);
+
+    if (req.method === 'POST') {
+      res.writeHead(302, { Location: `/tree/${tree.name}/lifespans?xrefs=${encodeURIComponent(joinLifespansXrefs(xrefs))}` });
+      res.end();
+      return;
+    }
+
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'lifespans_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'lifespans_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    if (url.searchParams.get('ajax') === '1') {
+      const individuals = [];
+
+      for (const xref of xrefs) {
+        const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+        if (individual === null) {
+          continue;
+        }
+
+        const facts = parseFacts(individual.gedcom);
+        const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, xref);
+        const box = await buildChartBoxViewModel(
+          pool,
+          tree.gedcomId,
+          tree.name,
+          treePrivacyPrefs,
+          false,
+          individual,
+          ctx.viewerBaseFor(xref),
+          traversalAccessLevel,
+          defaultResnInfo,
+          glideKey,
+          siteUrlConfig,
+        );
+
+        const birthDate = await getEstimatedBirthDate(pool, tree.gedcomId, xref, facts, treePrivacyPrefs.maxAliveAge);
+        const deathDate = getEstimatedDeathDate(facts, birthDate, treePrivacyPrefs.maxAliveAge);
+
+        individuals.push({ box, birthDate, deathDate });
+      }
+
+      individuals.sort((a, b) => GedcomDate.compare(a.birthDate, b.birthDate));
+
+      const startYear = lifespansMinYear(individuals);
+      const endYear = lifespansMaxYear(individuals) + 1;
+      const lifespans = layoutIndividuals(individuals);
+      const maxRows = lifespans.reduce((carry, item) => Math.max(carry, item.row), 0);
+      const count = individuals.length;
+      const subtitle = count === 1 ? '1 individual' : `${count} individuals`;
+
+      const bodyHtml = renderLifespansChart({ subtitle, startYear, endYear, lifespans, maxRows });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const ajaxUrl = `/tree/${tree.name}/lifespans?ajax=1&xrefs=${encodeURIComponent(joinLifespansXrefs(xrefs))}`;
+    const resetUrl = `/tree/${tree.name}/lifespans`;
+
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel, xrefParam: xrefs[0] ?? null }),
+    );
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderLifespansChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: 'Lifespans',
+      xrefs,
+      resetUrl,
+      ajaxUrl,
+      genealogyMenuHtml,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve lifespans chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -7392,6 +7682,13 @@ const server = createServer(async (req, res) => {
 
   if (fanChartMatch !== null) {
     await handleFanChartPage(req, res, fanChartMatch, url);
+    return;
+  }
+
+  const lifespansChartMatch = matchLifespansChartPagePath(url.pathname);
+
+  if (lifespansChartMatch !== null) {
+    await handleLifespansChartPage(req, res, lifespansChartMatch, url);
     return;
   }
 

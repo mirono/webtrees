@@ -553,3 +553,26 @@ export function matchFanChartPagePath(pathname) {
     xref: decodeURIComponent(match[5]),
   };
 }
+
+/**
+ * PHP's route (LifespansChartModule::ROUTE_URL - `/tree/{tree}/lifespans`) -
+ * the SEVENTH chart route, and the first with no `{xref}` path segment
+ * at all - the accumulated individual list lives entirely in the
+ * `xrefs` query string (dot-joined, or the legacy `xrefs[]=...` array
+ * form), parsed separately by parseLifespansXrefs()
+ * (pages-server/lifespans-chart.mjs).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string}|null}
+ */
+export function matchLifespansChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/lifespans\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+  };
+}

@@ -30,6 +30,7 @@ import {
   matchFamilyBookChartPagePath,
   matchCompactTreeChartPagePath,
   matchFanChartPagePath,
+  matchLifespansChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -769,5 +770,20 @@ describe('matchFanChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchFanChartPagePath('/tree/ophir')).toBeNull();
     expect(matchFanChartPagePath('/tree/ophir/compact/I1')).toBeNull();
+  });
+});
+
+describe('matchLifespansChartPagePath', () => {
+  test('extracts tree, with no other path segments', () => {
+    expect(matchLifespansChartPagePath('/tree/ophir/lifespans')).toEqual({ tree: 'ophir' });
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchLifespansChartPagePath('/tree/ophir/lifespans/')).toEqual({ tree: 'ophir' });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchLifespansChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchLifespansChartPagePath('/tree/ophir/lifespans/I1')).toBeNull();
   });
 });

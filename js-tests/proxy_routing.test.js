@@ -24,6 +24,7 @@ import {
   isFamilyBookChartPagePath,
   isCompactTreeChartPagePath,
   isFanChartPagePath,
+  isLifespansChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -786,6 +787,17 @@ describe('isFanChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(isFanChartPagePath('/tree/ophir')).toBe(false);
     expect(isFanChartPagePath('/tree/ophir/compact/I1')).toBe(false);
+  });
+});
+
+describe('isLifespansChartPagePath', () => {
+  test('matches the real path shape', () => {
+    expect(isLifespansChartPagePath('/tree/ophir/lifespans')).toBe(true);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isLifespansChartPagePath('/tree/ophir')).toBe(false);
+    expect(isLifespansChartPagePath('/tree/ophir/lifespans/I1')).toBe(false);
   });
 });
 
