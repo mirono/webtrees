@@ -85,6 +85,7 @@ import {
   matchCompactTreeChartPagePath,
   matchFanChartPagePath,
   matchLifespansChartPagePath,
+  matchTimelineChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -172,6 +173,15 @@ import {
   layoutIndividuals,
 } from './lifespans-chart.mjs';
 import { renderLifespansChart, renderLifespansChartPage } from './lifespans-chart-view.mjs';
+import {
+  collectIndividualTimelineEvents,
+  layoutTimelineEvents,
+  timelineColorIndex,
+  timelineEventYear,
+  timelineZoomIn,
+  timelineZoomOut,
+} from './timeline-chart.mjs';
+import { renderTimelineChart, renderTimelineChartPage } from './timeline-chart-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -7477,6 +7487,307 @@ async function handleLifespansChartPage(req, res, match, url) {
   }
 }
 
+// Mirrors TimelineChartModule's own Defaults/Limits constants
+// (app/Module/TimelineChartModule.php:49-57).
+const TIMELINE_CHART_DEFAULT_SCALE = 10;
+const TIMELINE_CHART_MIN_SCALE = 1;
+const TIMELINE_CHART_MAX_SCALE = 200;
+const TIMELINE_CHART_BOX_HEIGHT = 30;
+
+function timelineMemberFullNameHtml(individualRecord) {
+  const primaryName = extractPrimaryName(individualRecord.gedcom);
+
+  return primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individualRecord.xref}</span>`;
+}
+
+async function handleTimelineChartPage(req, res, match, url) {
+  const { tree: treeName, scale } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  if (!Number.isInteger(scale) || scale < TIMELINE_CHART_MIN_SCALE || scale > TIMELINE_CHART_MAX_SCALE) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    // Mirrors TimelineChartModule::handle()'s own `$xrefs = array_filter(array_unique($xrefs))`
+    // - the array form only (`xrefs[]=...`), no dot-joined encoding
+    // (unlike Lifespans - TimelineChartModule has no SEPARATOR constant).
+    const initialXrefs = [...new Set(url.searchParams.getAll('xrefs[]'))].filter((xref) => xref !== '');
+
+    // Mirrors LifespansChartModule::handle()'s own "Convert POST
+    // requests into GET requests for pretty URLs" - here just one
+    // `add` xref gets appended before the redirect.
+    if (req.method === 'POST') {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const addXref = formData.get('add') ?? '';
+      const redirectXrefs = addXref !== '' ? [...initialXrefs, addXref] : initialXrefs;
+
+      const redirectParams = new URLSearchParams();
+
+      for (const xref of redirectXrefs) {
+        redirectParams.append('xrefs[]', xref);
+      }
+
+      res.writeHead(302, { Location: `/tree/${tree.name}/timeline-${scale}?${redirectParams.toString()}` });
+      res.end();
+      return;
+    }
+
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'timeline_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'timeline_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+    const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+    const glideKey = await loadGlideKey(pool);
+
+    // Same reasoning as Lifespans: no "root" individual here either, so
+    // isSelfRecord is computed fresh per individual, not shared.
+    const relationshipGateBlocked = relPrefs.gedcomid !== null && relPrefs.pathLength > 0;
+    const viewerBaseFor = (xref) => ({
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead: false,
+      relationshipGateBlocked,
+    });
+
+    // Resolve + privacy-filter, preserving the ORIGINAL xref order (it's
+    // the color-assignment order real PHP's own `array_search($event->record(), $individuals, true)` uses).
+    const selectedXrefs = [];
+    const selectedBoxes = new Map();
+
+    for (const xref of initialXrefs) {
+      const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+      if (individual === null) {
+        continue;
+      }
+
+      const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, xref);
+      const box = await buildChartBoxViewModel(
+        pool,
+        tree.gedcomId,
+        tree.name,
+        treePrivacyPrefs,
+        false,
+        individual,
+        viewerBaseFor(xref),
+        traversalAccessLevel,
+        defaultResnInfo,
+        glideKey,
+        siteUrlConfig,
+      );
+
+      if (box.canShow) {
+        selectedXrefs.push(xref);
+        selectedBoxes.set(xref, box);
+      }
+    }
+
+    if (url.searchParams.get('ajax') === '1') {
+      const ctx = { gedcomId: tree.gedcomId, accessLevel: traversalAccessLevel };
+      const eventsByKey = new Map();
+      let baseyear = new Date().getFullYear();
+      let topyear = 0;
+
+      const resolveShownFamilyFor = (familyXref) => resolveShownFamily(tree, treePrivacyPrefs, traversalAccessLevel, relPrefs, familyXref);
+
+      for (const xref of selectedXrefs) {
+        const individual = await loadIndividual(pool, tree.gedcomId, xref);
+        const facts = parseFacts(individual.gedcom);
+        const individualIsDead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+
+        const { events, topYearBump } = await collectIndividualTimelineEvents(pool, ctx, individual, individualIsDead, resolveShownFamilyFor);
+
+        for (const event of events) {
+          if (!eventsByKey.has(event.key)) {
+            eventsByKey.set(event.key, event);
+          }
+
+          const year = timelineEventYear(event);
+          baseyear = Math.min(baseyear, year);
+          topyear = Math.max(topyear, year);
+        }
+
+        if (topYearBump) {
+          topyear = Math.max(topyear, new Date().getFullYear());
+        }
+      }
+
+      let resolvedScale = scale;
+
+      if (resolvedScale < 2) {
+        resolvedScale = 2;
+      }
+
+      baseyear -= 5;
+      topyear += 5;
+
+      const sortedEvents = [...eventsByKey.values()].sort((a, b) => GedcomDate.compare(a.gedcomDate, b.gedcomDate));
+      const placedEvents = layoutTimelineEvents(sortedEvents, baseyear, resolvedScale, TIMELINE_CHART_BOX_HEIGHT);
+      const showNames = selectedXrefs.length > 8;
+
+      const decoratedEvents = placedEvents.map((event) => {
+        const colorIndex = timelineColorIndex(selectedXrefs, event);
+        const dateDisplay = displayDate(event.gedcomDate);
+        const ownerFullNameHtml = showNames ? (selectedBoxes.get(event.ownerXref)?.fullNameHtml ?? '') : '';
+
+        let ageHtml = '';
+        let family = null;
+
+        if (event.recordType === 'family') {
+          const findMember = (xref) => event.spouses.find((member) => member.individual.xref === xref) ?? null;
+          const husband = findMember(event.husbandXref);
+          const wife = findMember(event.wifeXref);
+
+          const ages = [];
+
+          for (const [member, label] of [
+            [husband, "Husband's age"],
+            [wife, "Wife's age"],
+          ]) {
+            const birthDate = member !== null ? getBirthDate(member.facts) : null;
+
+            if (birthDate !== null && birthDate.date.isOK()) {
+              const age = new Age(
+                { minimumDate: birthDate.date.minimumDate(), maximumDate: birthDate.date.maximumDate(), isOK: true },
+                { minimumDate: event.gedcomDate.minimumDate(), maximumDate: event.gedcomDate.maximumDate(), isOK: true },
+              ).toString();
+
+              ages.push(`<span class="age"> ${label} ${age}</span>`);
+            }
+          }
+
+          ageHtml = ages.join('');
+          family = {
+            url: `/tree/${tree.name}/family/${event.ownerXref}`,
+            fullNameHtml: `${husband !== null ? timelineMemberFullNameHtml(husband.individual) : UNKNOWN_NAME_HTML} + ${wife !== null ? timelineMemberFullNameHtml(wife.individual) : UNKNOWN_NAME_HTML}`,
+          };
+        }
+
+        return { ...event, colorIndex, dateDisplay, ownerFullNameHtml, ageHtml, family };
+      });
+
+      const bodyHtml = renderTimelineChart({
+        baseyear,
+        topyear,
+        scale: resolvedScale,
+        bheight: TIMELINE_CHART_BOX_HEIGHT,
+        placedEvents: decoratedEvents,
+        showNames,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    const xrefsQuery = selectedXrefs.map((xref) => `xrefs%5B%5D=${encodeURIComponent(xref)}`).join('&');
+    const individuals = selectedXrefs.map((xref) => {
+      const removeXrefs = selectedXrefs.filter((other) => other !== xref);
+      const removeQuery = removeXrefs.map((other) => `xrefs%5B%5D=${encodeURIComponent(other)}`).join('&');
+
+      return { box: selectedBoxes.get(xref), removeUrl: `/tree/${tree.name}/timeline-${scale}?${removeQuery}` };
+    });
+
+    const resetUrl = `/tree/${tree.name}/timeline-${TIMELINE_CHART_DEFAULT_SCALE}`;
+    const zoomInUrl = `/tree/${tree.name}/timeline-${timelineZoomIn(scale, TIMELINE_CHART_MIN_SCALE, TIMELINE_CHART_MAX_SCALE)}?${xrefsQuery}`;
+    const zoomOutUrl = `/tree/${tree.name}/timeline-${timelineZoomOut(scale, TIMELINE_CHART_MIN_SCALE, TIMELINE_CHART_MAX_SCALE)}?${xrefsQuery}`;
+    const ajaxUrl = `/tree/${tree.name}/timeline-${scale}?ajax=1&${xrefsQuery}`;
+
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel, xrefParam: selectedXrefs[0] ?? null }),
+    );
+
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderTimelineChartPage({
+      tree,
+      user,
+      csrfToken,
+      title: 'Timeline',
+      individuals,
+      resetUrl,
+      zoomInUrl,
+      zoomOutUrl,
+      ajaxUrl,
+      genealogyMenuHtml,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve timeline chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -7689,6 +8000,13 @@ const server = createServer(async (req, res) => {
 
   if (lifespansChartMatch !== null) {
     await handleLifespansChartPage(req, res, lifespansChartMatch, url);
+    return;
+  }
+
+  const timelineChartMatch = matchTimelineChartPagePath(url.pathname);
+
+  if (timelineChartMatch !== null) {
+    await handleTimelineChartPage(req, res, timelineChartMatch, url);
     return;
   }
 

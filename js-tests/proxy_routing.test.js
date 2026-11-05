@@ -25,6 +25,7 @@ import {
   isCompactTreeChartPagePath,
   isFanChartPagePath,
   isLifespansChartPagePath,
+  isTimelineChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -798,6 +799,17 @@ describe('isLifespansChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(isLifespansChartPagePath('/tree/ophir')).toBe(false);
     expect(isLifespansChartPagePath('/tree/ophir/lifespans/I1')).toBe(false);
+  });
+});
+
+describe('isTimelineChartPagePath', () => {
+  test('matches the real path shape', () => {
+    expect(isTimelineChartPagePath('/tree/ophir/timeline-10')).toBe(true);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isTimelineChartPagePath('/tree/ophir')).toBe(false);
+    expect(isTimelineChartPagePath('/tree/ophir/lifespans')).toBe(false);
   });
 });
 

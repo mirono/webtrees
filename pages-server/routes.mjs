@@ -576,3 +576,26 @@ export function matchLifespansChartPagePath(pathname) {
     tree: decodeURIComponent(match[1]),
   };
 }
+
+/**
+ * PHP's route (TimelineChartModule::ROUTE_URL - `/tree/{tree}/timeline-{scale}`) -
+ * the EIGHTH chart route. Like Lifespans, the accumulated individual
+ * list lives entirely in the `xrefs` query string - but Timeline only
+ * ever accepts the array form (`xrefs[]=...`), not Lifespans' dot-
+ * joined encoding (TimelineChartModule has no SEPARATOR constant).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, scale: number}|null}
+ */
+export function matchTimelineChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/timeline-(\d+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    scale: parseInt(match[2], 10),
+  };
+}

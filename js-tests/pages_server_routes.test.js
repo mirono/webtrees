@@ -31,6 +31,7 @@ import {
   matchCompactTreeChartPagePath,
   matchFanChartPagePath,
   matchLifespansChartPagePath,
+  matchTimelineChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -785,5 +786,20 @@ describe('matchLifespansChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchLifespansChartPagePath('/tree/ophir')).toBeNull();
     expect(matchLifespansChartPagePath('/tree/ophir/lifespans/I1')).toBeNull();
+  });
+});
+
+describe('matchTimelineChartPagePath', () => {
+  test('extracts tree and scale', () => {
+    expect(matchTimelineChartPagePath('/tree/ophir/timeline-10')).toEqual({ tree: 'ophir', scale: 10 });
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchTimelineChartPagePath('/tree/ophir/timeline-200/')).toEqual({ tree: 'ophir', scale: 200 });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchTimelineChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchTimelineChartPagePath('/tree/ophir/lifespans')).toBeNull();
   });
 });

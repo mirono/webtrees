@@ -238,6 +238,12 @@ export function isLifespansChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/lifespans\/?$/.test(pathname);
 }
 
+// /tree/{tree}/timeline-{scale}: TimelineChartModule - the EIGHTH
+// chart route.
+export function isTimelineChartPagePath(pathname) {
+  return /^\/tree\/[^/]+\/timeline-\d+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -274,7 +280,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFamilyBookChartPagePath(pathname) ||
     isCompactTreeChartPagePath(pathname) ||
     isFanChartPagePath(pathname) ||
-    isLifespansChartPagePath(pathname)
+    isLifespansChartPagePath(pathname) ||
+    isTimelineChartPagePath(pathname)
   ) {
     return true;
   }
@@ -310,7 +317,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFamilyBookChartPagePath(route) ||
     isCompactTreeChartPagePath(route) ||
     isFanChartPagePath(route) ||
-    isLifespansChartPagePath(route)
+    isLifespansChartPagePath(route) ||
+    isTimelineChartPagePath(route)
   );
 }
 
