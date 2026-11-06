@@ -250,6 +250,17 @@ export function isRelationshipsChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/relationships-\d+-\d+\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname);
 }
 
+// /module/statistics_chart/{Chart|Individuals|Families|Other|Custom|CustomChart}/{tree}:
+// StatisticsChartModule - the TENTH chart route, and the SECOND
+// (deliberately narrow) use of PHP's generic `/module/{module}/{action}/{tree}`
+// route shape - see isHourglassChartActionPath() above for the first.
+// This module has no `{xref}` of its own (a tree-wide chart, not an
+// individual's), so unlike every other chart route this one has no
+// trailing xref segment at all.
+export function isStatisticsChartActionPath(pathname) {
+  return /^\/module\/statistics_chart\/(Chart|Individuals|Families|Other|Custom|CustomChart)\/[^/]+\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -288,7 +299,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFanChartPagePath(pathname) ||
     isLifespansChartPagePath(pathname) ||
     isTimelineChartPagePath(pathname) ||
-    isRelationshipsChartPagePath(pathname)
+    isRelationshipsChartPagePath(pathname) ||
+    isStatisticsChartActionPath(pathname)
   ) {
     return true;
   }
@@ -326,7 +338,8 @@ export function isNodeRoute(pathname, searchParams) {
     isFanChartPagePath(route) ||
     isLifespansChartPagePath(route) ||
     isTimelineChartPagePath(route) ||
-    isRelationshipsChartPagePath(route)
+    isRelationshipsChartPagePath(route) ||
+    isStatisticsChartActionPath(route)
   );
 }
 

@@ -33,6 +33,7 @@ import {
   matchLifespansChartPagePath,
   matchTimelineChartPagePath,
   matchRelationshipsChartPagePath,
+  matchStatisticsChartActionPath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -839,5 +840,23 @@ describe('matchRelationshipsChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(matchRelationshipsChartPagePath('/tree/ophir')).toBeNull();
     expect(matchRelationshipsChartPagePath('/tree/ophir/timeline-10')).toBeNull();
+  });
+});
+
+describe('matchStatisticsChartActionPath', () => {
+  test('extracts the action and tree for each known action', () => {
+    for (const action of ['Chart', 'Individuals', 'Families', 'Other', 'Custom', 'CustomChart']) {
+      expect(matchStatisticsChartActionPath(`/module/statistics_chart/${action}/ophir`)).toEqual({ action, tree: 'ophir' });
+    }
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchStatisticsChartActionPath('/module/statistics_chart/Chart/ophir/')).toEqual({ action: 'Chart', tree: 'ophir' });
+  });
+
+  test('an unknown action, or a different module, does not match', () => {
+    expect(matchStatisticsChartActionPath('/module/statistics_chart/Bogus/ophir')).toBeNull();
+    expect(matchStatisticsChartActionPath('/module/hourglass_chart/Chart/ophir')).toBeNull();
+    expect(matchStatisticsChartActionPath('/tree/ophir')).toBeNull();
   });
 });

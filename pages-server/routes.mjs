@@ -627,3 +627,30 @@ export function matchRelationshipsChartPagePath(pathname) {
     xref2: match[5] ? decodeURIComponent(match[5]) : '',
   };
 }
+
+/**
+ * PHP's generic module-action route (`/module/{module}/{action}/{tree}`
+ * - app/Http/Routes/WebRoutes.php:718, dispatched by ModuleAction) - the
+ * TENTH chart route, and the SECOND (deliberately narrow) use of this
+ * generic route shape in the migration - see
+ * matchHourglassChartActionPath()'s doc comment for why it's scoped per
+ * module rather than general. StatisticsChartModule has no `{xref}` of
+ * its own at all (it's a tree-wide chart, not an individual's chart) -
+ * instead FIVE actions, all GET except CustomChart (POST only, the
+ * "Create your own chart" form submission): Chart (the tabbed page
+ * shell), Individuals/Families/Other (the three AJAX-loaded tab-content
+ * fragments), Custom (the "build your own" form), CustomChart (the
+ * form's POST handler, returning the built Chart.js data).
+ *
+ * @param {string} pathname
+ * @returns {{action: 'Chart'|'Individuals'|'Families'|'Other'|'Custom'|'CustomChart', tree: string}|null}
+ */
+export function matchStatisticsChartActionPath(pathname) {
+  const match = /^\/module\/statistics_chart\/(Chart|Individuals|Families|Other|Custom|CustomChart)\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return { action: match[1], tree: decodeURIComponent(match[2]) };
+}

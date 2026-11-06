@@ -27,6 +27,7 @@ import {
   isLifespansChartPagePath,
   isTimelineChartPagePath,
   isRelationshipsChartPagePath,
+  isStatisticsChartActionPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -823,6 +824,19 @@ describe('isRelationshipsChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(isRelationshipsChartPagePath('/tree/ophir')).toBe(false);
     expect(isRelationshipsChartPagePath('/tree/ophir/timeline-10')).toBe(false);
+  });
+});
+
+describe('isStatisticsChartActionPath', () => {
+  test('matches every known action', () => {
+    for (const action of ['Chart', 'Individuals', 'Families', 'Other', 'Custom', 'CustomChart']) {
+      expect(isStatisticsChartActionPath(`/module/statistics_chart/${action}/ophir`)).toBe(true);
+    }
+  });
+
+  test('an unknown action, or a different module, does not match', () => {
+    expect(isStatisticsChartActionPath('/module/statistics_chart/Bogus/ophir')).toBe(false);
+    expect(isStatisticsChartActionPath('/module/hourglass_chart/Chart/ophir')).toBe(false);
   });
 });
 

@@ -87,6 +87,7 @@ import {
   matchLifespansChartPagePath,
   matchTimelineChartPagePath,
   matchRelationshipsChartPagePath,
+  matchStatisticsChartActionPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -195,6 +196,17 @@ import {
 } from './relationship-chart.mjs';
 import { legacyNameAlgorithm } from './relationship-names.mjs';
 import { renderRelationshipsChart, renderRelationshipsChartPage, buildRelationshipGrid, renderRelationshipPath } from './relationship-chart-view.mjs';
+import * as statistics from './statistics.mjs';
+import { individualRecordHtml, familyRecordHtml } from './statistics-records.mjs';
+import { buildCustomChart } from './statistics-custom-chart.mjs';
+import {
+  renderStatisticsChartPage,
+  renderIndividualsTab,
+  renderFamiliesTab,
+  renderOtherTab,
+  renderCustomTab,
+  renderCustomChartResult,
+} from './statistics-chart-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -8148,6 +8160,572 @@ async function handleRelationshipsChartPage(req, res, match, url) {
   }
 }
 
+/**
+ * Mirrors Auth::isMember($tree) (app/Auth.php) - true for a logged-in
+ * user with at least member-level access to this tree. Used only by
+ * the "Oldest living individuals" block's own `!Auth::isMember($tree)`
+ * gate (StatisticsChartModule::topTenOldestFemaleListAlive() et al.).
+ */
+function isMemberAccess(accessLevel) {
+  return accessLevel <= 1;
+}
+
+/**
+ * Resolves one tag's raw `{xref, gedcom}|null` individual record (or
+ * array of `{person: {xref,gedcom}, ...rest}` rows) into the final
+ * privacy-aware HTML string(s) statistics-chart-view.mjs expects -
+ * the bridge between statistics.mjs's raw data and the view layer,
+ * using statistics-records.mjs's privacy logic (same "no root
+ * individual, resolved fresh per record" shape as Lifespans/Timeline).
+ */
+async function resolveIndividualTag(ctx, record) {
+  return individualRecordHtml(ctx.pool, ctx.tree, ctx.treePrivacyPrefs, ctx.accessLevel, ctx.relPrefs, record);
+}
+
+async function resolveFamilyTag(ctx, record) {
+  return familyRecordHtml(ctx.pool, ctx.tree, ctx.treePrivacyPrefs, ctx.accessLevel, ctx.relPrefs, record);
+}
+
+/**
+ * firstEvent/lastEvent (statistics.mjs) are the only tags whose
+ * resolved xref can be EITHER an individual or a family record (every
+ * other fact-specific event tag - firstBirth, firstMarriage, ... -
+ * is pinned to one record type by its fact list) - dispatch on the
+ * `isFamily` flag those two functions attach to their raw record.
+ */
+async function resolveEventRecordTag(ctx, record) {
+  if (record === null) {
+    return 'This information is not available.';
+  }
+  return record.isFamily ? resolveFamilyTag(ctx, record) : resolveIndividualTag(ctx, record);
+}
+
+async function resolvePersonAgeList(ctx, rows) {
+  return Promise.all(rows.map(async (row) => ({ personHtml: await resolveIndividualTag(ctx, row.person), age: row.age })));
+}
+
+async function resolveFamilyCountList(ctx, rows, countKey) {
+  return Promise.all(rows.map(async (row) => ({ familyHtml: await resolveFamilyTag(ctx, row.family), [countKey]: row[countKey] })));
+}
+
+async function resolveSiblingAgeList(ctx, rows) {
+  return Promise.all(
+    rows.map(async (row) => ({
+      child1Html: await resolveIndividualTag(ctx, row.child1),
+      child2Html: await resolveIndividualTag(ctx, row.child2),
+      ageDiff: row.ageDiff,
+    })),
+  );
+}
+
+/**
+ * `ageBetweenSpousesFMList`/`MFList` rows carry `{husband: {xref},
+ * wife: {xref}}` with no `gedcom` (statistics.mjs doesn't load it) -
+ * load it here before handing off to resolveIndividualTag(), same
+ * fetch-then-resolve split used throughout this handler.
+ */
+async function resolveSpouseAgeList(ctx, rows) {
+  return Promise.all(
+    rows.map(async (row) => {
+      const husband = row.husband !== null ? await loadIndividual(pool, ctx.tree.gedcomId, row.husband.xref) : null;
+      const wife = row.wife !== null ? await loadIndividual(pool, ctx.tree.gedcomId, row.wife.xref) : null;
+      return {
+        husbandHtml: await resolveIndividualTag(ctx, husband),
+        wifeHtml: await resolveIndividualTag(ctx, wife),
+        ageDiff: row.ageDiff,
+      };
+    }),
+  );
+}
+
+/** Mirrors modules/statistics-chart/individuals.phtml's tag closure. */
+async function buildIndividualsTabTags(ctx) {
+  const isMember = isMemberAccess(ctx.accessLevel);
+
+  const [
+    totalIndividuals,
+    totalSexMales,
+    totalSexFemales,
+    chartSex,
+    totalLiving,
+    totalDeceased,
+    chartMortality,
+    totalBirths,
+    totalDeaths,
+    statsBirth,
+    statsDeath,
+    firstBirth,
+    lastBirth,
+    firstDeath,
+    lastDeath,
+    averageLifespan,
+    averageLifespanMale,
+    averageLifespanFemale,
+    statsAgeChart,
+    topTenOldestMaleListRaw,
+    topTenOldestFemaleListRaw,
+    topTenOldestMaleListAliveRaw,
+    topTenOldestFemaleListAliveRaw,
+    totalSurnames,
+    chartCommonSurnames,
+    totalGivennames,
+    chartCommonGiven,
+  ] = await Promise.all([
+    statistics.totalIndividuals(pool, ctx.tree.gedcomId),
+    statistics.totalSexMales(pool, ctx.tree.gedcomId),
+    statistics.totalSexFemales(pool, ctx.tree.gedcomId),
+    statistics.chartSex(pool, ctx.tree.gedcomId),
+    statistics.totalLiving(pool, ctx.tree.gedcomId),
+    statistics.totalDeceased(pool, ctx.tree.gedcomId),
+    statistics.chartMortality(pool, ctx.tree.gedcomId),
+    statistics.totalBirths(pool, ctx.tree.gedcomId),
+    statistics.totalDeaths(pool, ctx.tree.gedcomId),
+    statistics.statsBirth(pool, ctx.tree.gedcomId),
+    statistics.statsDeath(pool, ctx.tree.gedcomId),
+    statistics.firstBirth(pool, ctx.tree.gedcomId),
+    statistics.lastBirth(pool, ctx.tree.gedcomId),
+    statistics.firstDeath(pool, ctx.tree.gedcomId),
+    statistics.lastDeath(pool, ctx.tree.gedcomId),
+    statistics.averageLifespan(pool, ctx.tree.gedcomId, '1'),
+    statistics.averageLifespanMale(pool, ctx.tree.gedcomId, '1'),
+    statistics.averageLifespanFemale(pool, ctx.tree.gedcomId, '1'),
+    statistics.statsAge(pool, ctx.tree.gedcomId),
+    statistics.topTenOldestMaleList(pool, ctx.tree.gedcomId),
+    statistics.topTenOldestFemaleList(pool, ctx.tree.gedcomId),
+    statistics.topTenOldestMaleListAlive(pool, ctx.tree.gedcomId, '10', isMember),
+    statistics.topTenOldestFemaleListAlive(pool, ctx.tree.gedcomId, '10', isMember),
+    statistics.totalSurnames(pool, ctx.tree.gedcomId),
+    statistics.chartCommonSurnames(pool, ctx.tree.gedcomId),
+    statistics.totalGivennames(pool, ctx.tree.gedcomId),
+    statistics.chartCommonGiven(pool, ctx.tree.gedcomId),
+  ]);
+
+  const [firstBirthHtml, lastBirthHtml, firstDeathHtml, lastDeathHtml, topTenOldestMaleList, topTenOldestFemaleList] = await Promise.all([
+    resolveIndividualTag(ctx, firstBirth),
+    resolveIndividualTag(ctx, lastBirth),
+    resolveIndividualTag(ctx, firstDeath),
+    resolveIndividualTag(ctx, lastDeath),
+    resolvePersonAgeList(ctx, topTenOldestMaleListRaw),
+    resolvePersonAgeList(ctx, topTenOldestFemaleListRaw),
+  ]);
+
+  const topTenOldestMaleListAlive = typeof topTenOldestMaleListAliveRaw === 'string' ? topTenOldestMaleListAliveRaw : await resolvePersonAgeList(ctx, topTenOldestMaleListAliveRaw);
+  const topTenOldestFemaleListAlive =
+    typeof topTenOldestFemaleListAliveRaw === 'string' ? topTenOldestFemaleListAliveRaw : await resolvePersonAgeList(ctx, topTenOldestFemaleListAliveRaw);
+
+  return {
+    totalIndividuals,
+    totalSexMales,
+    totalSexFemales,
+    chartSex,
+    totalLiving,
+    totalDeceased,
+    chartMortality,
+    totalBirths,
+    totalDeaths,
+    statsBirth,
+    statsDeath,
+    firstBirthHtml,
+    lastBirthHtml,
+    firstDeathHtml,
+    lastDeathHtml,
+    averageLifespan,
+    averageLifespanMale,
+    averageLifespanFemale,
+    statsAge: statsAgeChart,
+    topTenOldestMaleList,
+    topTenOldestFemaleList,
+    topTenOldestMaleListAlive,
+    topTenOldestFemaleListAlive,
+    totalSurnames,
+    chartCommonSurnames,
+    totalGivennames,
+    chartCommonGiven,
+  };
+}
+
+/** Mirrors modules/statistics-chart/families.phtml's tag closure. */
+async function buildFamiliesTabTags(ctx) {
+  const [
+    totalFamilies,
+    totalMarriages,
+    statsMarr,
+    firstMarriage,
+    lastMarriage,
+    totalDivorces,
+    statsDiv,
+    firstDivorce,
+    lastDivorce,
+    topAgeOfMarriage,
+    topAgeOfMarriageFamily,
+    minAgeOfMarriage,
+    minAgeOfMarriageFamily,
+    noChildrenFamilies,
+    chartNoChildrenFamilies,
+    oldestMarriageMale,
+    oldestMarriageMaleAge,
+    oldestMarriageFemale,
+    oldestMarriageFemaleAge,
+    youngestMarriageMale,
+    youngestMarriageMaleAge,
+    youngestMarriageFemale,
+    youngestMarriageFemaleAge,
+    statsMarrAge,
+    oldestFather,
+    oldestFatherAge,
+    oldestMother,
+    oldestMotherAge,
+    youngestFather,
+    youngestFatherAge,
+    youngestMother,
+    youngestMotherAge,
+    averageChildren,
+    statsChildren,
+    topTenLargestFamilyListRaw,
+    topTenLargestGrandFamilyListRaw,
+    topAgeBetweenSiblingsListRaw,
+    topAgeBetweenSiblingsFullName,
+    ageBetweenSpousesFMListRaw,
+    ageBetweenSpousesMFListRaw,
+  ] = await Promise.all([
+    statistics.totalFamilies(pool, ctx.tree.gedcomId),
+    statistics.totalMarriages(pool, ctx.tree.gedcomId),
+    statistics.statsMarr(pool, ctx.tree.gedcomId),
+    statistics.firstMarriage(pool, ctx.tree.gedcomId),
+    statistics.lastMarriage(pool, ctx.tree.gedcomId),
+    statistics.totalDivorces(pool, ctx.tree.gedcomId),
+    statistics.statsDiv(pool, ctx.tree.gedcomId),
+    statistics.firstDivorce(pool, ctx.tree.gedcomId),
+    statistics.lastDivorce(pool, ctx.tree.gedcomId),
+    statistics.topAgeOfMarriage(pool, ctx.tree.gedcomId),
+    statistics.topAgeOfMarriageFamily(pool, ctx.tree.gedcomId),
+    statistics.minAgeOfMarriage(pool, ctx.tree.gedcomId),
+    statistics.minAgeOfMarriageFamily(pool, ctx.tree.gedcomId),
+    statistics.noChildrenFamilies(pool, ctx.tree.gedcomId),
+    statistics.chartNoChildrenFamilies(pool, ctx.tree.gedcomId),
+    statistics.oldestMarriageMale(pool, ctx.tree.gedcomId),
+    statistics.oldestMarriageMaleAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.oldestMarriageFemale(pool, ctx.tree.gedcomId),
+    statistics.oldestMarriageFemaleAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.youngestMarriageMale(pool, ctx.tree.gedcomId),
+    statistics.youngestMarriageMaleAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.youngestMarriageFemale(pool, ctx.tree.gedcomId),
+    statistics.youngestMarriageFemaleAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.statsMarrAge(pool, ctx.tree.gedcomId),
+    statistics.oldestFather(pool, ctx.tree.gedcomId),
+    statistics.oldestFatherAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.oldestMother(pool, ctx.tree.gedcomId),
+    statistics.oldestMotherAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.youngestFather(pool, ctx.tree.gedcomId),
+    statistics.youngestFatherAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.youngestMother(pool, ctx.tree.gedcomId),
+    statistics.youngestMotherAge(pool, ctx.tree.gedcomId, '1'),
+    statistics.averageChildren(pool, ctx.tree.gedcomId),
+    statistics.statsChildren(pool, ctx.tree.gedcomId),
+    statistics.topTenLargestFamilyList(pool, ctx.tree.gedcomId),
+    statistics.topTenLargestGrandFamilyList(pool, ctx.tree.gedcomId),
+    statistics.topAgeBetweenSiblingsList(pool, ctx.tree.gedcomId),
+    statistics.topAgeBetweenSiblingsFullName(pool, ctx.tree.gedcomId),
+    statistics.ageBetweenSpousesFMList(pool, ctx.tree.gedcomId),
+    statistics.ageBetweenSpousesMFList(pool, ctx.tree.gedcomId),
+  ]);
+
+  const [
+    firstMarriageHtml,
+    lastMarriageHtml,
+    firstDivorceHtml,
+    lastDivorceHtml,
+    topAgeOfMarriageFamilyHtml,
+    minAgeOfMarriageFamilyHtml,
+    oldestMarriageMaleHtml,
+    oldestMarriageFemaleHtml,
+    youngestMarriageMaleHtml,
+    youngestMarriageFemaleHtml,
+    oldestFatherHtml,
+    oldestMotherHtml,
+    youngestFatherHtml,
+    youngestMotherHtml,
+    topTenLargestFamilyList,
+    topTenLargestGrandFamilyList,
+    topAgeBetweenSiblingsList,
+    ageBetweenSpousesFMList,
+    ageBetweenSpousesMFList,
+  ] = await Promise.all([
+    resolveIndividualTag(ctx, firstMarriage),
+    resolveIndividualTag(ctx, lastMarriage),
+    resolveIndividualTag(ctx, firstDivorce),
+    resolveIndividualTag(ctx, lastDivorce),
+    resolveFamilyTag(ctx, topAgeOfMarriageFamily),
+    resolveFamilyTag(ctx, minAgeOfMarriageFamily),
+    resolveFamilyTag(ctx, oldestMarriageMale),
+    resolveFamilyTag(ctx, oldestMarriageFemale),
+    resolveFamilyTag(ctx, youngestMarriageMale),
+    resolveFamilyTag(ctx, youngestMarriageFemale),
+    resolveIndividualTag(ctx, oldestFather),
+    resolveIndividualTag(ctx, oldestMother),
+    resolveIndividualTag(ctx, youngestFather),
+    resolveIndividualTag(ctx, youngestMother),
+    resolveFamilyCountList(ctx, topTenLargestFamilyListRaw, 'children'),
+    resolveFamilyCountList(ctx, topTenLargestGrandFamilyListRaw, 'grandchildren'),
+    resolveSiblingAgeList(ctx, topAgeBetweenSiblingsListRaw),
+    resolveSpouseAgeList(ctx, ageBetweenSpousesFMListRaw),
+    resolveSpouseAgeList(ctx, ageBetweenSpousesMFListRaw),
+  ]);
+
+  let topAgeBetweenSiblingsFullNameHtml = 'This information is not available.';
+
+  if (topAgeBetweenSiblingsFullName !== null) {
+    const [child2Html, child1Html, familyHtml] = await Promise.all([
+      resolveIndividualTag(ctx, topAgeBetweenSiblingsFullName.child2),
+      resolveIndividualTag(ctx, topAgeBetweenSiblingsFullName.child1),
+      resolveFamilyTag(ctx, topAgeBetweenSiblingsFullName.family),
+    ]);
+    topAgeBetweenSiblingsFullNameHtml = `${child2Html} and ${child1Html} ${familyHtml}`;
+  }
+
+  return {
+    totalFamilies,
+    totalMarriages,
+    statsMarr,
+    firstMarriageHtml,
+    lastMarriageHtml,
+    totalDivorces,
+    statsDiv,
+    firstDivorceHtml,
+    lastDivorceHtml,
+    topAgeOfMarriage,
+    topAgeOfMarriageFamilyHtml,
+    minAgeOfMarriage,
+    minAgeOfMarriageFamilyHtml,
+    noChildrenFamilies,
+    chartNoChildrenFamilies,
+    oldestMarriageMaleHtml,
+    oldestMarriageMaleAge,
+    oldestMarriageFemaleHtml,
+    oldestMarriageFemaleAge,
+    youngestMarriageMaleHtml,
+    youngestMarriageMaleAge,
+    youngestMarriageFemaleHtml,
+    youngestMarriageFemaleAge,
+    statsMarrAge,
+    oldestFatherHtml,
+    oldestFatherAge,
+    oldestMotherHtml,
+    oldestMotherAge,
+    youngestFatherHtml,
+    youngestFatherAge,
+    youngestMotherHtml,
+    youngestMotherAge,
+    averageChildren,
+    statsChildren,
+    topTenLargestFamilyList,
+    topTenLargestGrandFamilyList,
+    topAgeBetweenSiblingsList,
+    topAgeBetweenSiblingsFullNameHtml,
+    ageBetweenSpousesFMList,
+    ageBetweenSpousesMFList,
+  };
+}
+
+/** Mirrors modules/statistics-chart/other.phtml's tag closure. */
+async function buildOtherTabTags(ctx) {
+  const [
+    totalRecords,
+    totalMedia,
+    totalSources,
+    totalNotes,
+    totalRepositories,
+    totalEvents,
+    firstEvent,
+    lastEvent,
+    firstEventType,
+    lastEventType,
+    chartMedia,
+    totalIndisWithSources,
+    chartIndisWithSources,
+    totalFamsWithSources,
+    chartFamsWithSources,
+    totalPlaces,
+    commonBirthPlacesList,
+    commonDeathPlacesList,
+    commonMarriagePlacesList,
+    commonCountriesList,
+    chartDistribution,
+  ] = await Promise.all([
+    statistics.totalRecords(pool, ctx.tree.gedcomId),
+    statistics.totalMedia(pool, ctx.tree.gedcomId),
+    statistics.totalSources(pool, ctx.tree.gedcomId),
+    statistics.totalNotes(pool, ctx.tree.gedcomId),
+    statistics.totalRepositories(pool, ctx.tree.gedcomId),
+    statistics.totalEvents(pool, ctx.tree.gedcomId),
+    statistics.firstEvent(pool, ctx.tree.gedcomId),
+    statistics.lastEvent(pool, ctx.tree.gedcomId),
+    statistics.firstEventType(pool, ctx.tree.gedcomId),
+    statistics.lastEventType(pool, ctx.tree.gedcomId),
+    statistics.chartMedia(pool, ctx.tree.gedcomId),
+    statistics.totalIndisWithSources(pool, ctx.tree.gedcomId),
+    statistics.chartIndisWithSources(pool, ctx.tree.gedcomId),
+    statistics.totalFamsWithSources(pool, ctx.tree.gedcomId),
+    statistics.chartFamsWithSources(pool, ctx.tree.gedcomId),
+    statistics.totalPlaces(pool, ctx.tree.gedcomId),
+    statistics.commonBirthPlacesList(pool, ctx.tree.gedcomId),
+    statistics.commonDeathPlacesList(pool, ctx.tree.gedcomId),
+    statistics.commonMarriagePlacesList(pool, ctx.tree.gedcomId),
+    statistics.commonCountriesList(pool, ctx.tree.gedcomId),
+    statistics.chartDistribution(pool, ctx.tree.gedcomId),
+  ]);
+
+  const [firstEventHtml, lastEventHtml] = await Promise.all([resolveEventRecordTag(ctx, firstEvent), resolveEventRecordTag(ctx, lastEvent)]);
+
+  return {
+    totalRecords,
+    totalMedia,
+    totalSources,
+    totalNotes,
+    totalRepositories,
+    totalEvents,
+    firstEventHtml,
+    lastEventHtml,
+    firstEventType,
+    lastEventType,
+    chartMedia,
+    totalIndisWithSources,
+    chartIndisWithSources,
+    totalFamsWithSources,
+    chartFamsWithSources,
+    totalPlaces,
+    commonBirthPlacesList,
+    commonDeathPlacesList,
+    commonMarriagePlacesList,
+    commonCountriesList,
+    chartDistribution,
+  };
+}
+
+async function handleStatisticsChartPage(req, res, match) {
+  const { action, tree: treeName } = match;
+
+  if (action === 'CustomChart' ? req.method !== 'POST' : req.method !== 'GET') {
+    res.writeHead(405, { allow: action === 'CustomChart' ? 'POST' : 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'statistics_chart'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const chartAccessLevel = await moduleAccessLevel(
+      tree.gedcomId,
+      'statistics_chart',
+      'Fisharebest\\Webtrees\\Module\\ModuleChartInterface',
+      2,
+    );
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    if (action === 'CustomChart') {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+
+      const result = await buildCustomChart(pool, tree, {
+        xAxisType: parseInt(formData.get('x-as') ?? '0', 10),
+        yAxisType: parseInt(formData.get('y-as') ?? '0', 10),
+        zAxisType: parseInt(formData.get('z-as') ?? '0', 10),
+        zAxisBoundariesPeriods: formData.get('z-axis-boundaries-periods') ?? '',
+        xAxisBoundariesAges: formData.get('x-axis-boundaries-ages') ?? '',
+        xAxisBoundariesAgesM: formData.get('x-axis-boundaries-ages_m') ?? '',
+        chartShows: formData.get('chart_shows') ?? 'world',
+        chartType: formData.get('chart_type') ?? '',
+        surname: formData.get('SURN') ?? '',
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(renderCustomChartResult(result));
+      return;
+    }
+
+    if (action === 'Custom') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(renderCustomTab({ tree }));
+      return;
+    }
+
+    if (action === 'Individuals' || action === 'Families' || action === 'Other') {
+      const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+      const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+      const ctx = { pool, tree, treePrivacyPrefs, accessLevel, relPrefs };
+
+      let bodyHtml;
+
+      if (action === 'Individuals') {
+        bodyHtml = renderIndividualsTab(await buildIndividualsTabTags(ctx));
+      } else if (action === 'Families') {
+        bodyHtml = renderFamiliesTab(await buildFamiliesTabTags(ctx));
+      } else {
+        bodyHtml = renderOtherTab(await buildOtherTabTags(ctx));
+      }
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(bodyHtml);
+      return;
+    }
+
+    // action === 'Chart' - the tabbed shell.
+    const genealogyMenuHtml = renderGenealogyMenuNav(await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel, xrefParam: null }));
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+    const html = renderStatisticsChartPage({ tree, user, csrfToken, genealogyMenuHtml });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve statistics chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -8374,6 +8952,13 @@ const server = createServer(async (req, res) => {
 
   if (relationshipsChartMatch !== null) {
     await handleRelationshipsChartPage(req, res, relationshipsChartMatch, url);
+    return;
+  }
+
+  const statisticsChartMatch = matchStatisticsChartActionPath(url.pathname);
+
+  if (statisticsChartMatch !== null) {
+    await handleStatisticsChartPage(req, res, statisticsChartMatch);
     return;
   }
 
