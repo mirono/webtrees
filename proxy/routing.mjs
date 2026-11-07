@@ -289,6 +289,28 @@ export function isUserManagementPath(pathname) {
   );
 }
 
+// /admin/trees/manage[/{tree}], /admin/trees/create,
+// /admin/trees/default/{tree}, /admin/trees/delete/{tree},
+// /admin/trees/merge, /tree/{tree}/preferences, /tree/{tree}/renumber,
+// /tree/{tree}/privacy, /tree/{tree}/check: tree management step. NOT
+// included (both still fall through to PHP - see
+// pages-server/tree-management.mjs's top doc comment for why):
+// /admin/trees/default-blocks (needs the block-editor framework) and
+// /admin/trees/sync (performs a full GEDCOM import internally).
+export function isTreeManagementPath(pathname) {
+  return (
+    /^\/admin\/trees\/manage(?:\/[^/]+)?\/?$/.test(pathname) ||
+    /^\/admin\/trees\/create\/?$/.test(pathname) ||
+    /^\/admin\/trees\/default\/[^/]+\/?$/.test(pathname) ||
+    /^\/admin\/trees\/delete\/[^/]+\/?$/.test(pathname) ||
+    /^\/admin\/trees\/merge\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/preferences\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/renumber\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/privacy\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/check\/?$/.test(pathname)
+  );
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -331,7 +353,8 @@ export function isNodeRoute(pathname, searchParams) {
     isStatisticsChartActionPath(pathname) ||
     isPedigreeMapChartPagePath(pathname) ||
     isControlPanelPath(pathname) ||
-    isUserManagementPath(pathname)
+    isUserManagementPath(pathname) ||
+    isTreeManagementPath(pathname)
   ) {
     return true;
   }
@@ -373,7 +396,8 @@ export function isNodeRoute(pathname, searchParams) {
     isStatisticsChartActionPath(route) ||
     isPedigreeMapChartPagePath(route) ||
     isControlPanelPath(route) ||
-    isUserManagementPath(route)
+    isUserManagementPath(route) ||
+    isTreeManagementPath(route)
   );
 }
 

@@ -733,3 +733,86 @@ export function matchMasqueradePath(pathname) {
   const match = /^\/admin\/masquerade\/(\d+)\/?$/.exec(pathname);
   return match ? parseInt(match[1], 10) : null;
 }
+
+/**
+ * PHP's routes for tree management (ManageTrees/CreateTreePage/
+ * CreateTreeAction/SelectDefaultTree/DeleteTreeAction/MergeTreesPage/
+ * MergeTreesAction, all under `/admin/trees...`, plus
+ * TreePreferencesPage/Action, RenumberTreePage/Action, TreePrivacyPage/
+ * Action, and CheckTree under `/tree/{tree}/...`). Tree management
+ * step. See pages-server/tree-management.mjs's top doc comment for
+ * the two routes NOT ported (default-blocks, sync).
+ */
+export function matchManageTreesPath(pathname) {
+  return /^\/admin\/trees\/manage(?:\/([^/]+))?\/?$/.test(pathname);
+}
+
+export function matchCreateTreePath(pathname) {
+  return /^\/admin\/trees\/create\/?$/.test(pathname);
+}
+
+/**
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null if this isn't a default-tree request
+ */
+export function matchSelectDefaultTreePath(pathname) {
+  const match = /^\/admin\/trees\/default\/([^/]+)\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null if this isn't a delete-tree request
+ */
+export function matchDeleteTreePath(pathname) {
+  const match = /^\/admin\/trees\/delete\/([^/]+)\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export function matchMergeTreesPath(pathname) {
+  return /^\/admin\/trees\/merge\/?$/.test(pathname);
+}
+
+/**
+ * PHP's route (TreePreferencesPage/TreePreferencesAction, `/tree/{tree}/preferences`).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchTreePreferencesPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/preferences\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * PHP's route (RenumberTreePage/RenumberTreeAction, `/tree/{tree}/renumber`).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchRenumberTreePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/renumber\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * PHP's route (TreePrivacyPage/TreePrivacyAction, `/tree/{tree}/privacy`).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchTreePrivacyPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/privacy\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * PHP's route (CheckTree::class, `/tree/{tree}/check`).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchCheckTreePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/check\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}

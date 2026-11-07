@@ -31,6 +31,7 @@ import {
   isPedigreeMapChartPagePath,
   isControlPanelPath,
   isUserManagementPath,
+  isTreeManagementPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -880,6 +881,42 @@ describe('isUserManagementPath', () => {
   test('an unrelated path does not match', () => {
     expect(isUserManagementPath('/admin/modules')).toBe(false);
     expect(isUserManagementPath('/admin')).toBe(false);
+  });
+});
+
+describe('isTreeManagementPath', () => {
+  test('matches every tree-management route', () => {
+    expect(isTreeManagementPath('/admin/trees/manage')).toBe(true);
+    expect(isTreeManagementPath('/admin/trees/manage/ophir')).toBe(true);
+    expect(isTreeManagementPath('/admin/trees/create')).toBe(true);
+    expect(isTreeManagementPath('/admin/trees/default/ophir')).toBe(true);
+    expect(isTreeManagementPath('/admin/trees/delete/ophir')).toBe(true);
+    expect(isTreeManagementPath('/admin/trees/merge')).toBe(true);
+    expect(isTreeManagementPath('/tree/ophir/preferences')).toBe(true);
+    expect(isTreeManagementPath('/tree/ophir/renumber')).toBe(true);
+    expect(isTreeManagementPath('/tree/ophir/privacy')).toBe(true);
+    expect(isTreeManagementPath('/tree/ophir/check')).toBe(true);
+  });
+
+  test('does not match deliberately excluded routes', () => {
+    expect(isTreeManagementPath('/admin/trees/default-blocks')).toBe(false);
+    expect(isTreeManagementPath('/admin/trees/sync')).toBe(false);
+  });
+
+  test('does not match other admin routes', () => {
+    expect(isTreeManagementPath('/admin')).toBe(false);
+    expect(isTreeManagementPath('/admin/admin-users')).toBe(false);
+    expect(isTreeManagementPath('/admin/modules')).toBe(false);
+  });
+
+  test('does not match other tree routes', () => {
+    expect(isTreeManagementPath('/tree/ophir')).toBe(false);
+    expect(isTreeManagementPath('/tree/ophir/individual/I1')).toBe(false);
+  });
+
+  test('does not match unrelated paths', () => {
+    expect(isTreeManagementPath('/login')).toBe(false);
+    expect(isTreeManagementPath('/')).toBe(false);
   });
 });
 

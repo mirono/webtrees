@@ -42,6 +42,15 @@ import {
   matchUserEditPath,
   matchDeleteUserPath,
   matchMasqueradePath,
+  matchManageTreesPath,
+  matchCreateTreePath,
+  matchSelectDefaultTreePath,
+  matchDeleteTreePath,
+  matchMergeTreesPath,
+  matchTreePreferencesPath,
+  matchRenumberTreePath,
+  matchTreePrivacyPath,
+  matchCheckTreePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -929,5 +938,102 @@ describe('user management route matchers', () => {
   test('matchMasqueradePath extracts the user_id', () => {
     expect(matchMasqueradePath('/admin/masquerade/7')).toBe(7);
     expect(matchMasqueradePath('/admin/users/delete/7')).toBeNull();
+  });
+});
+
+describe('tree management route matchers', () => {
+  test('matchManageTreesPath matches manage page with or without tree name', () => {
+    expect(matchManageTreesPath('/admin/trees/manage')).toBe(true);
+    expect(matchManageTreesPath('/admin/trees/manage/')).toBe(true);
+    expect(matchManageTreesPath('/admin/trees/manage/ophir')).toBe(true);
+    expect(matchManageTreesPath('/admin/trees/manage/my-tree/')).toBe(true);
+  });
+
+  test('matchManageTreesPath does not match other tree paths', () => {
+    expect(matchManageTreesPath('/admin/trees/create')).toBe(false);
+    expect(matchManageTreesPath('/admin/trees')).toBe(false);
+    expect(matchManageTreesPath('/tree/ophir')).toBe(false);
+  });
+
+  test('matchCreateTreePath matches the create page', () => {
+    expect(matchCreateTreePath('/admin/trees/create')).toBe(true);
+    expect(matchCreateTreePath('/admin/trees/create/')).toBe(true);
+  });
+
+  test('matchCreateTreePath does not match other paths', () => {
+    expect(matchCreateTreePath('/admin/trees/manage')).toBe(false);
+    expect(matchCreateTreePath('/admin/trees/merge')).toBe(false);
+  });
+
+  test('matchSelectDefaultTreePath extracts the tree name', () => {
+    expect(matchSelectDefaultTreePath('/admin/trees/default/ophir')).toBe('ophir');
+    expect(matchSelectDefaultTreePath('/admin/trees/default/my-tree/')).toBe('my-tree');
+  });
+
+  test('matchSelectDefaultTreePath returns null for invalid paths', () => {
+    expect(matchSelectDefaultTreePath('/admin/trees/default')).toBeNull();
+    expect(matchSelectDefaultTreePath('/admin/trees/default/')).toBeNull();
+    expect(matchSelectDefaultTreePath('/admin/trees/manage')).toBeNull();
+  });
+
+  test('matchDeleteTreePath extracts the tree name', () => {
+    expect(matchDeleteTreePath('/admin/trees/delete/ophir')).toBe('ophir');
+    expect(matchDeleteTreePath('/admin/trees/delete/my-tree/')).toBe('my-tree');
+  });
+
+  test('matchDeleteTreePath returns null for invalid paths', () => {
+    expect(matchDeleteTreePath('/admin/trees/delete')).toBeNull();
+    expect(matchDeleteTreePath('/admin/trees/delete/')).toBeNull();
+    expect(matchDeleteTreePath('/admin/trees/manage/ophir')).toBeNull();
+  });
+
+  test('matchMergeTreesPath matches the merge page', () => {
+    expect(matchMergeTreesPath('/admin/trees/merge')).toBe(true);
+    expect(matchMergeTreesPath('/admin/trees/merge/')).toBe(true);
+  });
+
+  test('matchMergeTreesPath does not match other paths', () => {
+    expect(matchMergeTreesPath('/admin/trees/create')).toBe(false);
+    expect(matchMergeTreesPath('/admin/trees/merge/ophir')).toBe(false);
+  });
+
+  test('matchTreePreferencesPath extracts the tree name', () => {
+    expect(matchTreePreferencesPath('/tree/ophir/preferences')).toBe('ophir');
+    expect(matchTreePreferencesPath('/tree/my-tree/preferences/')).toBe('my-tree');
+  });
+
+  test('matchTreePreferencesPath returns null for invalid paths', () => {
+    expect(matchTreePreferencesPath('/tree/ophir')).toBeNull();
+    expect(matchTreePreferencesPath('/tree/ophir/preferences/something')).toBeNull();
+  });
+
+  test('matchRenumberTreePath extracts the tree name', () => {
+    expect(matchRenumberTreePath('/tree/ophir/renumber')).toBe('ophir');
+    expect(matchRenumberTreePath('/tree/my-tree/renumber/')).toBe('my-tree');
+  });
+
+  test('matchRenumberTreePath returns null for invalid paths', () => {
+    expect(matchRenumberTreePath('/tree/ophir')).toBeNull();
+    expect(matchRenumberTreePath('/tree/ophir/renumber/something')).toBeNull();
+  });
+
+  test('matchTreePrivacyPath extracts the tree name', () => {
+    expect(matchTreePrivacyPath('/tree/ophir/privacy')).toBe('ophir');
+    expect(matchTreePrivacyPath('/tree/my-tree/privacy/')).toBe('my-tree');
+  });
+
+  test('matchTreePrivacyPath returns null for invalid paths', () => {
+    expect(matchTreePrivacyPath('/tree/ophir')).toBeNull();
+    expect(matchTreePrivacyPath('/tree/ophir/privacy/something')).toBeNull();
+  });
+
+  test('matchCheckTreePath extracts the tree name', () => {
+    expect(matchCheckTreePath('/tree/ophir/check')).toBe('ophir');
+    expect(matchCheckTreePath('/tree/my-tree/check/')).toBe('my-tree');
+  });
+
+  test('matchCheckTreePath returns null for invalid paths', () => {
+    expect(matchCheckTreePath('/tree/ophir')).toBeNull();
+    expect(matchCheckTreePath('/tree/ophir/check/something')).toBeNull();
   });
 });

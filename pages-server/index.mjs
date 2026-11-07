@@ -97,6 +97,15 @@ import {
   matchUserEditPath,
   matchDeleteUserPath,
   matchMasqueradePath,
+  matchManageTreesPath,
+  matchCreateTreePath,
+  matchSelectDefaultTreePath,
+  matchDeleteTreePath,
+  matchMergeTreesPath,
+  matchTreePreferencesPath,
+  matchRenumberTreePath,
+  matchTreePrivacyPath,
+  matchCheckTreePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -224,6 +233,16 @@ import { renderControlPanelPage } from './control-panel-view.mjs';
 import * as usersAdmin from './users-admin.mjs';
 import { handleDatatablesQuery } from './datatables.mjs';
 import { renderUsersListPage, renderUserAddPage, renderUserEditPage } from './users-admin-view.mjs';
+import * as treeManagement from './tree-management.mjs';
+import {
+  renderManageTreesPage,
+  renderCreateTreePage,
+  renderMergeTreesPage,
+  renderTreePreferencesPage,
+  renderRenumberTreePage,
+  renderTreePrivacyPage,
+  renderCheckTreePage,
+} from './tree-management-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -8989,6 +9008,89 @@ async function authenticateAdmin(req, res, requestPath) {
 }
 
 /**
+ * AuthManager-equivalent gate for /admin/trees/manage - unlike every
+ * other /admin/... page ported so far, ManageTrees only requires
+ * AuthManager (manager of at least one tree), not AuthAdministrator.
+ * Tree management step.
+ */
+async function authenticateManager(req, res, requestPath) {
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return null;
+  }
+
+  if (user === null) {
+    res.writeHead(302, { Location: `/login?url=${encodeURIComponent(requestPath)}` });
+    res.end();
+    return null;
+  }
+
+  const isAdmin = user.settings.canadmin === '1';
+  const isManager = await treeManagement.isSiteManager(pool, { userId: user.userId, isAdmin });
+
+  if (!isManager) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return null;
+  }
+
+  return { ...user, isAdmin };
+}
+
+/**
+ * AuthManager-equivalent gate for a SPECIFIC tree (used by
+ * TreePreferencesPage/Action, RenumberTreePage/Action,
+ * TreePrivacyPage/Action, CheckTree - all under `/tree/{tree}/...`
+ * with AuthManager middleware in real PHP, scoped to that one tree).
+ * Tree management step.
+ *
+ * @returns {Promise<{user: object, tree: object}|null>}
+ */
+async function authenticateTreeManager(req, res, requestPath, treeName) {
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return null;
+  }
+
+  if (user === null) {
+    res.writeHead(302, { Location: `/login?url=${encodeURIComponent(requestPath)}` });
+    res.end();
+    return null;
+  }
+
+  const isAdmin = user.settings.canadmin === '1';
+  const tree = await accessibleTreeByName(pool, treeName, { userId: user.userId, isAdmin });
+
+  if (tree === null) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+    return null;
+  }
+
+  const isManager = await isTreeManager(pool, { gedcomId: tree.gedcomId, userId: user.userId, isAdmin });
+
+  if (!isManager) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return null;
+  }
+
+  return { user: { ...user, isAdmin }, tree };
+}
+
+/**
  * /admin (ControlPanel) - the entry point into the ~85-route admin
  * area (phase 5 step 39). Scoped to this read-only dashboard only -
  * every other /admin/... link on the page still falls through the
@@ -9398,6 +9500,521 @@ async function handleMasquerade(req, res, targetUserId) {
   }
 }
 
+/**
+ * GET /admin/trees/manage[/{tree}] (ManageTrees) - tree management
+ * step. Unlike every other admin page ported so far, this is gated by
+ * AuthManager (any tree manager), not AuthAdministrator.
+ */
+async function handleManageTreesPage(req, res, url) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const user = await authenticateManager(req, res, url.pathname);
+
+  if (user === null) {
+    return;
+  }
+
+  try {
+    const trees = await accessibleTrees(pool, { userId: user.userId, isAdmin: user.isAdmin });
+    const defaultResult = await pool.query("SELECT setting_value FROM wt_site_setting WHERE setting_name = 'DEFAULT_GEDCOM'");
+    const defaultTreeName = defaultResult.rows[0]?.setting_value ?? '';
+
+    const treesWithStatus = await Promise.all(
+      trees.map(async (tree) => ({
+        gedcomId: tree.gedcomId,
+        name: tree.name,
+        title: tree.title,
+        isManager: await isTreeManager(pool, { gedcomId: tree.gedcomId, userId: user.userId, isAdmin: user.isAdmin }),
+        importing: await treeManagement.isTreeImporting(pool, tree.gedcomId),
+      })),
+    );
+
+    const csrfToken = generateCsrfToken();
+    const html = renderManageTreesPage({
+      csrfToken,
+      trees: treesWithStatus,
+      defaultTreeName,
+      canDeleteOrSetDefault: user.isAdmin,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve manage trees page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET/POST /admin/trees/create (CreateTreePage/CreateTreeAction) -
+ * AuthAdministrator only. Tree management step. See
+ * tree-management.mjs's createTree() doc comment for the scope cut
+ * (no placeholder GEDCOM records are inserted).
+ */
+async function handleCreateTreePage(req, res, url) {
+  const user = await authenticateAdmin(req, res, '/admin/trees/create');
+
+  if (user === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    const treeName = url.searchParams.get('name') ?? (await treeManagement.uniqueTreeName(pool));
+    const treeTitle = url.searchParams.get('title') ?? 'My family tree';
+    const csrfToken = generateCsrfToken();
+    const html = renderCreateTreePage({ csrfToken, treeName, treeTitle });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const name = formData.get('name') ?? '';
+      const title = formData.get('title') ?? '';
+
+      const existingId = await treeManagement.findTreeIdByName(pool, name);
+
+      if (existingId !== null) {
+        const query = new URLSearchParams({ title });
+        res.writeHead(302, { Location: `/admin/trees/create?${query}` });
+        res.end();
+        return;
+      }
+
+      await treeManagement.createTree(pool, { name, title, userId: user.userId });
+
+      res.writeHead(302, { Location: `/admin/trees/manage/${encodeURIComponent(name)}` });
+      res.end();
+    } catch (error) {
+      console.error('Failed to create tree:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * POST /admin/trees/default/{tree} (SelectDefaultTree) -
+ * AuthAdministrator only. Tree management step.
+ */
+async function handleSelectDefaultTree(req, res, treeName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const user = await authenticateAdmin(req, res, `/admin/trees/default/${treeName}`);
+
+  if (user === null) {
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    await treeManagement.setDefaultTree(pool, treeName);
+
+    res.writeHead(302, { Location: `/admin/trees/manage/${encodeURIComponent(treeName)}` });
+    res.end();
+  } catch (error) {
+    console.error('Failed to set default tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /admin/trees/delete/{tree} (DeleteTreeAction) - AJAX, AuthAdministrator
+ * only. Tree management step. Mirrors TreeService::delete() via
+ * tree-management.mjs's deleteTreeTransactional().
+ */
+async function handleDeleteTree(req, res, treeName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const user = await authenticateAdmin(req, res, '/admin/trees/manage');
+
+  if (user === null) {
+    return;
+  }
+
+  const cookies = parseCookies(req.headers.cookie);
+
+  if (!isValidCsrf(cookies, req.headers['x-csrf-token'])) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('This form has expired. Please reload the page and try again.');
+    return;
+  }
+
+  try {
+    const gedcomId = await treeManagement.findTreeIdByName(pool, treeName);
+
+    if (gedcomId === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    await treeManagement.deleteTreeTransactional(pool, gedcomId);
+
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to delete tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET/POST /admin/trees/merge (MergeTreesPage/MergeTreesAction) -
+ * AuthAdministrator only. Tree management step.
+ */
+async function handleMergeTreesPage(req, res, url) {
+  const user = await authenticateAdmin(req, res, '/admin/trees/merge');
+
+  if (user === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    try {
+      const tree1Name = url.searchParams.get('tree1_name') ?? '';
+      const tree2Name = url.searchParams.get('tree2_name') ?? '';
+      const tree1Id = await treeManagement.findTreeIdByName(pool, tree1Name);
+      const tree2Id = await treeManagement.findTreeIdByName(pool, tree2Name);
+
+      const xrefs = tree1Id !== null && tree2Id !== null && tree1Id !== tree2Id ? await treeManagement.countCommonXrefs(pool, tree1Id, tree2Id) : 0;
+
+      const trees = await accessibleTrees(pool, { userId: user.userId, isAdmin: true });
+      const treeList = {};
+
+      for (const tree of trees) {
+        treeList[tree.name] = tree.title;
+      }
+
+      const csrfToken = generateCsrfToken();
+      const html = renderMergeTreesPage({ csrfToken, treeList, tree1Name, tree2Name, xrefs });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve merge trees page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const tree1Name = formData.get('tree1_name') ?? '';
+      const tree2Name = formData.get('tree2_name') ?? '';
+      const tree1Id = await treeManagement.findTreeIdByName(pool, tree1Name);
+      const tree2Id = await treeManagement.findTreeIdByName(pool, tree2Name);
+
+      if (tree1Id !== null && tree2Id !== null && tree1Id !== tree2Id && (await treeManagement.countCommonXrefs(pool, tree1Id, tree2Id)) === 0) {
+        await treeManagement.mergeTreesTransactional(pool, tree1Id, tree2Id);
+
+        res.writeHead(302, { Location: `/admin/trees/manage/${encodeURIComponent(tree2Name)}` });
+        res.end();
+        return;
+      }
+
+      const query = new URLSearchParams({ tree1_name: tree1Name, tree2_name: tree2Name });
+      res.writeHead(302, { Location: `/admin/trees/merge?${query}` });
+      res.end();
+    } catch (error) {
+      console.error('Failed to merge trees:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /tree/{tree}/preferences (TreePreferencesPage/Action) -
+ * AuthManager (for THIS tree). Tree management step.
+ */
+async function handleTreePreferencesPage(req, res, url, treeName) {
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { user, tree } = gate;
+
+  if (req.method === 'GET') {
+    try {
+      const data = await treeManagement.loadTreeForPreferences(pool, tree.gedcomId);
+
+      const allUsersResult = await pool.query('SELECT user_id, real_name, user_name FROM wt_user WHERE user_id > 0 ORDER BY real_name');
+      const memberList = allUsersResult.rows.map((row) => ({ id: row.user_id, realName: row.real_name, userName: row.user_name }));
+
+      const csrfToken = generateCsrfToken();
+      const html = renderTreePreferencesPage({
+        csrfToken,
+        tree: { gedcom_name: treeName, title: data.row.title, gedcomId: tree.gedcomId },
+        preferences: data.preferences,
+        members: memberList,
+        isAdmin: user.isAdmin,
+        duplicateName: url.searchParams.get('duplicate') === '1',
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve tree preferences page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const { gedcomName, duplicateName } = await treeManagement.updateTreePreferences(pool, {
+        gedcomId: tree.gedcomId,
+        isAdmin: user.isAdmin,
+        treeName,
+        formData,
+      });
+
+      const query = duplicateName ? '?duplicate=1' : '';
+      res.writeHead(302, { Location: `/tree/${encodeURIComponent(gedcomName)}/preferences${query}` });
+      res.end();
+    } catch (error) {
+      console.error('Failed to update tree preferences:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /tree/{tree}/renumber (RenumberTreePage/Action) -
+ * AuthManager (for THIS tree). Tree management step.
+ */
+async function handleRenumberTreePage(req, res, url, treeName) {
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+
+  if (req.method === 'GET') {
+    try {
+      const xrefs = await treeManagement.duplicateXrefs(pool, tree.gedcomId);
+      const csrfToken = generateCsrfToken();
+      const html = renderRenumberTreePage({ csrfToken, tree: { gedcom_name: treeName, title: tree.title }, xrefs });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve renumber tree page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const xrefs = await treeManagement.duplicateXrefs(pool, tree.gedcomId);
+      const pendingEdit = await treeManagement.hasPendingEdit(pool, tree.gedcomId);
+
+      if (Object.keys(xrefs).length > 0 && pendingEdit) {
+        res.writeHead(302, { Location: `/tree/${encodeURIComponent(treeName)}/renumber?pending=1` });
+        res.end();
+        return;
+      }
+
+      await treeManagement.renumberTreeTransactional(pool, tree.gedcomId, xrefs);
+
+      res.writeHead(302, { Location: `/tree/${encodeURIComponent(treeName)}/renumber` });
+      res.end();
+    } catch (error) {
+      console.error('Failed to renumber tree:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /tree/{tree}/privacy (TreePrivacyPage/Action) -
+ * AuthManager (for THIS tree). Tree management step.
+ */
+async function handleTreePrivacyPage(req, res, url, treeName) {
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+
+  if (req.method === 'GET') {
+    try {
+      const data = await treeManagement.loadPrivacyData(pool, tree.gedcomId);
+      const csrfToken = generateCsrfToken();
+      const html = renderTreePrivacyPage({
+        csrfToken,
+        tree: { gedcom_name: treeName, private: data.tree.private },
+        preferences: data.preferences,
+        restrictions: data.restrictions,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve tree privacy page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      await treeManagement.updatePrivacy(pool, { gedcomId: tree.gedcomId, formData });
+
+      res.writeHead(302, { Location: `/admin/trees/manage/${encodeURIComponent(treeName)}` });
+      res.end();
+    } catch (error) {
+      console.error('Failed to update tree privacy:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET /tree/{tree}/check (CheckTree) - AuthManager (for THIS tree).
+ * Tree management step. Reduced-scope port - see
+ * tree-management.mjs's checkTreeErrors() doc comment.
+ */
+async function handleCheckTreePage(req, res, url, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+
+  try {
+    const { errors, warnings } = await treeManagement.checkTreeErrors(pool, tree.gedcomId);
+    const csrfToken = generateCsrfToken();
+    const html = renderCheckTreePage({ csrfToken, tree: { gedcom_name: treeName, title: tree.title }, errors, warnings });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve check tree page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -9677,6 +10294,63 @@ const server = createServer(async (req, res) => {
 
   if (masqueradeUserId !== null) {
     await handleMasquerade(req, res, masqueradeUserId);
+    return;
+  }
+
+  if (matchManageTreesPath(url.pathname)) {
+    await handleManageTreesPage(req, res, url);
+    return;
+  }
+
+  if (matchCreateTreePath(url.pathname)) {
+    await handleCreateTreePage(req, res, url);
+    return;
+  }
+
+  const defaultTreeNameParam = matchSelectDefaultTreePath(url.pathname);
+
+  if (defaultTreeNameParam !== null) {
+    await handleSelectDefaultTree(req, res, defaultTreeNameParam);
+    return;
+  }
+
+  const deleteTreeNameParam = matchDeleteTreePath(url.pathname);
+
+  if (deleteTreeNameParam !== null) {
+    await handleDeleteTree(req, res, deleteTreeNameParam);
+    return;
+  }
+
+  if (matchMergeTreesPath(url.pathname)) {
+    await handleMergeTreesPage(req, res, url);
+    return;
+  }
+
+  const preferencesTreeName = matchTreePreferencesPath(url.pathname);
+
+  if (preferencesTreeName !== null) {
+    await handleTreePreferencesPage(req, res, url, preferencesTreeName);
+    return;
+  }
+
+  const renumberTreeName = matchRenumberTreePath(url.pathname);
+
+  if (renumberTreeName !== null) {
+    await handleRenumberTreePage(req, res, url, renumberTreeName);
+    return;
+  }
+
+  const privacyTreeName = matchTreePrivacyPath(url.pathname);
+
+  if (privacyTreeName !== null) {
+    await handleTreePrivacyPage(req, res, url, privacyTreeName);
+    return;
+  }
+
+  const checkTreeName = matchCheckTreePath(url.pathname);
+
+  if (checkTreeName !== null) {
+    await handleCheckTreePage(req, res, url, checkTreeName);
     return;
   }
 
