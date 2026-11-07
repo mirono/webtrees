@@ -276,6 +276,19 @@ export function isControlPanelPath(pathname) {
   return /^\/admin\/?$/.test(pathname);
 }
 
+// /admin/admin-users{,-data,-create,-edit}, /admin/users/delete/{id},
+// /admin/masquerade/{id}: user management (phase 5 step 40).
+export function isUserManagementPath(pathname) {
+  return (
+    /^\/admin\/admin-users\/?$/.test(pathname) ||
+    /^\/admin\/admin-users-data\/?$/.test(pathname) ||
+    /^\/admin\/admin-users-create\/?$/.test(pathname) ||
+    /^\/admin\/admin-users-edit\/?$/.test(pathname) ||
+    /^\/admin\/users\/delete\/\d+\/?$/.test(pathname) ||
+    /^\/admin\/masquerade\/\d+\/?$/.test(pathname)
+  );
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -317,7 +330,8 @@ export function isNodeRoute(pathname, searchParams) {
     isRelationshipsChartPagePath(pathname) ||
     isStatisticsChartActionPath(pathname) ||
     isPedigreeMapChartPagePath(pathname) ||
-    isControlPanelPath(pathname)
+    isControlPanelPath(pathname) ||
+    isUserManagementPath(pathname)
   ) {
     return true;
   }
@@ -358,7 +372,8 @@ export function isNodeRoute(pathname, searchParams) {
     isRelationshipsChartPagePath(route) ||
     isStatisticsChartActionPath(route) ||
     isPedigreeMapChartPagePath(route) ||
-    isControlPanelPath(route)
+    isControlPanelPath(route) ||
+    isUserManagementPath(route)
   );
 }
 

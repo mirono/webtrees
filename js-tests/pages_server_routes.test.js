@@ -36,6 +36,12 @@ import {
   matchStatisticsChartActionPath,
   matchPedigreeMapChartPagePath,
   matchControlPanelPath,
+  matchUserListPagePath,
+  matchUserListDataPath,
+  matchUserAddPath,
+  matchUserEditPath,
+  matchDeleteUserPath,
+  matchMasqueradePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -889,5 +895,39 @@ describe('matchControlPanelPath', () => {
     expect(matchControlPanelPath('/admin/admin-users')).toBe(false);
     expect(matchControlPanelPath('/admin/modules')).toBe(false);
     expect(matchControlPanelPath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('user management route matchers', () => {
+  test('matchUserListPagePath', () => {
+    expect(matchUserListPagePath('/admin/admin-users')).toBe(true);
+    expect(matchUserListPagePath('/admin/admin-users-data')).toBe(false);
+  });
+
+  test('matchUserListDataPath', () => {
+    expect(matchUserListDataPath('/admin/admin-users-data')).toBe(true);
+    expect(matchUserListDataPath('/admin/admin-users')).toBe(false);
+  });
+
+  test('matchUserAddPath', () => {
+    expect(matchUserAddPath('/admin/admin-users-create')).toBe(true);
+    expect(matchUserAddPath('/admin/admin-users-edit')).toBe(false);
+  });
+
+  test('matchUserEditPath', () => {
+    expect(matchUserEditPath('/admin/admin-users-edit')).toBe(true);
+    expect(matchUserEditPath('/admin/admin-users-create')).toBe(false);
+  });
+
+  test('matchDeleteUserPath extracts the user_id', () => {
+    expect(matchDeleteUserPath('/admin/users/delete/42')).toBe(42);
+    expect(matchDeleteUserPath('/admin/users/delete/42/')).toBe(42);
+    expect(matchDeleteUserPath('/admin/users/delete/abc')).toBeNull();
+    expect(matchDeleteUserPath('/admin/masquerade/42')).toBeNull();
+  });
+
+  test('matchMasqueradePath extracts the user_id', () => {
+    expect(matchMasqueradePath('/admin/masquerade/7')).toBe(7);
+    expect(matchMasqueradePath('/admin/users/delete/7')).toBeNull();
   });
 });

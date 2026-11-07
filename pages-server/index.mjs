@@ -91,6 +91,12 @@ import {
   matchStatisticsChartActionPath,
   matchPedigreeMapChartPagePath,
   matchControlPanelPath,
+  matchUserListPagePath,
+  matchUserListDataPath,
+  matchUserAddPath,
+  matchUserEditPath,
+  matchDeleteUserPath,
+  matchMasqueradePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -215,6 +221,9 @@ import { renderPedigreeMapChart, renderPedigreeMapPage } from './pedigree-map-vi
 import { buildLeafletJsConfig } from './leaflet-config.mjs';
 import * as controlPanel from './control-panel.mjs';
 import { renderControlPanelPage } from './control-panel-view.mjs';
+import * as usersAdmin from './users-admin.mjs';
+import { handleDatatablesQuery } from './datatables.mjs';
+import { renderUsersListPage, renderUserAddPage, renderUserEditPage } from './users-admin-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -8940,23 +8949,19 @@ async function handlePedigreeMapChartPage(req, res, match) {
 const WEBTREES_ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
 
 /**
- * /admin (ControlPanel) - the entry point into the ~85-route admin
- * area (phase 5 step 39). Scoped to this read-only dashboard only -
- * every other /admin/... link on the page still falls through the
- * proxy to real PHP. AuthAdministrator-gated: not logged in -> 302 to
- * /login?url=/admin (mirrors `redirect(route(LoginPage::class, ['url'
- * => ...]))`); logged in but not an admin -> 403. See
- * pages-server/control-panel.mjs's own top doc comment for the three
- * deliberately scope-cut services (ServerCheckService, UpgradeService,
- * HousekeepingService's destructive delete-on-every-load behavior).
+ * Shared AuthAdministrator-equivalent gate for every /admin/... route
+ * this migration serves - not logged in -> 302 to /login?url={path}
+ * (mirrors `redirect(route(LoginPage::class, ['url' => ...]))`);
+ * logged in but not an admin -> 403. On success returns the user;
+ * on failure, the response has already been written and the caller
+ * must return immediately.
+ *
+ * @param {import('http').IncomingMessage} req
+ * @param {import('http').ServerResponse} res
+ * @param {string} requestPath used only for the login redirect's own `url` param
+ * @returns {Promise<object|null>} the admin user, or null (response already sent)
  */
-async function handleControlPanelPage(req, res) {
-  if (req.method !== 'GET') {
-    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
-    res.end('Method Not Allowed');
-    return;
-  }
-
+async function authenticateAdmin(req, res, requestPath) {
   let user;
 
   try {
@@ -8965,20 +8970,43 @@ async function handleControlPanelPage(req, res) {
     console.error('Failed to look up session:', error);
     res.writeHead(502, { 'content-type': 'text/plain' });
     res.end('Bad Gateway');
-    return;
+    return null;
   }
 
   if (user === null) {
-    res.writeHead(302, { Location: `/login?url=${encodeURIComponent('/admin')}` });
+    res.writeHead(302, { Location: `/login?url=${encodeURIComponent(requestPath)}` });
     res.end();
+    return null;
+  }
+
+  if (user.settings.canadmin !== '1') {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return null;
+  }
+
+  return user;
+}
+
+/**
+ * /admin (ControlPanel) - the entry point into the ~85-route admin
+ * area (phase 5 step 39). Scoped to this read-only dashboard only -
+ * every other /admin/... link on the page still falls through the
+ * proxy to real PHP. See pages-server/control-panel.mjs's own top doc
+ * comment for the three deliberately scope-cut services
+ * (ServerCheckService, UpgradeService, HousekeepingService's
+ * destructive delete-on-every-load behavior).
+ */
+async function handleControlPanelPage(req, res) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
     return;
   }
 
-  const isAdmin = user.settings.canadmin === '1';
+  const user = await authenticateAdmin(req, res, '/admin');
 
-  if (!isAdmin) {
-    res.writeHead(403, { 'content-type': 'text/plain' });
-    res.end('Forbidden');
+  if (user === null) {
     return;
   }
 
@@ -9034,6 +9062,337 @@ async function handleControlPanelPage(req, res) {
     res.end(html);
   } catch (error) {
     console.error('Failed to resolve control panel:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /admin/admin-users (UserListPage) - the list page shell; the
+ * real table data loads via /admin/admin-users-data (see
+ * handleUserListDataPage() below). Phase 5 step 40.
+ */
+async function handleUserListPage(req, res, url) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const user = await authenticateAdmin(req, res, '/admin/admin-users');
+
+  if (user === null) {
+    return;
+  }
+
+  const filter = url.searchParams.get('filter') ?? '';
+  const csrfToken = generateCsrfToken();
+  const html = renderUsersListPage({ csrfToken, filter });
+
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+  res.end(html);
+}
+
+/**
+ * POST /admin/admin-users-data (UserListData) - the real server-side
+ * DataTables AJAX endpoint (see pages-server/datatables.mjs). Phase 5
+ * step 40.
+ */
+async function handleUserListDataPage(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const user = await authenticateAdmin(req, res, '/admin/admin-users');
+
+  if (user === null) {
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+
+    const { sql, params } = usersAdmin.buildUserListQuery();
+    const sortColumns = { 2: 'user_name', 3: 'real_name', 4: 'email', 5: 'language', 7: 'registered_at', 9: 'active_at', 10: 'verified', 11: 'verified_by_admin' };
+    const searchColumns = ['user_name', 'real_name', 'email'];
+
+    const result = await handleDatatablesQuery(pool, sql, params, searchColumns, sortColumns, formData, (row) => usersAdmin.userListRow(row, user.userId));
+
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(result));
+  } catch (error) {
+    console.error('Failed to resolve user list data:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET/POST /admin/admin-users-create (UserAddPage/UserAddAction).
+ * Phase 5 step 40. On a duplicate username/email, real PHP redirects
+ * back to this same GET page with the submitted values as query
+ * params - replicated via a 302 with those params, same shape.
+ */
+async function handleUserAddPage(req, res, url) {
+  const user = await authenticateAdmin(req, res, '/admin/admin-users-create');
+
+  if (user === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    const values = {
+      email: url.searchParams.get('email') ?? '',
+      realName: url.searchParams.get('real_name') ?? '',
+      username: url.searchParams.get('username') ?? '',
+    };
+    const csrfToken = generateCsrfToken();
+    const html = renderUserAddPage({ csrfToken, values });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const username = formData.get('username') ?? '';
+      const realName = formData.get('real_name') ?? '';
+      const email = formData.get('email') ?? '';
+      const password = formData.get('password') ?? '';
+
+      const duplicateUserName = await usersAdmin.findUserByUserName(pool, username);
+      const duplicateEmail = await usersAdmin.findUserByEmail(pool, email);
+
+      if (duplicateUserName !== null || duplicateEmail !== null) {
+        const query = new URLSearchParams({ email, real_name: realName, username });
+        res.writeHead(302, { Location: `/admin/admin-users-create?${query}` });
+        res.end();
+        return;
+      }
+
+      const newUserId = await usersAdmin.createUser(pool, { username, realName, email, password });
+
+      res.writeHead(302, { Location: `/admin/admin-users-edit?user_id=${newUserId}` });
+      res.end();
+    } catch (error) {
+      console.error('Failed to create user:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /admin/admin-users-edit (UserEditPage/UserEditAction).
+ * Phase 5 step 40.
+ */
+async function handleUserEditPage(req, res, url) {
+  const adminUser = await authenticateAdmin(req, res, '/admin/admin-users-edit');
+
+  if (adminUser === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    try {
+      const userId = parseInt(url.searchParams.get('user_id'), 10);
+      const editUser = await usersAdmin.loadUserForEdit(pool, userId);
+
+      if (editUser === null) {
+        res.writeHead(404, { 'content-type': 'text/plain' });
+        res.end('Not Found');
+        return;
+      }
+
+      const trees = await accessibleTrees(pool, { userId: adminUser.userId, isAdmin: true });
+      const csrfToken = generateCsrfToken();
+      const html = renderUserEditPage({
+        csrfToken,
+        user: editUser,
+        trees: trees.map((tree) => ({ gedcomId: tree.gedcomId, title: tree.title })),
+        isSelf: editUser.userId === adminUser.userId,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve user edit page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const userId = parseInt(formData.get('user_id'), 10);
+      const trees = await accessibleTrees(pool, { userId: adminUser.userId, isAdmin: true });
+
+      const { errors } = await usersAdmin.updateUser(pool, adminUser.userId, trees, formData);
+
+      if (errors.length > 0) {
+        const editUser = await usersAdmin.loadUserForEdit(pool, userId);
+        const csrfToken = generateCsrfToken();
+        const html = renderUserEditPage({
+          csrfToken,
+          user: editUser,
+          trees: trees.map((tree) => ({ gedcomId: tree.gedcomId, title: tree.title })),
+          isSelf: userId === adminUser.userId,
+          errors,
+        });
+
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+        res.end(html);
+        return;
+      }
+
+      res.writeHead(302, { Location: '/admin/admin-users' });
+      res.end();
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * POST /admin/users/delete/{user_id} (DeleteUser) - AJAX, no body on
+ * success. Phase 5 step 40. Reuses the already-transactional delete
+ * (see pages-server/users-admin.mjs's own doc comment for why the
+ * pending-change reassignment is real here, unlike the self-delete case).
+ */
+async function handleDeleteUser(req, res, targetUserId) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const adminUser = await authenticateAdmin(req, res, '/admin/admin-users');
+
+  if (adminUser === null) {
+    return;
+  }
+
+  const cookies = parseCookies(req.headers.cookie);
+
+  if (!isValidCsrf(cookies, req.headers['x-csrf-token'])) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('This form has expired. Please reload the page and try again.');
+    return;
+  }
+
+  try {
+    const targetUser = await usersAdmin.loadUserForEdit(pool, targetUserId);
+
+    if (targetUser === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    if (targetUser.preferences.canadmin === '1') {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Cannot delete an administrator');
+      return;
+    }
+
+    await usersAdmin.deleteUserTransactional(pool, targetUserId, adminUser.userId);
+
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to delete user:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /admin/masquerade/{user_id} (Masquerade) - AJAX, logs the
+ * acting admin in as another user without a password check. Reuses
+ * session-store.mjs's regenerateSessionForLogin() unchanged (see
+ * pages-server/users-admin.mjs's own doc comment). Phase 5 step 40.
+ */
+async function handleMasquerade(req, res, targetUserId) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const adminUser = await authenticateAdmin(req, res, '/admin/admin-users');
+
+  if (adminUser === null) {
+    return;
+  }
+
+  const cookies = parseCookies(req.headers.cookie);
+
+  if (!isValidCsrf(cookies, req.headers['x-csrf-token'])) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('This form has expired. Please reload the page and try again.');
+    return;
+  }
+
+  try {
+    const targetUser = await usersAdmin.loadUserForEdit(pool, targetUserId);
+
+    if (targetUser === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    if (targetUserId === adminUser.userId) {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end('');
+      return;
+    }
+
+    const ip = clientIp(req);
+    const { session } = await loadOrCreateAnonymousSession(req.headers.cookie, ip, pool);
+    session.masquerade = '1';
+
+    const { newSessionId } = await regenerateSessionForLogin(session, targetUserId, ip, pool);
+
+    res.writeHead(200, { 'content-type': 'text/plain', 'set-cookie': sessionSetCookieHeader(isSecure(req), newSessionId) });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to masquerade:', error);
     res.writeHead(502, { 'content-type': 'text/plain' });
     res.end('Bad Gateway');
   }
@@ -9284,6 +9643,40 @@ const server = createServer(async (req, res) => {
 
   if (matchControlPanelPath(url.pathname)) {
     await handleControlPanelPage(req, res);
+    return;
+  }
+
+  if (matchUserListPagePath(url.pathname)) {
+    await handleUserListPage(req, res, url);
+    return;
+  }
+
+  if (matchUserListDataPath(url.pathname)) {
+    await handleUserListDataPage(req, res);
+    return;
+  }
+
+  if (matchUserAddPath(url.pathname)) {
+    await handleUserAddPage(req, res, url);
+    return;
+  }
+
+  if (matchUserEditPath(url.pathname)) {
+    await handleUserEditPage(req, res, url);
+    return;
+  }
+
+  const deleteUserId = matchDeleteUserPath(url.pathname);
+
+  if (deleteUserId !== null) {
+    await handleDeleteUser(req, res, deleteUserId);
+    return;
+  }
+
+  const masqueradeUserId = matchMasqueradePath(url.pathname);
+
+  if (masqueradeUserId !== null) {
+    await handleMasquerade(req, res, masqueradeUserId);
     return;
   }
 

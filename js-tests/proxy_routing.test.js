@@ -30,6 +30,7 @@ import {
   isStatisticsChartActionPath,
   isPedigreeMapChartPagePath,
   isControlPanelPath,
+  isUserManagementPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -863,6 +864,22 @@ describe('isControlPanelPath', () => {
   test('does not match any other /admin/... path', () => {
     expect(isControlPanelPath('/admin/admin-users')).toBe(false);
     expect(isControlPanelPath('/admin/modules')).toBe(false);
+  });
+});
+
+describe('isUserManagementPath', () => {
+  test('matches every user-management route', () => {
+    expect(isUserManagementPath('/admin/admin-users')).toBe(true);
+    expect(isUserManagementPath('/admin/admin-users-data')).toBe(true);
+    expect(isUserManagementPath('/admin/admin-users-create')).toBe(true);
+    expect(isUserManagementPath('/admin/admin-users-edit')).toBe(true);
+    expect(isUserManagementPath('/admin/users/delete/42')).toBe(true);
+    expect(isUserManagementPath('/admin/masquerade/42')).toBe(true);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isUserManagementPath('/admin/modules')).toBe(false);
+    expect(isUserManagementPath('/admin')).toBe(false);
   });
 });
 

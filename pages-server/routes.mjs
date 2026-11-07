@@ -690,3 +690,46 @@ export function matchPedigreeMapChartPagePath(pathname) {
 export function matchControlPanelPath(pathname) {
   return /^\/admin\/?$/.test(pathname);
 }
+
+/**
+ * PHP's routes (UserListPage/UserListData/UserAddPage/UserAddAction/
+ * UserEditPage/UserEditAction, all `/admin/admin-users...`) - phase 5
+ * step 40 (user management).
+ */
+export function matchUserListPagePath(pathname) {
+  return /^\/admin\/admin-users\/?$/.test(pathname);
+}
+
+export function matchUserListDataPath(pathname) {
+  return /^\/admin\/admin-users-data\/?$/.test(pathname);
+}
+
+export function matchUserAddPath(pathname) {
+  return /^\/admin\/admin-users-create\/?$/.test(pathname);
+}
+
+export function matchUserEditPath(pathname) {
+  return /^\/admin\/admin-users-edit\/?$/.test(pathname);
+}
+
+/**
+ * PHP's route (DeleteUser::class, `/admin/users/delete/{user_id}`).
+ *
+ * @param {string} pathname
+ * @returns {number|null}
+ */
+export function matchDeleteUserPath(pathname) {
+  const match = /^\/admin\/users\/delete\/(\d+)\/?$/.exec(pathname);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * PHP's route (Masquerade::class, `/admin/masquerade/{user_id}`).
+ *
+ * @param {string} pathname
+ * @returns {number|null}
+ */
+export function matchMasqueradePath(pathname) {
+  const match = /^\/admin\/masquerade\/(\d+)\/?$/.exec(pathname);
+  return match ? parseInt(match[1], 10) : null;
+}
