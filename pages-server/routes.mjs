@@ -654,3 +654,27 @@ export function matchStatisticsChartActionPath(pathname) {
 
   return { action: match[1], tree: decodeURIComponent(match[2]) };
 }
+
+/**
+ * PHP's route (PedigreeMapModule::ROUTE_URL -
+ * `/tree/{tree}/pedigree-map-{generations}/{xref}`) - the ELEVENTH
+ * chart route, and the last of the distinctly-shaped ones (phase 5
+ * step 38). Only one numeric token (generations), same shape as
+ * HourglassChartModule's own "generations" token.
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, generations: number, xref: string}|null}
+ */
+export function matchPedigreeMapChartPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/pedigree-map-(\d+)\/([^/]+)\/?$/.exec(pathname);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    tree: decodeURIComponent(match[1]),
+    generations: parseInt(match[2], 10),
+    xref: decodeURIComponent(match[3]),
+  };
+}

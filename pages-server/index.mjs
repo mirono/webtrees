@@ -88,6 +88,7 @@ import {
   matchTimelineChartPagePath,
   matchRelationshipsChartPagePath,
   matchStatisticsChartActionPath,
+  matchPedigreeMapChartPagePath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -207,6 +208,9 @@ import {
   renderCustomTab,
   renderCustomChartResult,
 } from './statistics-chart-view.mjs';
+import { sosaStradonitzAncestors, buildPedigreeMapData } from './pedigree-map.mjs';
+import { renderPedigreeMapChart, renderPedigreeMapPage } from './pedigree-map-view.mjs';
+import { buildLeafletJsConfig } from './leaflet-config.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -8726,6 +8730,209 @@ async function handleStatisticsChartPage(req, res, match) {
   }
 }
 
+// Mirrors PedigreeMapModule::MINIMUM_GENERATIONS/MAXIMUM_GENERATIONS
+// (app/Module/PedigreeMapModule.php:62-63) - PHP_INT_SIZE is always 8
+// on every platform this migration targets, so 63 (not the 32-bit 31).
+const PEDIGREE_MAP_MIN_GENERATIONS = 1;
+const PEDIGREE_MAP_MAX_GENERATIONS = 63;
+
+/**
+ * /tree/{tree}/pedigree-map-{generations}/{xref} - the ELEVENTH chart
+ * route (phase 5 step 38). Unlike every other already-ported chart,
+ * there is no `?ajax=1` fragment action at all: the GeoJSON data is
+ * built and embedded directly in the one GET response, matching real
+ * PedigreeMapModule::handle()'s own inline `getMapData()` call. See
+ * pages-server/pedigree-map.mjs's own top doc comment for the two
+ * separate access-level contexts (traversal vs. display) this module
+ * uses - deliberately NOT the same single accessLevel every other
+ * chart route threads through unchanged.
+ *
+ * Deliberately NOT ported: the AuthNotRobot middleware's bot-blocking
+ * check (app/Http/Middleware/AuthNotRobot.php) - an anti-abuse
+ * measure with no effect on a normal user's own output, same
+ * "mouse-drag exploration aids" flavor of scope-cut already applied
+ * to the Timeline chart (phase 5 step 35).
+ */
+async function handlePedigreeMapChartPage(req, res, match) {
+  const { tree: treeName, generations, xref } = match;
+
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  // Mirrors PedigreeMapModule::handle()'s own "Convert POST requests
+  // into GET requests for pretty URLs".
+  if (req.method === 'POST') {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const postedGenerations = Math.max(
+      PEDIGREE_MAP_MIN_GENERATIONS,
+      Math.min(parseInt(formData.get('generations'), 10) || 4, PEDIGREE_MAP_MAX_GENERATIONS),
+    );
+    const postedXref = formData.get('xref') ?? xref;
+
+    res.writeHead(302, {
+      Location: `/tree/${treeName}/pedigree-map-${postedGenerations}/${encodeURIComponent(postedXref)}`,
+    });
+    res.end();
+    return;
+  }
+
+  if (generations < PEDIGREE_MAP_MIN_GENERATIONS || generations > PEDIGREE_MAP_MAX_GENERATIONS) {
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const isAdmin = user !== null && user.settings.canadmin === '1';
+  const userId = user !== null ? user.userId : null;
+
+  let tree;
+
+  try {
+    tree = await accessibleTreeByName(pool, treeName, { userId, isAdmin });
+  } catch (error) {
+    console.error('Failed to look up tree:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (tree === null) {
+    res.writeHead(302, { Location: '/' });
+    res.end();
+    return;
+  }
+
+  try {
+    const statusResult = await pool.query("SELECT status FROM wt_module WHERE module_name = 'pedigree-map'", []);
+
+    if (statusResult.rows[0]?.status !== 'enabled') {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    // PedigreeMapModule has no $access_level override of its own,
+    // same as every other chart/list module.
+    const chartAccessLevel = await moduleAccessLevel(tree.gedcomId, 'pedigree-map', 'Fisharebest\\Webtrees\\Module\\ModuleChartInterface', 2);
+
+    if (chartAccessLevel < accessLevel) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const individual = await loadIndividual(pool, tree.gedcomId, xref);
+
+    if (individual === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrivacyPrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const relPrefs = await viewerRelationshipPrefs(pool, tree.gedcomId, userId);
+    const showHighlightImages = await loadShowHighlightImagesPref(pool, tree.gedcomId);
+    const showPrivateRelationships = await loadShowPrivateRelationshipsPref(pool, tree.gedcomId);
+
+    const facts = parseFacts(individual.gedcom);
+    const dead = isDead(facts, { maxAliveAge: treePrivacyPrefs.maxAliveAge });
+    const defaultResnInfo = await loadDefaultResn(pool, tree.gedcomId, individual.xref);
+    const viewerBase = {
+      accessLevel,
+      isSelfRecord: relPrefs.gedcomid === individual.xref,
+      showDeadPeople: treePrivacyPrefs.showDeadPeople,
+      dead,
+      relationshipGateBlocked: relPrefs.gedcomid !== null && relPrefs.pathLength > 0,
+    };
+    const treeForPrivacy = {
+      hideLivePeople: treePrivacyPrefs.hideLivePeople,
+      defaultResn: defaultResnInfo.individualResn,
+      keepAliveYearsBirth: treePrivacyPrefs.keepAliveYearsBirth,
+      keepAliveYearsDeath: treePrivacyPrefs.keepAliveYearsDeath,
+    };
+
+    // Mirrors Auth::checkIndividualAccess($individual, false, true)'s
+    // own `$chart` bypass - same shape as every other chart's own root
+    // individual check (see handleAncestorsChartPage()'s own doc
+    // comment for why).
+    const subjectShown = showPrivateRelationships || canShowRecord(treeForPrivacy, individual.gedcom, facts, viewerBase);
+
+    if (!subjectShown) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const primaryName = extractPrimaryName(individual.gedcom);
+    const individualFullNameHtml = primaryName !== null ? primaryName.full : `<span class="NAME" dir="auto" translate="no">${individual.xref}</span>`;
+    const chartTitle = `Pedigree map of ${individualFullNameHtml.replace(/<[^>]*>/g, '')}`;
+
+    const leafletConfig = await buildLeafletJsConfig(pool);
+
+    if (leafletConfig === null) {
+      res.writeHead(503, { 'content-type': 'text/plain' });
+      res.end('Service Unavailable: no map-provider module is enabled.');
+      return;
+    }
+
+    const traversalAccessLevel = showPrivateRelationships ? -1 : accessLevel;
+    const glideKey = await loadGlideKey(pool);
+
+    const ancestors = await sosaStradonitzAncestors(pool, tree.gedcomId, treePrivacyPrefs, traversalAccessLevel, relPrefs, xref, generations);
+    const geojson = await buildPedigreeMapData(pool, tree, treePrivacyPrefs, showHighlightImages, accessLevel, relPrefs, glideKey, siteUrlConfig, ancestors);
+
+    const mapHtml = renderPedigreeMapChart({ data: geojson, leafletConfig });
+
+    const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+    const genealogyMenuHtml = renderGenealogyMenuNav(
+      await buildGenealogyMenu(pool, { tree, userId, isAdmin, accessLevel: genealogyMenuAccessLevel, xrefParam: xref }),
+    );
+    const csrfToken = user !== null ? generateCsrfToken() : null;
+
+    const html = renderPedigreeMapPage({
+      tree,
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: chartTitle,
+      individual: { xref: individual.xref },
+      generations,
+      minGenerations: PEDIGREE_MAP_MIN_GENERATIONS,
+      maxGenerations: PEDIGREE_MAP_MAX_GENERATIONS,
+      mapHtml,
+    });
+
+    const headers = { 'content-type': 'text/html; charset=utf-8' };
+
+    if (csrfToken !== null) {
+      headers['set-cookie'] = csrfSetCookieHeader(csrfToken);
+    }
+
+    res.writeHead(200, headers);
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve pedigree map chart:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -8959,6 +9166,13 @@ const server = createServer(async (req, res) => {
 
   if (statisticsChartMatch !== null) {
     await handleStatisticsChartPage(req, res, statisticsChartMatch);
+    return;
+  }
+
+  const pedigreeMapChartMatch = matchPedigreeMapChartPagePath(url.pathname);
+
+  if (pedigreeMapChartMatch !== null) {
+    await handlePedigreeMapChartPage(req, res, pedigreeMapChartMatch);
     return;
   }
 

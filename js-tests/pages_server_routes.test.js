@@ -34,6 +34,7 @@ import {
   matchTimelineChartPagePath,
   matchRelationshipsChartPagePath,
   matchStatisticsChartActionPath,
+  matchPedigreeMapChartPagePath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -858,5 +859,21 @@ describe('matchStatisticsChartActionPath', () => {
     expect(matchStatisticsChartActionPath('/module/statistics_chart/Bogus/ophir')).toBeNull();
     expect(matchStatisticsChartActionPath('/module/hourglass_chart/Chart/ophir')).toBeNull();
     expect(matchStatisticsChartActionPath('/tree/ophir')).toBeNull();
+  });
+});
+
+describe('matchPedigreeMapChartPagePath', () => {
+  test('extracts tree, generations, and xref', () => {
+    expect(matchPedigreeMapChartPagePath('/tree/ophir/pedigree-map-4/I1')).toEqual({ tree: 'ophir', generations: 4, xref: 'I1' });
+  });
+
+  test('a trailing slash is tolerated', () => {
+    expect(matchPedigreeMapChartPagePath('/tree/ophir/pedigree-map-4/I1/')).toEqual({ tree: 'ophir', generations: 4, xref: 'I1' });
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(matchPedigreeMapChartPagePath('/tree/ophir')).toBeNull();
+    expect(matchPedigreeMapChartPagePath('/tree/ophir/pedigree-map/I1')).toBeNull();
+    expect(matchPedigreeMapChartPagePath('/tree/ophir/ancestors-tree-4/I1')).toBeNull();
   });
 });

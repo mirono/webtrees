@@ -28,6 +28,7 @@ import {
   isTimelineChartPagePath,
   isRelationshipsChartPagePath,
   isStatisticsChartActionPath,
+  isPedigreeMapChartPagePath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -837,6 +838,18 @@ describe('isStatisticsChartActionPath', () => {
   test('an unknown action, or a different module, does not match', () => {
     expect(isStatisticsChartActionPath('/module/statistics_chart/Bogus/ophir')).toBe(false);
     expect(isStatisticsChartActionPath('/module/hourglass_chart/Chart/ophir')).toBe(false);
+  });
+});
+
+describe('isPedigreeMapChartPagePath', () => {
+  test('matches the pedigree map chart route', () => {
+    expect(isPedigreeMapChartPagePath('/tree/ophir/pedigree-map-4/I1')).toBe(true);
+    expect(isPedigreeMapChartPagePath('/tree/ophir/pedigree-map-4/I1/')).toBe(true);
+  });
+
+  test('an unrelated path does not match', () => {
+    expect(isPedigreeMapChartPagePath('/tree/ophir')).toBe(false);
+    expect(isPedigreeMapChartPagePath('/tree/ophir/ancestors-tree-4/I1')).toBe(false);
   });
 });
 
