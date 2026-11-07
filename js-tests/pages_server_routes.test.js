@@ -35,6 +35,7 @@ import {
   matchRelationshipsChartPagePath,
   matchStatisticsChartActionPath,
   matchPedigreeMapChartPagePath,
+  matchControlPanelPath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -875,5 +876,18 @@ describe('matchPedigreeMapChartPagePath', () => {
     expect(matchPedigreeMapChartPagePath('/tree/ophir')).toBeNull();
     expect(matchPedigreeMapChartPagePath('/tree/ophir/pedigree-map/I1')).toBeNull();
     expect(matchPedigreeMapChartPagePath('/tree/ophir/ancestors-tree-4/I1')).toBeNull();
+  });
+});
+
+describe('matchControlPanelPath', () => {
+  test('matches /admin exactly', () => {
+    expect(matchControlPanelPath('/admin')).toBe(true);
+    expect(matchControlPanelPath('/admin/')).toBe(true);
+  });
+
+  test('does not match any other /admin/... path', () => {
+    expect(matchControlPanelPath('/admin/admin-users')).toBe(false);
+    expect(matchControlPanelPath('/admin/modules')).toBe(false);
+    expect(matchControlPanelPath('/tree/ophir')).toBe(false);
   });
 });

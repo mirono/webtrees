@@ -29,6 +29,7 @@ import {
   isRelationshipsChartPagePath,
   isStatisticsChartActionPath,
   isPedigreeMapChartPagePath,
+  isControlPanelPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -850,6 +851,18 @@ describe('isPedigreeMapChartPagePath', () => {
   test('an unrelated path does not match', () => {
     expect(isPedigreeMapChartPagePath('/tree/ophir')).toBe(false);
     expect(isPedigreeMapChartPagePath('/tree/ophir/ancestors-tree-4/I1')).toBe(false);
+  });
+});
+
+describe('isControlPanelPath', () => {
+  test('matches /admin exactly', () => {
+    expect(isControlPanelPath('/admin')).toBe(true);
+    expect(isControlPanelPath('/admin/')).toBe(true);
+  });
+
+  test('does not match any other /admin/... path', () => {
+    expect(isControlPanelPath('/admin/admin-users')).toBe(false);
+    expect(isControlPanelPath('/admin/modules')).toBe(false);
   });
 });
 

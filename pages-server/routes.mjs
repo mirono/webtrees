@@ -678,3 +678,15 @@ export function matchPedigreeMapChartPagePath(pathname) {
     xref: decodeURIComponent(match[3]),
   };
 }
+
+/**
+ * PHP's route (ControlPanel::class, `/admin`) - the entry point into
+ * the admin area (phase 5 step 39, scoped to this dashboard only -
+ * every other `/admin/...` path still falls through the proxy to PHP).
+ *
+ * @param {string} pathname
+ * @returns {boolean}
+ */
+export function matchControlPanelPath(pathname) {
+  return /^\/admin\/?$/.test(pathname);
+}

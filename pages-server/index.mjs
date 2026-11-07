@@ -51,6 +51,7 @@
 // server/migration-service.mjs.
 
 import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { loadDbConfig, loadSiteUrlConfig } from './config.mjs';
 import {
@@ -89,6 +90,7 @@ import {
   matchRelationshipsChartPagePath,
   matchStatisticsChartActionPath,
   matchPedigreeMapChartPagePath,
+  matchControlPanelPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -211,6 +213,8 @@ import {
 import { sosaStradonitzAncestors, buildPedigreeMapData } from './pedigree-map.mjs';
 import { renderPedigreeMapChart, renderPedigreeMapPage } from './pedigree-map-view.mjs';
 import { buildLeafletJsConfig } from './leaflet-config.mjs';
+import * as controlPanel from './control-panel.mjs';
+import { renderControlPanelPage } from './control-panel-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -8933,6 +8937,108 @@ async function handlePedigreeMapChartPage(req, res, match) {
   }
 }
 
+const WEBTREES_ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
+
+/**
+ * /admin (ControlPanel) - the entry point into the ~85-route admin
+ * area (phase 5 step 39). Scoped to this read-only dashboard only -
+ * every other /admin/... link on the page still falls through the
+ * proxy to real PHP. AuthAdministrator-gated: not logged in -> 302 to
+ * /login?url=/admin (mirrors `redirect(route(LoginPage::class, ['url'
+ * => ...]))`); logged in but not an admin -> 403. See
+ * pages-server/control-panel.mjs's own top doc comment for the three
+ * deliberately scope-cut services (ServerCheckService, UpgradeService,
+ * HousekeepingService's destructive delete-on-every-load behavior).
+ */
+async function handleControlPanelPage(req, res) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return;
+  }
+
+  if (user === null) {
+    res.writeHead(302, { Location: `/login?url=${encodeURIComponent('/admin')}` });
+    res.end();
+    return;
+  }
+
+  const isAdmin = user.settings.canadmin === '1';
+
+  if (!isAdmin) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  try {
+    const trees = await accessibleTrees(pool, { userId: user.userId, isAdmin: true });
+
+    const [changes, individuals, families, sources, media, repositories, notes, submitters] = await Promise.all([
+      controlPanel.totalChangesByTree(pool),
+      controlPanel.totalIndividualsByTree(pool),
+      controlPanel.totalFamiliesByTree(pool),
+      controlPanel.totalSourcesByTree(pool),
+      controlPanel.totalMediaByTree(pool),
+      controlPanel.totalRepositoriesByTree(pool),
+      controlPanel.totalNotesByTree(pool),
+      controlPanel.totalSubmittersByTree(pool),
+    ]);
+
+    const listModuleUrls = await controlPanel.loadListModuleUrls(pool);
+
+    const [allUsers, administrators, managers, moderators, unapproved, unverified] = await Promise.all([
+      controlPanel.loadAllUsers(pool),
+      controlPanel.loadAdministrators(pool),
+      controlPanel.loadManagers(pool),
+      controlPanel.loadModerators(pool),
+      controlPanel.loadUnapproved(pool),
+      controlPanel.loadUnverified(pool),
+    ]);
+
+    const moduleSummary = await controlPanel.loadModuleSummary(pool);
+    const filesToDelete = await controlPanel.findOldWebtreesFiles(WEBTREES_ROOT_DIR);
+
+    const csrfToken = generateCsrfToken();
+
+    const html = renderControlPanelPage({
+      csrfToken,
+      trees: trees.map((tree) => ({ gedcomId: tree.gedcomId, name: tree.name, title: tree.title })),
+      treeCounts: { changes, individuals, families, sources, media, repositories, notes, submitters },
+      listUrls: {
+        individual: (t) => listModuleUrls.individual_list(t),
+        family: (t) => listModuleUrls.family_list(t),
+        source: (t) => listModuleUrls.source_list(t),
+        repository: (t) => listModuleUrls.repository_list(t),
+        media: (t) => listModuleUrls.media_list(t),
+        note: (t) => listModuleUrls.note_list(t),
+        submitter: (t) => listModuleUrls.submitter_list(t),
+      },
+      users: { all: allUsers, administrators, managers, moderators, unapproved, unverified, recipients: controlPanel.recipientTypes() },
+      moduleSummary,
+      filesToDelete,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve control panel:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -9173,6 +9279,11 @@ const server = createServer(async (req, res) => {
 
   if (pedigreeMapChartMatch !== null) {
     await handlePedigreeMapChartPage(req, res, pedigreeMapChartMatch);
+    return;
+  }
+
+  if (matchControlPanelPath(url.pathname)) {
+    await handleControlPanelPage(req, res);
     return;
   }
 

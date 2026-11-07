@@ -268,6 +268,14 @@ export function isPedigreeMapChartPagePath(pathname) {
   return /^\/tree\/[^/]+\/pedigree-map-\d+\/[^/]+\/?$/.test(pathname);
 }
 
+// /admin: ControlPanel - the entry point into the admin area (phase 5
+// step 39). EXACT match only, same reasoning as isTreePagePath() above -
+// every other /admin/... path (admin-users, modules, trees/create, ...)
+// must NOT match this and so must keep falling through to PHP.
+export function isControlPanelPath(pathname) {
+  return /^\/admin\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -308,7 +316,8 @@ export function isNodeRoute(pathname, searchParams) {
     isTimelineChartPagePath(pathname) ||
     isRelationshipsChartPagePath(pathname) ||
     isStatisticsChartActionPath(pathname) ||
-    isPedigreeMapChartPagePath(pathname)
+    isPedigreeMapChartPagePath(pathname) ||
+    isControlPanelPath(pathname)
   ) {
     return true;
   }
@@ -348,7 +357,8 @@ export function isNodeRoute(pathname, searchParams) {
     isTimelineChartPagePath(route) ||
     isRelationshipsChartPagePath(route) ||
     isStatisticsChartActionPath(route) ||
-    isPedigreeMapChartPagePath(route)
+    isPedigreeMapChartPagePath(route) ||
+    isControlPanelPath(route)
   );
 }
 
