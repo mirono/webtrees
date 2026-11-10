@@ -51,6 +51,10 @@ import {
   matchRenumberTreePath,
   matchTreePrivacyPath,
   matchCheckTreePath,
+  matchSitePreferencesPath,
+  matchSiteRegistrationPath,
+  matchEmailPreferencesPath,
+  matchSiteTagsPath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -1035,5 +1039,51 @@ describe('tree management route matchers', () => {
   test('matchCheckTreePath returns null for invalid paths', () => {
     expect(matchCheckTreePath('/tree/ophir')).toBeNull();
     expect(matchCheckTreePath('/tree/ophir/check/something')).toBeNull();
+  });
+});
+
+describe('site preferences route matchers', () => {
+  test('matchSitePreferencesPath matches /admin/site-preferences', () => {
+    expect(matchSitePreferencesPath('/admin/site-preferences')).toBe(true);
+    expect(matchSitePreferencesPath('/admin/site-preferences/')).toBe(true);
+  });
+
+  test('matchSitePreferencesPath does not match other paths', () => {
+    expect(matchSitePreferencesPath('/admin/site-preferences/something')).toBe(false);
+    expect(matchSitePreferencesPath('/admin/site-registration')).toBe(false);
+    expect(matchSitePreferencesPath('/admin')).toBe(false);
+  });
+
+  test('matchSiteRegistrationPath matches /admin/site-registration', () => {
+    expect(matchSiteRegistrationPath('/admin/site-registration')).toBe(true);
+    expect(matchSiteRegistrationPath('/admin/site-registration/')).toBe(true);
+  });
+
+  test('matchSiteRegistrationPath does not match other paths', () => {
+    expect(matchSiteRegistrationPath('/admin/site-registration/something')).toBe(false);
+    expect(matchSiteRegistrationPath('/admin/site-preferences')).toBe(false);
+    expect(matchSiteRegistrationPath('/admin')).toBe(false);
+  });
+
+  test('matchEmailPreferencesPath matches /admin/email', () => {
+    expect(matchEmailPreferencesPath('/admin/email')).toBe(true);
+    expect(matchEmailPreferencesPath('/admin/email/')).toBe(true);
+  });
+
+  test('matchEmailPreferencesPath does not match other paths', () => {
+    expect(matchEmailPreferencesPath('/admin/email/something')).toBe(false);
+    expect(matchEmailPreferencesPath('/admin/site-preferences')).toBe(false);
+    expect(matchEmailPreferencesPath('/admin')).toBe(false);
+  });
+
+  test('matchSiteTagsPath matches /admin/tags', () => {
+    expect(matchSiteTagsPath('/admin/tags')).toBe(true);
+    expect(matchSiteTagsPath('/admin/tags/')).toBe(true);
+  });
+
+  test('matchSiteTagsPath does not match other paths', () => {
+    expect(matchSiteTagsPath('/admin/tags/something')).toBe(false);
+    expect(matchSiteTagsPath('/admin/site-preferences')).toBe(false);
+    expect(matchSiteTagsPath('/admin')).toBe(false);
   });
 });

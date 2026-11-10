@@ -32,6 +32,7 @@ import {
   isControlPanelPath,
   isUserManagementPath,
   isTreeManagementPath,
+  isSitePreferencesPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -917,6 +918,53 @@ describe('isTreeManagementPath', () => {
   test('does not match unrelated paths', () => {
     expect(isTreeManagementPath('/login')).toBe(false);
     expect(isTreeManagementPath('/')).toBe(false);
+  });
+});
+
+describe('isSitePreferencesPath', () => {
+  test('matches /admin/site-preferences', () => {
+    expect(isSitePreferencesPath('/admin/site-preferences')).toBe(true);
+  });
+
+  test('matches /admin/site-preferences with trailing slash', () => {
+    expect(isSitePreferencesPath('/admin/site-preferences/')).toBe(true);
+  });
+
+  test('matches /admin/site-registration', () => {
+    expect(isSitePreferencesPath('/admin/site-registration')).toBe(true);
+  });
+
+  test('matches /admin/site-registration with trailing slash', () => {
+    expect(isSitePreferencesPath('/admin/site-registration/')).toBe(true);
+  });
+
+  test('matches /admin/email', () => {
+    expect(isSitePreferencesPath('/admin/email')).toBe(true);
+  });
+
+  test('matches /admin/email with trailing slash', () => {
+    expect(isSitePreferencesPath('/admin/email/')).toBe(true);
+  });
+
+  test('matches /admin/tags', () => {
+    expect(isSitePreferencesPath('/admin/tags')).toBe(true);
+  });
+
+  test('matches /admin/tags with trailing slash', () => {
+    expect(isSitePreferencesPath('/admin/tags/')).toBe(true);
+  });
+
+  test('does not match other admin paths', () => {
+    expect(isSitePreferencesPath('/admin')).toBe(false);
+    expect(isSitePreferencesPath('/admin/admin-users')).toBe(false);
+    expect(isSitePreferencesPath('/admin/trees')).toBe(false);
+    expect(isSitePreferencesPath('/admin/modules')).toBe(false);
+  });
+
+  test('does not match unrelated paths', () => {
+    expect(isSitePreferencesPath('/login')).toBe(false);
+    expect(isSitePreferencesPath('/')).toBe(false);
+    expect(isSitePreferencesPath('/tree/ophir')).toBe(false);
   });
 });
 

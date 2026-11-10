@@ -816,3 +816,25 @@ export function matchCheckTreePath(pathname) {
   const match = /^\/tree\/([^/]+)\/check\/?$/.exec(pathname);
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * PHP's routes for site preferences (SitePreferencesPage/Action,
+ * SiteRegistrationPage/Action, EmailPreferencesPage/Action,
+ * SiteTagsPage/Action, all `/admin/...`, AuthAdministrator only).
+ * Site preferences step.
+ */
+export function matchSitePreferencesPath(pathname) {
+  return /^\/admin\/site-preferences\/?$/.test(pathname);
+}
+
+export function matchSiteRegistrationPath(pathname) {
+  return /^\/admin\/site-registration\/?$/.test(pathname);
+}
+
+export function matchEmailPreferencesPath(pathname) {
+  return /^\/admin\/email\/?$/.test(pathname);
+}
+
+export function matchSiteTagsPath(pathname) {
+  return /^\/admin\/tags\/?$/.test(pathname);
+}

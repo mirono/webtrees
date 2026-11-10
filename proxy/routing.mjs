@@ -311,6 +311,18 @@ export function isTreeManagementPath(pathname) {
   );
 }
 
+// /admin/site-preferences, /admin/site-registration, /admin/email,
+// /admin/tags: site preferences step (site-WIDE settings, as
+// opposed to the already-ported per-tree "tree management" bucket).
+export function isSitePreferencesPath(pathname) {
+  return (
+    /^\/admin\/site-preferences\/?$/.test(pathname) ||
+    /^\/admin\/site-registration\/?$/.test(pathname) ||
+    /^\/admin\/email\/?$/.test(pathname) ||
+    /^\/admin\/tags\/?$/.test(pathname)
+  );
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -354,7 +366,8 @@ export function isNodeRoute(pathname, searchParams) {
     isPedigreeMapChartPagePath(pathname) ||
     isControlPanelPath(pathname) ||
     isUserManagementPath(pathname) ||
-    isTreeManagementPath(pathname)
+    isTreeManagementPath(pathname) ||
+    isSitePreferencesPath(pathname)
   ) {
     return true;
   }
@@ -397,7 +410,8 @@ export function isNodeRoute(pathname, searchParams) {
     isPedigreeMapChartPagePath(route) ||
     isControlPanelPath(route) ||
     isUserManagementPath(route) ||
-    isTreeManagementPath(route)
+    isTreeManagementPath(route) ||
+    isSitePreferencesPath(route)
   );
 }
 

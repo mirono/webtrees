@@ -106,6 +106,10 @@ import {
   matchRenumberTreePath,
   matchTreePrivacyPath,
   matchCheckTreePath,
+  matchSitePreferencesPath,
+  matchSiteRegistrationPath,
+  matchEmailPreferencesPath,
+  matchSiteTagsPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -243,6 +247,13 @@ import {
   renderTreePrivacyPage,
   renderCheckTreePage,
 } from './tree-management-view.mjs';
+import * as sitePreferences from './site-preferences.mjs';
+import {
+  renderGeneralPreferencesPage,
+  renderRegistrationPreferencesPage,
+  renderEmailPreferencesPage,
+  renderSiteTagsPage,
+} from './site-preferences-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -10015,6 +10026,257 @@ async function handleCheckTreePage(req, res, url, treeName) {
   }
 }
 
+/**
+ * GET/POST /admin/site-preferences (SitePreferencesPage/Action) -
+ * AuthAdministrator only. Site preferences step.
+ */
+async function handleSitePreferencesPage(req, res, url) {
+  const user = await authenticateAdmin(req, res, '/admin/site-preferences');
+
+  if (user === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    try {
+      const preferences = await sitePreferences.loadGeneralPreferences(pool);
+      const csrfToken = generateCsrfToken();
+      const html = renderGeneralPreferencesPage({ csrfToken, preferences, dataFolder: `${WEBTREES_ROOT_DIR}data/` });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve site preferences page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const { error } = await sitePreferences.updateGeneralPreferences(pool, formData);
+
+      if (error !== null) {
+        const preferences = await sitePreferences.loadGeneralPreferences(pool);
+        const csrfToken = generateCsrfToken();
+        const html = renderGeneralPreferencesPage({ csrfToken, preferences, dataFolder: `${WEBTREES_ROOT_DIR}data/`, error });
+
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+        res.end(html);
+        return;
+      }
+
+      res.writeHead(302, { Location: '/admin' });
+      res.end();
+    } catch (error) {
+      console.error('Failed to update site preferences:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /admin/site-registration (SiteRegistrationPage/Action) -
+ * AuthAdministrator only. Site preferences step.
+ */
+async function handleSiteRegistrationPage(req, res) {
+  const user = await authenticateAdmin(req, res, '/admin/site-registration');
+
+  if (user === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    try {
+      const preferences = await sitePreferences.loadRegistrationPreferences(pool);
+      const csrfToken = generateCsrfToken();
+      const html = renderRegistrationPreferencesPage({ csrfToken, preferences });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve site registration page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      await sitePreferences.updateRegistrationPreferences(pool, formData);
+
+      res.writeHead(302, { Location: '/admin' });
+      res.end();
+    } catch (error) {
+      console.error('Failed to update site registration preferences:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /admin/email (EmailPreferencesPage/Action) -
+ * AuthAdministrator only. Site preferences step. This is the FIRST
+ * real network dependency in this migration - see
+ * site-preferences.mjs's top doc comment.
+ */
+async function handleEmailPreferencesPage(req, res) {
+  const user = await authenticateAdmin(req, res, '/admin/email');
+
+  if (user === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    try {
+      const preferences = await sitePreferences.loadEmailPreferences(pool);
+      const csrfToken = generateCsrfToken();
+      const html = renderEmailPreferencesPage({ csrfToken, preferences });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve email preferences page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      await sitePreferences.updateEmailPreferences(pool, formData);
+
+      const test = formData.get('test') === '1';
+
+      if (test) {
+        const preferences = await sitePreferences.loadEmailPreferences(pool);
+        const success = await sitePreferences.sendTestEmail(preferences, { email: user.email, realName: user.userName });
+
+        const csrfToken = generateCsrfToken();
+        const html = renderEmailPreferencesPage({
+          csrfToken,
+          preferences,
+          testMessage: success ? `The message was successfully sent to ${user.email}.` : 'The message was not sent.',
+          testSuccess: success,
+        });
+
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+        res.end(html);
+        return;
+      }
+
+      res.writeHead(302, { Location: '/admin' });
+      res.end();
+    } catch (error) {
+      console.error('Failed to update email preferences:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /admin/tags (SiteTagsPage/Action) - AuthAdministrator
+ * only. Site preferences step.
+ */
+async function handleSiteTagsPage(req, res) {
+  const user = await authenticateAdmin(req, res, '/admin/tags');
+
+  if (user === null) {
+    return;
+  }
+
+  if (req.method === 'GET') {
+    try {
+      const preferences = await sitePreferences.loadSiteTagsPreferences(pool);
+      const csrfToken = generateCsrfToken();
+      const html = renderSiteTagsPage({ csrfToken, preferences });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve site tags page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      await sitePreferences.updateSiteTagsPreferences(pool, formData);
+
+      res.writeHead(302, { Location: '/admin' });
+      res.end();
+    } catch (error) {
+      console.error('Failed to update site tags preferences:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -10351,6 +10613,26 @@ const server = createServer(async (req, res) => {
 
   if (checkTreeName !== null) {
     await handleCheckTreePage(req, res, url, checkTreeName);
+    return;
+  }
+
+  if (matchSitePreferencesPath(url.pathname)) {
+    await handleSitePreferencesPage(req, res, url);
+    return;
+  }
+
+  if (matchSiteRegistrationPath(url.pathname)) {
+    await handleSiteRegistrationPage(req, res);
+    return;
+  }
+
+  if (matchEmailPreferencesPath(url.pathname)) {
+    await handleEmailPreferencesPage(req, res);
+    return;
+  }
+
+  if (matchSiteTagsPath(url.pathname)) {
+    await handleSiteTagsPage(req, res);
     return;
   }
 
