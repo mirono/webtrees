@@ -454,7 +454,7 @@ function sqlReplace(column, from, to) {
  * @param {import('pg').PoolClient} client an open transaction client (for the row lock)
  * @returns {Promise<string>}
  */
-async function generateXref(client) {
+export async function generateXref(client) {
   const lockResult = await client.query(
     "SELECT setting_value FROM wt_site_setting WHERE setting_name = 'next_xref' FOR UPDATE",
   );

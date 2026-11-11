@@ -34,6 +34,7 @@ import {
   isTreeManagementPath,
   isSitePreferencesPath,
   isGedcomExportPath,
+  isGedcomImportPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -1006,6 +1007,39 @@ describe('isGedcomExportPath', () => {
     expect(isGedcomExportPath('/tree/ophir/preferences')).toBe(false);
     expect(isGedcomExportPath('/admin/site-preferences')).toBe(false);
     expect(isGedcomExportPath('/')).toBe(false);
+  });
+});
+
+describe('isGedcomImportPath', () => {
+  test('matches /tree/{tree}/import', () => {
+    expect(isGedcomImportPath('/tree/ophir/import')).toBe(true);
+  });
+
+  test('matches /tree/{tree}/import with trailing slash', () => {
+    expect(isGedcomImportPath('/tree/ophir/import/')).toBe(true);
+  });
+
+  test('works with special tree names that require encoding', () => {
+    expect(isGedcomImportPath('/tree/my%20tree/import')).toBe(true);
+    expect(isGedcomImportPath('/tree/my%2Ftree/import')).toBe(true);
+    expect(isGedcomImportPath('/tree/special%3Fchar/import')).toBe(true);
+  });
+
+  test('does not match partial paths', () => {
+    expect(isGedcomImportPath('/tree/ophir')).toBe(false);
+    expect(isGedcomImportPath('/tree/ophir/import-')).toBe(false);
+  });
+
+  test('does not match with extra path segments', () => {
+    expect(isGedcomImportPath('/tree/ophir/import/something')).toBe(false);
+  });
+
+  test('does not match unrelated paths', () => {
+    expect(isGedcomImportPath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isGedcomImportPath('/tree/ophir/export')).toBe(false);
+    expect(isGedcomImportPath('/tree/ophir/preferences')).toBe(false);
+    expect(isGedcomImportPath('/admin/site-preferences')).toBe(false);
+    expect(isGedcomImportPath('/')).toBe(false);
   });
 });
 

@@ -818,6 +818,18 @@ export function matchCheckTreePath(pathname) {
 }
 
 /**
+ * PHP's route (ImportGedcomPage::class, `/tree/{tree}/import`). GEDCOM
+ * import step.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchImportGedcomPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/import\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
  * PHP's route (ExportGedcomPage::class, `/tree/{tree}/export`). GEDCOM
  * export step.
  *

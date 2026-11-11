@@ -335,6 +335,12 @@ export function isGedcomExportPath(pathname) {
   );
 }
 
+// /tree/{tree}/import: GEDCOM import step (phase 5 step 44), the
+// counterpart to step 43's export.
+export function isGedcomImportPath(pathname) {
+  return /^\/tree\/[^/]+\/import\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -380,7 +386,8 @@ export function isNodeRoute(pathname, searchParams) {
     isUserManagementPath(pathname) ||
     isTreeManagementPath(pathname) ||
     isSitePreferencesPath(pathname) ||
-    isGedcomExportPath(pathname)
+    isGedcomExportPath(pathname) ||
+    isGedcomImportPath(pathname)
   ) {
     return true;
   }
@@ -425,7 +432,8 @@ export function isNodeRoute(pathname, searchParams) {
     isUserManagementPath(route) ||
     isTreeManagementPath(route) ||
     isSitePreferencesPath(route) ||
-    isGedcomExportPath(route)
+    isGedcomExportPath(route) ||
+    isGedcomImportPath(route)
   );
 }
 

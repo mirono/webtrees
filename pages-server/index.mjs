@@ -52,6 +52,7 @@
 
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { loadDbConfig, loadSiteUrlConfig } from './config.mjs';
 import {
@@ -113,6 +114,7 @@ import {
   matchExportGedcomPagePath,
   matchExportGedcomClientPath,
   matchExportGedcomServerPath,
+  matchImportGedcomPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -267,6 +269,15 @@ import {
 } from './gedcom-export.mjs';
 import { renderExportGedcomPage } from './gedcom-export-view.mjs';
 import { ZipArchive } from 'archiver';
+import {
+  importGedcomFile,
+  treeHasExistingData,
+  listServerGedcomFiles,
+  loadImportPreferences,
+  saveImportPreferences,
+} from './gedcom-import.mjs';
+import { renderImportGedcomPage, renderImportResultPage } from './gedcom-import-view.mjs';
+import Busboy from 'busboy';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -10291,6 +10302,216 @@ async function handleExportGedcomServer(req, res, url, treeName) {
 }
 
 /**
+ * Parses a `multipart/form-data` request body with `busboy`, used by
+ * the GEDCOM import form (real PHP's form always posts multipart,
+ * since a <select>/checkbox form can carry a <input type=file> even
+ * when the "source=server" radio is the one actually selected).
+ * `client_file`'s stream is buffered in full; every other field named
+ * in the form is read into a plain Map.
+ *
+ * @param {import('http').IncomingMessage} req
+ * @returns {Promise<{fields: Map<string,string>, fileBuffer: Buffer|null, fileName: string|null, fileTooLarge: boolean}>}
+ */
+function parseMultipartForm(req) {
+  return new Promise((resolve, reject) => {
+    const busboy = Busboy({ headers: req.headers, limits: { fileSize: 200 * 1024 * 1024 } });
+    const fields = new Map();
+    let fileBuffer = null;
+    let fileName = null;
+    let fileTooLarge = false;
+
+    busboy.on('field', (name, value) => fields.set(name, value));
+
+    busboy.on('file', (name, stream, info) => {
+      if (name !== 'client_file') {
+        stream.resume();
+        return;
+      }
+
+      const chunks = [];
+      stream.on('data', (chunk) => chunks.push(chunk));
+      stream.on('limit', () => {
+        fileTooLarge = true;
+      });
+      stream.on('end', () => {
+        fileBuffer = Buffer.concat(chunks);
+        fileName = info.filename;
+      });
+    });
+
+    busboy.on('error', reject);
+    busboy.on('close', () => resolve({ fields, fileBuffer, fileName, fileTooLarge }));
+
+    req.pipe(busboy);
+  });
+}
+
+/**
+ * GET/POST /tree/{tree}/import (ImportGedcomPage/Action) -
+ * AuthManager gated, same as export (step 43). GEDCOM import step
+ * (phase 5 step 44) - see pages-server/gedcom-import.mjs's top doc
+ * comment for scope (standard-OBJE-links only, one synchronous
+ * transactional pass, destructive-replace-with-confirmation).
+ */
+async function handleImportGedcomPage(req, res, url, treeName) {
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+  const dataDir = `${WEBTREES_ROOT_DIR}data/`;
+
+  if (req.method === 'GET') {
+    try {
+      const [prefs, serverFiles, hasExistingData, gedcomRow] = await Promise.all([
+        loadImportPreferences(pool, tree.gedcomId),
+        listServerGedcomFiles(dataDir),
+        treeHasExistingData(pool, tree.gedcomId),
+        pool.query('SELECT gedcom_filename FROM wt_gedcom WHERE gedcom_id = $1', [tree.gedcomId]),
+      ]);
+
+      const csrfToken = generateCsrfToken();
+      const html = renderImportGedcomPage({
+        csrfToken,
+        tree: { gedcom_name: treeName, title: tree.title },
+        dataFolder: dataDir,
+        defaultGedcomFile: gedcomRow.rows[0]?.gedcom_filename ?? '',
+        serverFiles,
+        gedcomMediaPath: prefs.gedcomMediaPath,
+        keepMedia: prefs.keepMedia,
+        wordWrappedNotes: prefs.wordWrappedNotes,
+        hasExistingData,
+        error: null,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve import GEDCOM page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { fields, fileBuffer, fileName, fileTooLarge } = await parseMultipartForm(req);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, fields.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const keepMedia = fields.get('keep_media') === '1';
+      const wordWrappedNotes = fields.get('WORD_WRAPPED_NOTES') === '1';
+      const gedcomMediaPath = fields.get('GEDCOM_MEDIA_PATH') ?? '';
+      const encoding = fields.get('encoding') ?? '';
+      const source = fields.get('source');
+
+      await saveImportPreferences(pool, tree.gedcomId, { keepMedia, wordWrappedNotes, gedcomMediaPath });
+
+      const [prefs, serverFiles, hasExistingData, gedcomRow] = await Promise.all([
+        loadImportPreferences(pool, tree.gedcomId),
+        listServerGedcomFiles(dataDir),
+        treeHasExistingData(pool, tree.gedcomId),
+        pool.query('SELECT gedcom_filename FROM wt_gedcom WHERE gedcom_id = $1', [tree.gedcomId]),
+      ]);
+
+      const rerenderForm = (error) => {
+        const csrfToken = generateCsrfToken();
+        const html = renderImportGedcomPage({
+          csrfToken,
+          tree: { gedcom_name: treeName, title: tree.title },
+          dataFolder: dataDir,
+          defaultGedcomFile: gedcomRow.rows[0]?.gedcom_filename ?? '',
+          serverFiles,
+          gedcomMediaPath: prefs.gedcomMediaPath,
+          keepMedia: prefs.keepMedia,
+          wordWrappedNotes: prefs.wordWrappedNotes,
+          hasExistingData,
+          error,
+        });
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+        res.end(html);
+      };
+
+      if (hasExistingData && fields.get('confirmed') !== '1') {
+        rerenderForm('Please confirm that you understand this will delete the existing data in this tree.');
+        return;
+      }
+
+      if (fileTooLarge) {
+        rerenderForm('The uploaded file is too large.');
+        return;
+      }
+
+      let buffer;
+      let filename;
+
+      if (source === 'client') {
+        if (fileBuffer === null || fileBuffer.length === 0) {
+          rerenderForm('No GEDCOM file was received.');
+          return;
+        }
+        buffer = fileBuffer;
+        filename = (fileName ?? 'import.ged').split(/[/\\]/).pop();
+      } else if (source === 'server') {
+        const serverFile = fields.get('server_file') ?? '';
+
+        if (serverFile === '') {
+          rerenderForm('No GEDCOM file was received.');
+          return;
+        }
+
+        try {
+          buffer = await readFile(`${dataDir}${serverFile}`);
+        } catch {
+          rerenderForm('No GEDCOM file was received.');
+          return;
+        }
+        filename = serverFile;
+      } else {
+        rerenderForm('No GEDCOM file was received.');
+        return;
+      }
+
+      const result = await importGedcomFile(pool, tree, buffer, filename, {
+        encoding,
+        keepMedia,
+        wordWrappedNotes,
+        gedcomMediaPath,
+        generateUids: prefs.generateUids,
+      });
+
+      const csrfToken = generateCsrfToken();
+      const html = renderImportResultPage({
+        csrfToken,
+        tree: { gedcom_name: treeName, title: tree.title },
+        success: result.success,
+        recordCount: result.recordCount,
+        error: result.error,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to import GEDCOM file:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
  * GET/POST /admin/site-preferences (SitePreferencesPage/Action) -
  * AuthAdministrator only. Site preferences step.
  */
@@ -10898,6 +11119,13 @@ const server = createServer(async (req, res) => {
 
   if (exportServerTreeName !== null) {
     await handleExportGedcomServer(req, res, url, exportServerTreeName);
+    return;
+  }
+
+  const importTreeName = matchImportGedcomPath(url.pathname);
+
+  if (importTreeName !== null) {
+    await handleImportGedcomPage(req, res, url, importTreeName);
     return;
   }
 

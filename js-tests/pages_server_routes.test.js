@@ -58,6 +58,7 @@ import {
   matchExportGedcomPagePath,
   matchExportGedcomClientPath,
   matchExportGedcomServerPath,
+  matchImportGedcomPath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -1131,5 +1132,29 @@ describe('GEDCOM export route matchers', () => {
     expect(matchExportGedcomPagePath('/tree/my%20tree/export')).toBe('my tree');
     expect(matchExportGedcomClientPath('/tree/my%2Ftree/export-client')).toBe('my/tree');
     expect(matchExportGedcomServerPath('/tree/special%3Fchar/export-server')).toBe('special?char');
+  });
+});
+
+describe('GEDCOM import route matchers', () => {
+  test('matchImportGedcomPath extracts the tree name', () => {
+    expect(matchImportGedcomPath('/tree/ophir/import')).toBe('ophir');
+    expect(matchImportGedcomPath('/tree/my-tree/import/')).toBe('my-tree');
+  });
+
+  test('matchImportGedcomPath returns null for invalid paths', () => {
+    expect(matchImportGedcomPath('/tree/ophir')).toBeNull();
+    expect(matchImportGedcomPath('/tree/ophir/import/something')).toBeNull();
+    expect(matchImportGedcomPath('/tree/ophir/export')).toBeNull();
+  });
+
+  test('matchImportGedcomPath URL-decodes tree names', () => {
+    expect(matchImportGedcomPath('/tree/my%20tree/import')).toBe('my tree');
+    expect(matchImportGedcomPath('/tree/my%2Ftree/import/')).toBe('my/tree');
+    expect(matchImportGedcomPath('/tree/special%3Fchar/import')).toBe('special?char');
+  });
+
+  test('matchImportGedcomPath accepts paths with or without trailing slash', () => {
+    expect(matchImportGedcomPath('/tree/ophir/import')).toBe('ophir');
+    expect(matchImportGedcomPath('/tree/ophir/import/')).toBe('ophir');
   });
 });
