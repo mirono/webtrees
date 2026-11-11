@@ -110,6 +110,9 @@ import {
   matchSiteRegistrationPath,
   matchEmailPreferencesPath,
   matchSiteTagsPath,
+  matchExportGedcomPagePath,
+  matchExportGedcomClientPath,
+  matchExportGedcomServerPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -254,6 +257,16 @@ import {
   renderEmailPreferencesPage,
   renderSiteTagsPage,
 } from './site-preferences-view.mjs';
+import {
+  resolveExportFilenames,
+  buildExportText,
+  encodeGedcomText,
+  loadMediaFolder,
+  readMediaFile,
+  writeExportToServer,
+} from './gedcom-export.mjs';
+import { renderExportGedcomPage } from './gedcom-export-view.mjs';
+import { ZipArchive } from 'archiver';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -10027,6 +10040,257 @@ async function handleCheckTreePage(req, res, url, treeName) {
 }
 
 /**
+ * Builds a ZIP archive buffer from a list of entries - mirrors
+ * GedcomExportService::downloadResponse()'s ZipArchive assembly.
+ * `store: true` entries (real media files, "almost always already
+ * compressed") skip deflate, same as real PHP's
+ * `setCompressionName(..., ZipArchive::CM_STORE)`.
+ *
+ * @param {Array<{name: string, buffer: Buffer, store?: boolean}>} entries
+ * @returns {Promise<Buffer>}
+ */
+function buildZipBuffer(entries) {
+  return new Promise((resolve, reject) => {
+    const archive = new ZipArchive();
+    const chunks = [];
+
+    archive.on('data', (chunk) => chunks.push(chunk));
+    archive.on('error', reject);
+    archive.on('end', () => resolve(Buffer.concat(chunks)));
+
+    for (const entry of entries) {
+      archive.append(entry.buffer, { name: entry.name, store: entry.store === true });
+    }
+
+    archive.finalize();
+  });
+}
+
+/**
+ * GET /tree/{tree}/export (ExportGedcomPage) - AuthManager gated (any
+ * tree manager, not just an admin). GEDCOM export step (phase 5 step
+ * 43). See pages-server/gedcom-export.mjs's top doc comment for scope
+ * (export only - GEDCOM import is a separate future step).
+ */
+async function handleExportGedcomPage(req, res, url, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { user, tree } = gate;
+
+  try {
+    const { filename, downloadFilenames } = resolveExportFilenames(treeName);
+    const csrfToken = generateCsrfToken();
+    const html = renderExportGedcomPage({
+      csrfToken,
+      tree: { gedcom_name: treeName, title: tree.title },
+      filename,
+      downloadFilenames,
+      isAdmin: user.isAdmin,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve export GEDCOM page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * Shared GET-form-validation + export-text-building step for both
+ * export-client and export-server - mirrors the Validator::isInArray()
+ * checks both real PHP handlers run before calling into
+ * GedcomExportService.
+ *
+ * @returns {Promise<{filenameBase: string, format: string, buffer: Buffer}|null>}
+ *   null if validation failed (response already sent)
+ */
+async function buildValidatedExport(req, res, gate, formData) {
+  const filenameBase = formData.get('filename') ?? '';
+  const format = formData.get('format') ?? 'gedcom';
+  const privacy = formData.get('privacy') ?? 'none';
+  const encoding = formData.get('encoding') ?? 'UTF-8';
+  const lineEndings = formData.get('line_endings') ?? 'CRLF';
+
+  if (
+    !['gedcom', 'zip', 'zipmedia', 'gedzip'].includes(format) ||
+    !['none', 'gedadmin', 'user', 'visitor'].includes(privacy) ||
+    !['UTF-8', 'UTF-16BE', 'ANSEL', 'ASCII', 'CP1252'].includes(encoding) ||
+    !['CRLF', 'LF'].includes(lineEndings)
+  ) {
+    res.writeHead(422, { 'content-type': 'text/plain' });
+    res.end('Invalid export options');
+    return null;
+  }
+
+  // Admins may export with no privacy filtering at all ('none'); a
+  // plain manager may not - mirrors the privacy radio set
+  // gedcom-export-options.phtml actually renders per role (this route
+  // itself is already AuthManager-gated, so Member/Visitor never
+  // reach here at all).
+  if (privacy === 'none' && !gate.user.isAdmin) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return null;
+  }
+
+  const includeMediaPath = format === 'zipmedia' ? await loadMediaFolder(pool, gate.tree.gedcomId) : format === 'gedzip' ? '' : null;
+
+  const { text, mediaFiles } = await buildExportText(
+    pool,
+    gate.tree,
+    { privacy, encoding, lineEndings, includeMediaPath },
+    { userId: gate.user.userId },
+  );
+  const gedcomBuffer = encodeGedcomText(text, encoding);
+
+  if (format === 'gedcom') {
+    return { filenameBase, format, buffer: gedcomBuffer };
+  }
+
+  const dataDir = `${WEBTREES_ROOT_DIR}data/`;
+  const mediaFolder = includeMediaPath !== null ? await loadMediaFolder(pool, gate.tree.gedcomId) : null;
+  const zipEntries = [];
+
+  if (format === 'gedzip') {
+    zipEntries.push({ name: 'gedcom.ged', buffer: gedcomBuffer });
+  } else {
+    zipEntries.push({ name: `${filenameBase}.ged`, buffer: gedcomBuffer });
+  }
+
+  if (includeMediaPath !== null) {
+    for (const relativePath of mediaFiles) {
+      const fileBuffer = await readMediaFile(dataDir, mediaFolder, relativePath);
+
+      if (fileBuffer !== null) {
+        zipEntries.push({ name: `${includeMediaPath}${relativePath}`, buffer: fileBuffer, store: true });
+      }
+    }
+  }
+
+  const zipBuffer = await buildZipBuffer(zipEntries);
+
+  return { filenameBase, format, buffer: zipBuffer };
+}
+
+/**
+ * POST /tree/{tree}/export-client (ExportGedcomClient) - streams the
+ * export as a file download.
+ */
+async function handleExportGedcomClient(req, res, url, treeName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const result = await buildValidatedExport(req, res, gate, formData);
+
+    if (result === null) {
+      return;
+    }
+
+    const extensions = { gedcom: '.ged', zip: '.zip', zipmedia: '.zip', gedzip: '.gdz' };
+    const contentType = result.format === 'gedcom' ? 'text/x-gedcom; charset=UTF-8' : 'application/zip';
+    const downloadName = `${result.filenameBase}${extensions[result.format]}`;
+
+    res.writeHead(200, {
+      'content-type': contentType,
+      'content-disposition': `attachment; filename="${downloadName.replaceAll('"', '\\"')}"`,
+    });
+    res.end(result.buffer);
+  } catch (error) {
+    console.error('Failed to export GEDCOM (client):', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/export-server (ExportGedcomServer) - writes the
+ * export to a file in the data folder, then redirects back to
+ * ManageTrees. Always exports unfiltered/full-fidelity
+ * (privacy='none' equivalent, sort_by_xref=true), same as real PHP's
+ * own hardcoded `$this->gedcom_export_service->export($tree, true)`
+ * call (no privacy/format/encoding options on this form at all).
+ */
+async function handleExportGedcomServer(req, res, url, treeName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    let filename = formData.get('filename') ?? '';
+    if (!/\.ged$/i.test(filename)) {
+      filename += '.ged';
+    }
+
+    const { text } = await buildExportText(
+      pool,
+      gate.tree,
+      { privacy: 'none', encoding: 'UTF-8', lineEndings: 'CRLF', includeMediaPath: null },
+      { userId: gate.user.userId },
+    );
+    const buffer = encodeGedcomText(text, 'UTF-8');
+
+    await writeExportToServer(`${WEBTREES_ROOT_DIR}data/`, filename, buffer);
+
+    res.writeHead(302, { Location: `/admin/trees/manage/${encodeURIComponent(treeName)}` });
+    res.end();
+  } catch (error) {
+    console.error('Failed to export GEDCOM (server):', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
  * GET/POST /admin/site-preferences (SitePreferencesPage/Action) -
  * AuthAdministrator only. Site preferences step.
  */
@@ -10613,6 +10877,27 @@ const server = createServer(async (req, res) => {
 
   if (checkTreeName !== null) {
     await handleCheckTreePage(req, res, url, checkTreeName);
+    return;
+  }
+
+  const exportPageTreeName = matchExportGedcomPagePath(url.pathname);
+
+  if (exportPageTreeName !== null) {
+    await handleExportGedcomPage(req, res, url, exportPageTreeName);
+    return;
+  }
+
+  const exportClientTreeName = matchExportGedcomClientPath(url.pathname);
+
+  if (exportClientTreeName !== null) {
+    await handleExportGedcomClient(req, res, url, exportClientTreeName);
+    return;
+  }
+
+  const exportServerTreeName = matchExportGedcomServerPath(url.pathname);
+
+  if (exportServerTreeName !== null) {
+    await handleExportGedcomServer(req, res, url, exportServerTreeName);
     return;
   }
 

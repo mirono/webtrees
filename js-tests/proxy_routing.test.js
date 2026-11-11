@@ -33,6 +33,7 @@ import {
   isUserManagementPath,
   isTreeManagementPath,
   isSitePreferencesPath,
+  isGedcomExportPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -965,6 +966,46 @@ describe('isSitePreferencesPath', () => {
     expect(isSitePreferencesPath('/login')).toBe(false);
     expect(isSitePreferencesPath('/')).toBe(false);
     expect(isSitePreferencesPath('/tree/ophir')).toBe(false);
+  });
+});
+
+describe('isGedcomExportPath', () => {
+  test('matches /tree/{tree}/export', () => {
+    expect(isGedcomExportPath('/tree/ophir/export')).toBe(true);
+    expect(isGedcomExportPath('/tree/ophir/export/')).toBe(true);
+  });
+
+  test('matches /tree/{tree}/export-client', () => {
+    expect(isGedcomExportPath('/tree/ophir/export-client')).toBe(true);
+    expect(isGedcomExportPath('/tree/ophir/export-client/')).toBe(true);
+  });
+
+  test('matches /tree/{tree}/export-server', () => {
+    expect(isGedcomExportPath('/tree/ophir/export-server')).toBe(true);
+    expect(isGedcomExportPath('/tree/ophir/export-server/')).toBe(true);
+  });
+
+  test('works with special tree names that require encoding', () => {
+    expect(isGedcomExportPath('/tree/my%20tree/export')).toBe(true);
+    expect(isGedcomExportPath('/tree/my%2Ftree/export-client')).toBe(true);
+    expect(isGedcomExportPath('/tree/special%3Fchar/export-server')).toBe(true);
+  });
+
+  test('does not match partial paths', () => {
+    expect(isGedcomExportPath('/tree/ophir')).toBe(false);
+    expect(isGedcomExportPath('/tree/ophir/export-')).toBe(false);
+  });
+
+  test('does not match with extra path segments', () => {
+    expect(isGedcomExportPath('/tree/ophir/export/something')).toBe(false);
+    expect(isGedcomExportPath('/tree/ophir/export-client/extra')).toBe(false);
+  });
+
+  test('does not match unrelated paths', () => {
+    expect(isGedcomExportPath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isGedcomExportPath('/tree/ophir/preferences')).toBe(false);
+    expect(isGedcomExportPath('/admin/site-preferences')).toBe(false);
+    expect(isGedcomExportPath('/')).toBe(false);
   });
 });
 

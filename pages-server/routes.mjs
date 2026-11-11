@@ -818,6 +818,40 @@ export function matchCheckTreePath(pathname) {
 }
 
 /**
+ * PHP's route (ExportGedcomPage::class, `/tree/{tree}/export`). GEDCOM
+ * export step.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchExportGedcomPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/export\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * PHP's route (ExportGedcomClient::class, `/tree/{tree}/export-client`).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchExportGedcomClientPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/export-client\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * PHP's route (ExportGedcomServer::class, `/tree/{tree}/export-server`).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchExportGedcomServerPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/export-server\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
  * PHP's routes for site preferences (SitePreferencesPage/Action,
  * SiteRegistrationPage/Action, EmailPreferencesPage/Action,
  * SiteTagsPage/Action, all `/admin/...`, AuthAdministrator only).

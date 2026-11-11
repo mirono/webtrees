@@ -323,6 +323,18 @@ export function isSitePreferencesPath(pathname) {
   );
 }
 
+// /tree/{tree}/export, export-client, export-server: GEDCOM export
+// step (phase 5 step 43) - GEDCOM import is scoped as its own,
+// separate future step, see pages-server/gedcom-export.mjs's top doc
+// comment.
+export function isGedcomExportPath(pathname) {
+  return (
+    /^\/tree\/[^/]+\/export\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/export-client\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/export-server\/?$/.test(pathname)
+  );
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -367,7 +379,8 @@ export function isNodeRoute(pathname, searchParams) {
     isControlPanelPath(pathname) ||
     isUserManagementPath(pathname) ||
     isTreeManagementPath(pathname) ||
-    isSitePreferencesPath(pathname)
+    isSitePreferencesPath(pathname) ||
+    isGedcomExportPath(pathname)
   ) {
     return true;
   }
@@ -411,7 +424,8 @@ export function isNodeRoute(pathname, searchParams) {
     isControlPanelPath(route) ||
     isUserManagementPath(route) ||
     isTreeManagementPath(route) ||
-    isSitePreferencesPath(route)
+    isSitePreferencesPath(route) ||
+    isGedcomExportPath(route)
   );
 }
 

@@ -55,6 +55,9 @@ import {
   matchSiteRegistrationPath,
   matchEmailPreferencesPath,
   matchSiteTagsPath,
+  matchExportGedcomPagePath,
+  matchExportGedcomClientPath,
+  matchExportGedcomServerPath,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -1085,5 +1088,48 @@ describe('site preferences route matchers', () => {
     expect(matchSiteTagsPath('/admin/tags/something')).toBe(false);
     expect(matchSiteTagsPath('/admin/site-preferences')).toBe(false);
     expect(matchSiteTagsPath('/admin')).toBe(false);
+  });
+});
+
+describe('GEDCOM export route matchers', () => {
+  test('matchExportGedcomPagePath extracts the tree name', () => {
+    expect(matchExportGedcomPagePath('/tree/ophir/export')).toBe('ophir');
+    expect(matchExportGedcomPagePath('/tree/my-tree/export/')).toBe('my-tree');
+  });
+
+  test('matchExportGedcomPagePath returns null for invalid paths', () => {
+    expect(matchExportGedcomPagePath('/tree/ophir')).toBeNull();
+    expect(matchExportGedcomPagePath('/tree/ophir/export/something')).toBeNull();
+    expect(matchExportGedcomPagePath('/tree/ophir/export-client')).toBeNull();
+  });
+
+  test('matchExportGedcomClientPath extracts the tree name', () => {
+    expect(matchExportGedcomClientPath('/tree/ophir/export-client')).toBe('ophir');
+    expect(matchExportGedcomClientPath('/tree/my-tree/export-client/')).toBe('my-tree');
+  });
+
+  test('matchExportGedcomClientPath returns null for invalid paths', () => {
+    expect(matchExportGedcomClientPath('/tree/ophir')).toBeNull();
+    expect(matchExportGedcomClientPath('/tree/ophir/export')).toBeNull();
+    expect(matchExportGedcomClientPath('/tree/ophir/export-client/something')).toBeNull();
+    expect(matchExportGedcomClientPath('/tree/ophir/export-server')).toBeNull();
+  });
+
+  test('matchExportGedcomServerPath extracts the tree name', () => {
+    expect(matchExportGedcomServerPath('/tree/ophir/export-server')).toBe('ophir');
+    expect(matchExportGedcomServerPath('/tree/my-tree/export-server/')).toBe('my-tree');
+  });
+
+  test('matchExportGedcomServerPath returns null for invalid paths', () => {
+    expect(matchExportGedcomServerPath('/tree/ophir')).toBeNull();
+    expect(matchExportGedcomServerPath('/tree/ophir/export')).toBeNull();
+    expect(matchExportGedcomServerPath('/tree/ophir/export-server/something')).toBeNull();
+    expect(matchExportGedcomServerPath('/tree/ophir/export-client')).toBeNull();
+  });
+
+  test('URL-decodes tree names', () => {
+    expect(matchExportGedcomPagePath('/tree/my%20tree/export')).toBe('my tree');
+    expect(matchExportGedcomClientPath('/tree/my%2Ftree/export-client')).toBe('my/tree');
+    expect(matchExportGedcomServerPath('/tree/special%3Fchar/export-server')).toBe('special?char');
   });
 });
