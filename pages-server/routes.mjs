@@ -864,6 +864,32 @@ export function matchExportGedcomServerPath(pathname) {
 }
 
 /**
+ * PHP's route (MergeRecordsPage::class/MergeRecordsAction::class,
+ * `/tree/{tree}/merge-step1`). Record-merge wizard, step 1 (pick two
+ * records).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchMergeStep1Path(pathname) {
+  const match = /^\/tree\/([^/]+)\/merge-step1\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * PHP's route (MergeFactsPage::class/MergeFactsAction::class,
+ * `/tree/{tree}/merge-step2`). Record-merge wizard, step 2
+ * (review/select facts, commit).
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchMergeStep2Path(pathname) {
+  const match = /^\/tree\/([^/]+)\/merge-step2\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
  * PHP's routes for site preferences (SitePreferencesPage/Action,
  * SiteRegistrationPage/Action, EmailPreferencesPage/Action,
  * SiteTagsPage/Action, all `/admin/...`, AuthAdministrator only).

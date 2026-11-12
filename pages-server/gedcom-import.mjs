@@ -723,7 +723,14 @@ function extractMediaFiles(gedrec) {
  * @param {string} type
  * @param {string} gedrec
  */
-async function insertTypedRecord(client, gedcomId, xref, type, gedrec) {
+/**
+ * Exported for reuse by record-merge.mjs, which needs to re-run just
+ * this insert phase (not the whole importOneRecord() pipeline - no
+ * reformatting/UID injection/keep_media, since merge operates on
+ * already-live gedcom text, not a raw imported file) when replaying an
+ * auto-accepted pending change.
+ */
+export async function insertTypedRecord(client, gedcomId, xref, type, gedrec) {
   if (type === 'INDI') {
     const rinMatch = /\n1 RIN (.+)/.exec(gedrec);
     const rin = rinMatch ? rinMatch[1] : xref;
@@ -871,6 +878,60 @@ async function clearTreeData(client, gedcomId, keepMedia) {
   await client.query('DELETE FROM wt_sources WHERE s_file = $1', [gedcomId]);
   await client.query("DELETE FROM wt_other WHERE o_file = $1", [gedcomId]);
   await client.query('DELETE FROM wt_change WHERE gedcom_id = $1', [gedcomId]);
+}
+
+/**
+ * Mirrors the DELETE phase of `GedcomImportService::updateRecord()`
+ * (app/Services/GedcomImportService.php:725-816) for exactly ONE
+ * record (as opposed to `clearTreeData()` above, which wipes an
+ * entire tree) - exported for reuse by record-merge.mjs, which needs
+ * to re-run this delete phase when replaying an auto-accepted pending
+ * update OR delete. `type` is the record's level-0 tag
+ * (INDI/FAM/SOUR/OBJE/else), same convention `insertTypedRecord()`
+ * uses.
+ *
+ * The orphaned-places cleanup loop mirrors real PHP's own do/while
+ * (deleting "Westminster, London, England" can cascade-orphan
+ * "London, England" then "England") - scoped to this tree via the
+ * `pl_file` join, same as real PHP's own join condition.
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {number} gedcomId
+ * @param {string} xref
+ * @param {string} type
+ * @returns {Promise<void>}
+ */
+export async function deleteRecordRows(client, gedcomId, xref, type) {
+  await client.query('DELETE FROM wt_placelinks WHERE pl_gid = $1 AND pl_file = $2', [xref, gedcomId]);
+
+  let affected;
+  do {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await client.query(
+      `DELETE FROM wt_places WHERE p_file = $1 AND p_id NOT IN (
+         SELECT pl_p_id FROM wt_placelinks WHERE pl_file = $1
+       )`,
+      [gedcomId],
+    );
+    affected = result.rowCount;
+  } while (affected > 0);
+
+  await client.query('DELETE FROM wt_dates WHERE d_gid = $1 AND d_file = $2', [xref, gedcomId]);
+  await client.query('DELETE FROM wt_name WHERE n_id = $1 AND n_file = $2', [xref, gedcomId]);
+  await client.query('DELETE FROM wt_link WHERE l_from = $1 AND l_file = $2', [xref, gedcomId]);
+
+  if (type === 'INDI') {
+    await client.query('DELETE FROM wt_individuals WHERE i_id = $1 AND i_file = $2', [xref, gedcomId]);
+  } else if (type === 'FAM') {
+    await client.query('DELETE FROM wt_families WHERE f_id = $1 AND f_file = $2', [xref, gedcomId]);
+  } else if (type === 'SOUR') {
+    await client.query('DELETE FROM wt_sources WHERE s_id = $1 AND s_file = $2', [xref, gedcomId]);
+  } else if (type === 'OBJE') {
+    await client.query('DELETE FROM wt_media_file WHERE m_id = $1 AND m_file = $2', [xref, gedcomId]);
+    await client.query('DELETE FROM wt_media WHERE m_id = $1 AND m_file = $2', [xref, gedcomId]);
+  } else {
+    await client.query('DELETE FROM wt_other WHERE o_id = $1 AND o_file = $2', [xref, gedcomId]);
+  }
 }
 
 /**

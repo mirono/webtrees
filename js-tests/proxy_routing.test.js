@@ -35,6 +35,7 @@ import {
   isSitePreferencesPath,
   isGedcomExportPath,
   isGedcomImportPath,
+  isMergeRecordsPath,
   rewriteForPages,
 } from '../proxy/routing.mjs';
 
@@ -374,6 +375,36 @@ describe('isNodeRoute', () => {
 
   test('ugly-URL form ?route=/theme/{value}', () => {
     const url = urlFor('/index.php?route=%2Ftheme%2Fclouds');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/merge-step1 is a Node route', () => {
+    const url = urlFor('/tree/ophir/merge-step1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/merge-step1 with trailing slash is a Node route', () => {
+    const url = urlFor('/tree/ophir/merge-step1/');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/merge-step1', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fmerge-step1');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/merge-step2 is a Node route', () => {
+    const url = urlFor('/tree/ophir/merge-step2');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('/tree/{tree}/merge-step2 with trailing slash is a Node route', () => {
+    const url = urlFor('/tree/ophir/merge-step2/');
+    expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
+  });
+
+  test('ugly-URL form ?route=/tree/{tree}/merge-step2', () => {
+    const url = urlFor('/index.php?route=%2Ftree%2Fophir%2Fmerge-step2');
     expect(isNodeRoute(url.pathname, url.searchParams)).toBe(true);
   });
 });
@@ -1040,6 +1071,53 @@ describe('isGedcomImportPath', () => {
     expect(isGedcomImportPath('/tree/ophir/preferences')).toBe(false);
     expect(isGedcomImportPath('/admin/site-preferences')).toBe(false);
     expect(isGedcomImportPath('/')).toBe(false);
+  });
+});
+
+describe('isMergeRecordsPath', () => {
+  test('matches /tree/{tree}/merge-step1', () => {
+    expect(isMergeRecordsPath('/tree/ophir/merge-step1')).toBe(true);
+  });
+
+  test('matches /tree/{tree}/merge-step1 with trailing slash', () => {
+    expect(isMergeRecordsPath('/tree/ophir/merge-step1/')).toBe(true);
+  });
+
+  test('matches /tree/{tree}/merge-step2', () => {
+    expect(isMergeRecordsPath('/tree/ophir/merge-step2')).toBe(true);
+  });
+
+  test('matches /tree/{tree}/merge-step2 with trailing slash', () => {
+    expect(isMergeRecordsPath('/tree/ophir/merge-step2/')).toBe(true);
+  });
+
+  test('works with special tree names that require encoding', () => {
+    expect(isMergeRecordsPath('/tree/my%20tree/merge-step1')).toBe(true);
+    expect(isMergeRecordsPath('/tree/my%2Ftree/merge-step2')).toBe(true);
+    expect(isMergeRecordsPath('/tree/special%3Fchar/merge-step1')).toBe(true);
+  });
+
+  test('does not match partial paths', () => {
+    expect(isMergeRecordsPath('/tree/ophir')).toBe(false);
+    expect(isMergeRecordsPath('/tree/ophir/merge-')).toBe(false);
+  });
+
+  test('does not match with extra path segments', () => {
+    expect(isMergeRecordsPath('/tree/ophir/merge-step1/something')).toBe(false);
+    expect(isMergeRecordsPath('/tree/ophir/merge-step2/extra')).toBe(false);
+  });
+
+  test('does not match unrelated paths', () => {
+    expect(isMergeRecordsPath('/tree/ophir/individual/I1')).toBe(false);
+    expect(isMergeRecordsPath('/tree/ophir/export')).toBe(false);
+    expect(isMergeRecordsPath('/tree/ophir/preferences')).toBe(false);
+    expect(isMergeRecordsPath('/admin/site-preferences')).toBe(false);
+    expect(isMergeRecordsPath('/')).toBe(false);
+  });
+
+  test('does not match step0 or step3', () => {
+    expect(isMergeRecordsPath('/tree/ophir/merge-step0')).toBe(false);
+    expect(isMergeRecordsPath('/tree/ophir/merge-step3')).toBe(false);
   });
 });
 

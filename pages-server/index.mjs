@@ -115,6 +115,8 @@ import {
   matchExportGedcomClientPath,
   matchExportGedcomServerPath,
   matchImportGedcomPath,
+  matchMergeStep1Path,
+  matchMergeStep2Path,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -278,6 +280,16 @@ import {
 } from './gedcom-import.mjs';
 import { renderImportGedcomPage, renderImportResultPage } from './gedcom-import-view.mjs';
 import Busboy from 'busboy';
+import {
+  MERGEABLE_TYPES,
+  getRecordByXref,
+  listRecordsByType,
+  isPendingDeletion,
+  validateMergeSelection,
+  compareFacts,
+  mergeRecordsTransactional,
+} from './record-merge.mjs';
+import { renderMergeStep1Page, renderMergeStep2Page, renderMergeResultPage } from './record-merge-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -9955,6 +9967,242 @@ async function handleRenumberTreePage(req, res, url, treeName) {
 }
 
 /**
+ * Re-renders the merge-step1 form with an error message - shared by
+ * handleMergeStep1Page's POST-validation failure and
+ * handleMergeStep2Page's GET/POST-validation failures (real PHP
+ * redirects back to MergeRecordsPage in all 3 cases - this port
+ * renders it directly instead of a redirect, to carry the error
+ * message without a flash-message mechanism).
+ */
+async function renderMergeStep1WithError(res, treeName, tree, type, xref1, xref2, error) {
+  const resolvedType = MERGEABLE_TYPES.includes(type) ? type : 'INDI';
+  const records = await listRecordsByType(pool, tree.gedcomId, resolvedType);
+  const csrfToken = generateCsrfToken();
+  const html = renderMergeStep1Page({
+    csrfToken,
+    tree: { gedcom_name: treeName, title: tree.title },
+    type: resolvedType,
+    xref1,
+    xref2,
+    records,
+    error,
+  });
+
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+  res.end(html);
+}
+
+/**
+ * GET/POST /tree/{tree}/merge-step1 (MergeRecordsPage/MergeRecordsAction,
+ * phase 5 step 45) - AuthManager (for THIS tree). Record-merge wizard,
+ * step 1: pick two records of the same mergeable type.
+ */
+async function handleMergeStep1Page(req, res, url, treeName) {
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+
+  if (req.method === 'GET') {
+    try {
+      const type = MERGEABLE_TYPES.includes(url.searchParams.get('type')) ? url.searchParams.get('type') : 'INDI';
+      const records = await listRecordsByType(pool, tree.gedcomId, type);
+      const csrfToken = generateCsrfToken();
+      const html = renderMergeStep1Page({
+        csrfToken,
+        tree: { gedcom_name: treeName, title: tree.title },
+        type,
+        xref1: url.searchParams.get('xref1') ?? '',
+        xref2: url.searchParams.get('xref2') ?? '',
+        records,
+        error: null,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve merge step 1 page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const type = formData.get('type') ?? 'INDI';
+      const xref1 = formData.get('xref1') ?? '';
+      const xref2 = formData.get('xref2') ?? '';
+
+      const [record1, record2] = await Promise.all([
+        getRecordByXref(pool, tree.gedcomId, xref1),
+        getRecordByXref(pool, tree.gedcomId, xref2),
+      ]);
+      const [record1Pending, record2Pending] = await Promise.all([
+        record1 ? isPendingDeletion(pool, tree.gedcomId, xref1) : false,
+        record2 ? isPendingDeletion(pool, tree.gedcomId, xref2) : false,
+      ]);
+
+      const validationError = validateMergeSelection(record1, record2, record1Pending, record2Pending);
+
+      if (validationError) {
+        await renderMergeStep1WithError(res, treeName, tree, type, xref1, xref2, validationError);
+        return;
+      }
+
+      res.writeHead(302, {
+        Location: `/tree/${encodeURIComponent(treeName)}/merge-step2?xref1=${encodeURIComponent(xref1)}&xref2=${encodeURIComponent(xref2)}`,
+      });
+      res.end();
+    } catch (error) {
+      console.error('Failed to process merge step 1:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET/POST /tree/{tree}/merge-step2 (MergeFactsPage/MergeFactsAction,
+ * phase 5 step 45) - AuthManager (for THIS tree). Record-merge wizard,
+ * step 2: review/select facts, commit the merge.
+ */
+async function handleMergeStep2Page(req, res, url, treeName) {
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user } = gate;
+
+  if (req.method === 'GET') {
+    try {
+      const xref1 = url.searchParams.get('xref1') ?? '';
+      const xref2 = url.searchParams.get('xref2') ?? '';
+
+      const [record1, record2] = await Promise.all([
+        getRecordByXref(pool, tree.gedcomId, xref1),
+        getRecordByXref(pool, tree.gedcomId, xref2),
+      ]);
+      const [record1Pending, record2Pending] = await Promise.all([
+        record1 ? isPendingDeletion(pool, tree.gedcomId, xref1) : false,
+        record2 ? isPendingDeletion(pool, tree.gedcomId, xref2) : false,
+      ]);
+
+      const validationError = validateMergeSelection(record1, record2, record1Pending, record2Pending);
+
+      if (validationError) {
+        await renderMergeStep1WithError(res, treeName, tree, record1?.type, xref1, xref2, validationError);
+        return;
+      }
+
+      const facts = compareFacts(record1.gedcom, record2.gedcom);
+      const csrfToken = generateCsrfToken();
+      const html = renderMergeStep2Page({
+        csrfToken,
+        tree: { gedcom_name: treeName, title: tree.title },
+        xref1,
+        xref2,
+        facts,
+        error: null,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve merge step 2 page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const xref1 = formData.get('xref1') ?? '';
+      const xref2 = formData.get('xref2') ?? '';
+      const keep1 = formData.getAll('keep1[]');
+      const keep2 = formData.getAll('keep2[]');
+
+      const [record1, record2] = await Promise.all([
+        getRecordByXref(pool, tree.gedcomId, xref1),
+        getRecordByXref(pool, tree.gedcomId, xref2),
+      ]);
+      const [record1Pending, record2Pending] = await Promise.all([
+        record1 ? isPendingDeletion(pool, tree.gedcomId, xref1) : false,
+        record2 ? isPendingDeletion(pool, tree.gedcomId, xref2) : false,
+      ]);
+
+      const validationError = validateMergeSelection(record1, record2, record1Pending, record2Pending);
+
+      if (validationError) {
+        await renderMergeStep1WithError(res, treeName, tree, record1?.type, xref1, xref2, validationError);
+        return;
+      }
+
+      const autoAcceptEdits = user.settings.auto_accept === '1';
+      const mergeResult = await mergeRecordsTransactional(
+        pool,
+        tree.gedcomId,
+        { userId: user.userId, userName: user.userName, autoAcceptEdits },
+        xref1,
+        xref2,
+        keep1,
+        keep2,
+      );
+
+      const csrfToken = generateCsrfToken();
+      const html = renderMergeResultPage({
+        csrfToken,
+        tree: { gedcom_name: treeName, title: tree.title },
+        success: mergeResult.error === null,
+        pending: mergeResult.error === null && !autoAcceptEdits,
+        error: mergeResult.error,
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to process merge step 2:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
  * GET/POST /tree/{tree}/privacy (TreePrivacyPage/Action) -
  * AuthManager (for THIS tree). Tree management step.
  */
@@ -11126,6 +11374,20 @@ const server = createServer(async (req, res) => {
 
   if (importTreeName !== null) {
     await handleImportGedcomPage(req, res, url, importTreeName);
+    return;
+  }
+
+  const mergeStep1TreeName = matchMergeStep1Path(url.pathname);
+
+  if (mergeStep1TreeName !== null) {
+    await handleMergeStep1Page(req, res, url, mergeStep1TreeName);
+    return;
+  }
+
+  const mergeStep2TreeName = matchMergeStep2Path(url.pathname);
+
+  if (mergeStep2TreeName !== null) {
+    await handleMergeStep2Page(req, res, url, mergeStep2TreeName);
     return;
   }
 

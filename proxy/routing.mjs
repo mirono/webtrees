@@ -341,6 +341,12 @@ export function isGedcomImportPath(pathname) {
   return /^\/tree\/[^/]+\/import\/?$/.test(pathname);
 }
 
+// /tree/{tree}/merge-step1, merge-step2: record-merge wizard
+// (phase 5 step 45).
+export function isMergeRecordsPath(pathname) {
+  return /^\/tree\/[^/]+\/merge-step[12]\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -387,7 +393,8 @@ export function isNodeRoute(pathname, searchParams) {
     isTreeManagementPath(pathname) ||
     isSitePreferencesPath(pathname) ||
     isGedcomExportPath(pathname) ||
-    isGedcomImportPath(pathname)
+    isGedcomImportPath(pathname) ||
+    isMergeRecordsPath(pathname)
   ) {
     return true;
   }
@@ -433,7 +440,8 @@ export function isNodeRoute(pathname, searchParams) {
     isTreeManagementPath(route) ||
     isSitePreferencesPath(route) ||
     isGedcomExportPath(route) ||
-    isGedcomImportPath(route)
+    isGedcomImportPath(route) ||
+    isMergeRecordsPath(route)
   );
 }
 

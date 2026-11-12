@@ -59,6 +59,8 @@ import {
   matchExportGedcomClientPath,
   matchExportGedcomServerPath,
   matchImportGedcomPath,
+  matchMergeStep1Path,
+  matchMergeStep2Path,
 } from '../pages-server/routes.mjs';
 
 describe('isMyAccountPath', () => {
@@ -1156,5 +1158,51 @@ describe('GEDCOM import route matchers', () => {
   test('matchImportGedcomPath accepts paths with or without trailing slash', () => {
     expect(matchImportGedcomPath('/tree/ophir/import')).toBe('ophir');
     expect(matchImportGedcomPath('/tree/ophir/import/')).toBe('ophir');
+  });
+});
+
+describe('record-merge route matchers', () => {
+  test('matchMergeStep1Path extracts the tree name', () => {
+    expect(matchMergeStep1Path('/tree/ophir/merge-step1')).toBe('ophir');
+    expect(matchMergeStep1Path('/tree/my-tree/merge-step1/')).toBe('my-tree');
+  });
+
+  test('matchMergeStep1Path returns null for invalid paths', () => {
+    expect(matchMergeStep1Path('/tree/ophir')).toBeNull();
+    expect(matchMergeStep1Path('/tree/ophir/merge-step1/something')).toBeNull();
+    expect(matchMergeStep1Path('/tree/ophir/merge-step2')).toBeNull();
+  });
+
+  test('matchMergeStep1Path URL-decodes tree names', () => {
+    expect(matchMergeStep1Path('/tree/my%20tree/merge-step1')).toBe('my tree');
+    expect(matchMergeStep1Path('/tree/my%2Ftree/merge-step1/')).toBe('my/tree');
+    expect(matchMergeStep1Path('/tree/special%3Fchar/merge-step1')).toBe('special?char');
+  });
+
+  test('matchMergeStep1Path accepts paths with or without trailing slash', () => {
+    expect(matchMergeStep1Path('/tree/ophir/merge-step1')).toBe('ophir');
+    expect(matchMergeStep1Path('/tree/ophir/merge-step1/')).toBe('ophir');
+  });
+
+  test('matchMergeStep2Path extracts the tree name', () => {
+    expect(matchMergeStep2Path('/tree/ophir/merge-step2')).toBe('ophir');
+    expect(matchMergeStep2Path('/tree/my-tree/merge-step2/')).toBe('my-tree');
+  });
+
+  test('matchMergeStep2Path returns null for invalid paths', () => {
+    expect(matchMergeStep2Path('/tree/ophir')).toBeNull();
+    expect(matchMergeStep2Path('/tree/ophir/merge-step2/something')).toBeNull();
+    expect(matchMergeStep2Path('/tree/ophir/merge-step1')).toBeNull();
+  });
+
+  test('matchMergeStep2Path URL-decodes tree names', () => {
+    expect(matchMergeStep2Path('/tree/my%20tree/merge-step2')).toBe('my tree');
+    expect(matchMergeStep2Path('/tree/my%2Ftree/merge-step2/')).toBe('my/tree');
+    expect(matchMergeStep2Path('/tree/special%3Fchar/merge-step2')).toBe('special?char');
+  });
+
+  test('matchMergeStep2Path accepts paths with or without trailing slash', () => {
+    expect(matchMergeStep2Path('/tree/ophir/merge-step2')).toBe('ophir');
+    expect(matchMergeStep2Path('/tree/ophir/merge-step2/')).toBe('ophir');
   });
 });
