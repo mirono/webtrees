@@ -117,6 +117,12 @@ import {
   matchImportGedcomPath,
   matchMergeStep1Path,
   matchMergeStep2Path,
+  matchDataFixChoosePath,
+  matchDataFixPagePath,
+  matchDataFixUpdatePath,
+  matchDataFixUpdateAllPath,
+  matchDataFixDataPath,
+  matchDataFixPreviewPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -290,6 +296,8 @@ import {
   mergeRecordsTransactional,
 } from './record-merge.mjs';
 import { renderMergeStep1Page, renderMergeStep2Page, renderMergeResultPage } from './record-merge-view.mjs';
+import { DATA_FIX_MODULES, findDataFixModule, recordsToFix as dataFixRecordsToFix } from './data-fix.mjs';
+import { renderDataFixChoosePage, renderDataFixPage, renderDataFixPreviewFragment } from './data-fix-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -10202,6 +10210,491 @@ async function handleMergeStep2Page(req, res, url, treeName) {
   res.end('Method Not Allowed');
 }
 
+// --- Data fixes (DataFixChoose/Page/Preview/Select/Update/UpdateAll,
+// phase 5 step 46) - see pages-server/data-fix.mjs's own doc comment
+// for scope/correctness notes. ---
+
+/**
+ * Extracts a fix module's own params from a request's query string or
+ * form body, excluding the framework's own reserved keys.
+ *
+ * @param {URLSearchParams} source
+ * @param {string[]} excludeKeys
+ * @returns {Record<string,string>}
+ */
+function extractDataFixParams(source, excludeKeys) {
+  const params = {};
+  for (const [key, value] of source.entries()) {
+    if (!excludeKeys.includes(key)) {
+      params[key] = value;
+    }
+  }
+  return params;
+}
+
+function dataFixParamsQuery(params) {
+  const query = new URLSearchParams(params);
+  return query.toString();
+}
+
+/**
+ * A short display label for a data-fix table row - reuses the same
+ * "INDI gets a real name, everything else falls back to its own xref"
+ * simplification as record-merge.mjs's `listRecordsByType()`.
+ */
+async function dataFixRowLabel(pool, gedcomId, record) {
+  if (record.type === 'INDI') {
+    const result = await pool.query('SELECT n_full FROM wt_name WHERE n_file = $1 AND n_id = $2 AND n_num = 0', [gedcomId, record.xref]);
+    return result.rows.length > 0 ? result.rows[0].n_full : record.xref;
+  }
+
+  if (record.type === 'SOUR') {
+    const result = await pool.query('SELECT s_name FROM wt_sources WHERE s_file = $1 AND s_id = $2', [gedcomId, record.xref]);
+    return result.rows.length > 0 ? result.rows[0].s_name : record.xref;
+  }
+
+  return record.xref;
+}
+
+/**
+ * Runs one fix module's `applyFix()` in its own transaction - the
+ * generic counterpart to record-merge.mjs's `mergeRecordsTransactional()`,
+ * since a fix (like FixPrimaryTag) can write MULTIPLE records.
+ */
+async function runDataFixApply(module, gedcomId, userId, autoAcceptEdits, author, record, params) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    await module.applyFix(client, gedcomId, userId, autoAcceptEdits, author, record, params);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * GET/POST /tree/{tree}/data-fix (DataFixChoose/DataFixSelect,
+ * phase 5 step 46) - AuthManager. Pick which fix module to run.
+ */
+async function handleDataFixChoosePage(req, res, url, treeName) {
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+
+  if (req.method === 'GET') {
+    try {
+      const csrfToken = generateCsrfToken();
+      const html = renderDataFixChoosePage({
+        csrfToken,
+        tree: { gedcom_name: treeName, title: tree.title },
+        dataFixes: DATA_FIX_MODULES.map((module) => ({ name: module.name, title: module.title })),
+      });
+
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+      res.end(html);
+    } catch (error) {
+      console.error('Failed to resolve data fix choose page:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const formData = new URLSearchParams(body);
+      const cookies = parseCookies(req.headers.cookie);
+
+      if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+        res.writeHead(403, { 'content-type': 'text/plain' });
+        res.end('This form has expired. Please reload the page and try again.');
+        return;
+      }
+
+      const module = findDataFixModule(formData.get('data_fix') ?? '');
+      const target = module !== null ? `/tree/${encodeURIComponent(treeName)}/data-fix/${encodeURIComponent(module.name)}` : `/tree/${encodeURIComponent(treeName)}/data-fix`;
+
+      res.writeHead(302, { Location: target });
+      res.end();
+    } catch (error) {
+      console.error('Failed to process data fix choice:', error);
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+    return;
+  }
+
+  res.writeHead(405, { allow: 'GET, POST', 'content-type': 'text/plain' });
+  res.end('Method Not Allowed');
+}
+
+/**
+ * GET /tree/{tree}/data-fix/{data_fix} (DataFixPage, phase 5 step 46) -
+ * AuthManager. Shows the module's options form plus the (client-driven)
+ * record table.
+ */
+async function handleDataFixPage(req, res, url, treeName, dataFixName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+  const module = findDataFixModule(dataFixName);
+
+  if (module === null) {
+    res.writeHead(302, { Location: `/tree/${encodeURIComponent(treeName)}/data-fix` });
+    res.end();
+    return;
+  }
+
+  try {
+    const csrfToken = generateCsrfToken();
+    const html = renderDataFixPage({
+      csrfToken,
+      tree: { gedcom_name: treeName, title: tree.title },
+      dataFix: {
+        name: module.name,
+        title: module.title,
+        description: module.description,
+        optionsHtml: module.optionsHtml ? module.optionsHtml(tree) : '',
+      },
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve data fix page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/data-fix/{data_fix}/data (DataFixData, phase 5
+ * step 46) - AuthManager. The record table's own data source (a
+ * hand-rolled pager, see data-fix-view.mjs's doc comment - real PHP's
+ * DataTables protocol fields `draw`/`start`/`length` are still honored).
+ */
+async function handleDataFixDataPage(req, res, url, treeName, dataFixName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+  const module = findDataFixModule(dataFixName);
+
+  if (module === null) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const params = extractDataFixParams(formData, ['draw', 'start', 'length', '_csrf']);
+    const draw = parseInt(formData.get('draw') ?? '0', 10) || 0;
+    const start = parseInt(formData.get('start') ?? '0', 10) || 0;
+    const length = parseInt(formData.get('length') ?? '0', 10) || 0;
+
+    const allRows = await dataFixRecordsToFix(module, pool, tree.gedcomId, params);
+    const page = length > 0 ? allRows.slice(start, start + length) : allRows.slice(start);
+    const treePrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const ctx = { treePrefs };
+
+    const data = await Promise.all(
+      page.map(async ({ xref, type }) => {
+        const record = await getRecordByXref(pool, tree.gedcomId, xref);
+
+        if (record === null) {
+          return [`${xref}`, '—'];
+        }
+
+        const label = await dataFixRowLabel(pool, tree.gedcomId, record);
+        const col1 = `${label} — ${record.xref}`;
+
+        if (!module.doesRecordNeedUpdate(record, params, ctx)) {
+          return [col1, '—'];
+        }
+
+        const query = dataFixParamsQuery({ ...params, xref: record.xref, type: record.type });
+        const previewUrl = `/tree/${encodeURIComponent(treeName)}/data-fix/${encodeURIComponent(module.name)}/preview?${query}`;
+        const updateUrl = `/tree/${encodeURIComponent(treeName)}/data-fix/${encodeURIComponent(module.name)}/update?${query}`;
+
+        const col2 = `<a href="${previewUrl}" target="_blank" rel="noopener">preview</a> <button type="button" data-update-url="${updateUrl}">update</button>`;
+
+        return [col1, col2];
+      }),
+    );
+
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ draw, recordsTotal: allRows.length, recordsFiltered: allRows.length, data }));
+  } catch (error) {
+    console.error('Failed to resolve data fix table data:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/data-fix/{data_fix}/preview (DataFixPreview,
+ * phase 5 step 46) - AuthManager.
+ */
+async function handleDataFixPreviewPage(req, res, url, treeName, dataFixName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+  const module = findDataFixModule(dataFixName);
+
+  if (module === null) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+    return;
+  }
+
+  try {
+    const xref = url.searchParams.get('xref') ?? '';
+    const params = extractDataFixParams(url.searchParams, ['xref', 'type']);
+    const record = await getRecordByXref(pool, tree.gedcomId, xref);
+
+    if (record === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    const treePrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const ctx = { treePrefs };
+    const pendingDeletion = await isPendingDeletion(pool, tree.gedcomId, xref);
+
+    const preview = !pendingDeletion && module.doesRecordNeedUpdate(record, params, ctx) ? await module.previewUpdate(pool, tree.gedcomId, record, params) : '';
+
+    const label = await dataFixRowLabel(pool, tree.gedcomId, record);
+    const html = renderDataFixPreviewFragment({ title: `Preview — ${label}`, preview });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve data fix preview:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/data-fix/{data_fix}/update (DataFixUpdate,
+ * phase 5 step 46) - AuthManager. Fixes a single record.
+ */
+async function handleDataFixUpdatePage(req, res, url, treeName, dataFixName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user } = gate;
+  const module = findDataFixModule(dataFixName);
+
+  if (module === null) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const xref = url.searchParams.get('xref') ?? '';
+    const params = extractDataFixParams(url.searchParams, ['xref', 'type']);
+    const record = await getRecordByXref(pool, tree.gedcomId, xref);
+
+    if (record !== null) {
+      const treePrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+      const pendingDeletion = await isPendingDeletion(pool, tree.gedcomId, xref);
+
+      if (!pendingDeletion && module.doesRecordNeedUpdate(record, params, { treePrefs })) {
+        const autoAcceptEdits = user.settings.auto_accept === '1';
+        await runDataFixApply(module, tree.gedcomId, user.userId, autoAcceptEdits, user.userName, record, params);
+      }
+    }
+
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to apply data fix:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/data-fix/{data_fix}/update-all (DataFixUpdateAll,
+ * phase 5 step 46) - AuthManager. First call (no start/end) returns
+ * the chunk-of-continuation-URLs plan; each continuation call actually
+ * applies the fix to that chunk's xref range.
+ */
+async function handleDataFixUpdateAllPage(req, res, url, treeName, dataFixName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateTreeManager(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user } = gate;
+  const module = findDataFixModule(dataFixName);
+
+  if (module === null) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const params = extractDataFixParams(url.searchParams, ['start', 'end']);
+    const rows = await dataFixRecordsToFix(module, pool, tree.gedcomId, params);
+
+    if (rows.length === 0) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('[]');
+      return;
+    }
+
+    const start = url.searchParams.get('start') ?? '';
+    const end = url.searchParams.get('end') ?? '';
+
+    if (start === '' || end === '') {
+      const CHUNK_SIZE = 250;
+      const chunks = [];
+
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        chunks.push(rows.slice(i, i + CHUNK_SIZE));
+      }
+
+      let count = 0;
+      const updates = chunks.map((chunk) => {
+        count += chunk.length;
+        const percent = `${((100 * count) / rows.length).toFixed(1)}%`;
+        const query = dataFixParamsQuery({ ...params, start: chunk[0].xref, end: chunk[chunk.length - 1].xref });
+        return {
+          url: `/tree/${encodeURIComponent(treeName)}/data-fix/${encodeURIComponent(module.name)}/update-all?${query}`,
+          percent,
+          progress: percent,
+        };
+      });
+
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(updates));
+      return;
+    }
+
+    const treePrefs = await loadTreePrivacyPrefs(pool, tree.gedcomId);
+    const ctx = { treePrefs };
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+    const inRange = rows.filter((row) => row.xref >= start && row.xref <= end);
+
+    for (const row of inRange) {
+      // eslint-disable-next-line no-await-in-loop
+      const record = await getRecordByXref(pool, tree.gedcomId, row.xref);
+
+      if (record === null) {
+        continue;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      if (await isPendingDeletion(pool, tree.gedcomId, row.xref)) {
+        continue;
+      }
+
+      if (!module.doesRecordNeedUpdate(record, params, ctx)) {
+        continue;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      await runDataFixApply(module, tree.gedcomId, user.userId, autoAcceptEdits, user.userName, record, params);
+    }
+
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to apply data fix to all records:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
 /**
  * GET/POST /tree/{tree}/privacy (TreePrivacyPage/Action) -
  * AuthManager (for THIS tree). Tree management step.
@@ -11388,6 +11881,48 @@ const server = createServer(async (req, res) => {
 
   if (mergeStep2TreeName !== null) {
     await handleMergeStep2Page(req, res, url, mergeStep2TreeName);
+    return;
+  }
+
+  const dataFixUpdateAllMatch = matchDataFixUpdateAllPath(url.pathname);
+
+  if (dataFixUpdateAllMatch !== null) {
+    await handleDataFixUpdateAllPage(req, res, url, dataFixUpdateAllMatch.tree, dataFixUpdateAllMatch.dataFix);
+    return;
+  }
+
+  const dataFixUpdateMatch = matchDataFixUpdatePath(url.pathname);
+
+  if (dataFixUpdateMatch !== null) {
+    await handleDataFixUpdatePage(req, res, url, dataFixUpdateMatch.tree, dataFixUpdateMatch.dataFix);
+    return;
+  }
+
+  const dataFixDataMatch = matchDataFixDataPath(url.pathname);
+
+  if (dataFixDataMatch !== null) {
+    await handleDataFixDataPage(req, res, url, dataFixDataMatch.tree, dataFixDataMatch.dataFix);
+    return;
+  }
+
+  const dataFixPreviewMatch = matchDataFixPreviewPath(url.pathname);
+
+  if (dataFixPreviewMatch !== null) {
+    await handleDataFixPreviewPage(req, res, url, dataFixPreviewMatch.tree, dataFixPreviewMatch.dataFix);
+    return;
+  }
+
+  const dataFixPageMatch = matchDataFixPagePath(url.pathname);
+
+  if (dataFixPageMatch !== null) {
+    await handleDataFixPage(req, res, url, dataFixPageMatch.tree, dataFixPageMatch.dataFix);
+    return;
+  }
+
+  const dataFixChooseTreeName = matchDataFixChoosePath(url.pathname);
+
+  if (dataFixChooseTreeName !== null) {
+    await handleDataFixChoosePage(req, res, url, dataFixChooseTreeName);
     return;
   }
 

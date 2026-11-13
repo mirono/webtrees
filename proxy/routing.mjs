@@ -347,6 +347,12 @@ export function isMergeRecordsPath(pathname) {
   return /^\/tree\/[^/]+\/merge-step[12]\/?$/.test(pathname);
 }
 
+// /tree/{tree}/data-fix, /tree/{tree}/data-fix/{data_fix}[/update|
+// /update-all|/data|/preview]: data-fix wizard (phase 5 step 46).
+export function isDataFixPath(pathname) {
+  return /^\/tree\/[^/]+\/data-fix(?:\/[^/]+(?:\/(?:update|update-all|data|preview))?)?\/?$/.test(pathname);
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -394,7 +400,8 @@ export function isNodeRoute(pathname, searchParams) {
     isSitePreferencesPath(pathname) ||
     isGedcomExportPath(pathname) ||
     isGedcomImportPath(pathname) ||
-    isMergeRecordsPath(pathname)
+    isMergeRecordsPath(pathname) ||
+    isDataFixPath(pathname)
   ) {
     return true;
   }
@@ -441,7 +448,8 @@ export function isNodeRoute(pathname, searchParams) {
     isSitePreferencesPath(route) ||
     isGedcomExportPath(route) ||
     isGedcomImportPath(route) ||
-    isMergeRecordsPath(route)
+    isMergeRecordsPath(route) ||
+    isDataFixPath(route)
   );
 }
 

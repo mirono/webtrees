@@ -890,6 +890,73 @@ export function matchMergeStep2Path(pathname) {
 }
 
 /**
+ * PHP's route (DataFixChoose::class/DataFixSelect::class,
+ * `/tree/{tree}/data-fix`). Data-fix wizard, module choice.
+ *
+ * @param {string} pathname
+ * @returns {string|null} the tree name, or null
+ */
+export function matchDataFixChoosePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/data-fix\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * PHP's route (DataFixPage::class, `/tree/{tree}/data-fix/{data_fix}`).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, dataFix: string}|null}
+ */
+export function matchDataFixPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/data-fix\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), dataFix: decodeURIComponent(match[2]) } : null;
+}
+
+/**
+ * PHP's route (DataFixUpdate::class, `/tree/{tree}/data-fix/{data_fix}/update`).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, dataFix: string}|null}
+ */
+export function matchDataFixUpdatePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/data-fix\/([^/]+)\/update\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), dataFix: decodeURIComponent(match[2]) } : null;
+}
+
+/**
+ * PHP's route (DataFixUpdateAll::class, `/tree/{tree}/data-fix/{data_fix}/update-all`).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, dataFix: string}|null}
+ */
+export function matchDataFixUpdateAllPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/data-fix\/([^/]+)\/update-all\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), dataFix: decodeURIComponent(match[2]) } : null;
+}
+
+/**
+ * PHP's route (DataFixData::class, `/tree/{tree}/data-fix/{data_fix}/data`).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, dataFix: string}|null}
+ */
+export function matchDataFixDataPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/data-fix\/([^/]+)\/data\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), dataFix: decodeURIComponent(match[2]) } : null;
+}
+
+/**
+ * PHP's route (DataFixPreview::class, `/tree/{tree}/data-fix/{data_fix}/preview`).
+ *
+ * @param {string} pathname
+ * @returns {{tree: string, dataFix: string}|null}
+ */
+export function matchDataFixPreviewPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/data-fix\/([^/]+)\/preview\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), dataFix: decodeURIComponent(match[2]) } : null;
+}
+
+/**
  * PHP's routes for site preferences (SitePreferencesPage/Action,
  * SiteRegistrationPage/Action, EmailPreferencesPage/Action,
  * SiteTagsPage/Action, all `/admin/...`, AuthAdministrator only).
