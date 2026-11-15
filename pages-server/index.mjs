@@ -134,6 +134,18 @@ import {
   matchEditRawRecordPath,
   matchEditRecordPagePath,
   matchEditRecordActionPath,
+  matchAddChildToFamilyPagePath,
+  matchAddChildToFamilyActionPath,
+  matchAddSpouseToFamilyPagePath,
+  matchAddSpouseToFamilyActionPath,
+  matchAddChildToIndividualPath,
+  matchAddParentToIndividualPagePath,
+  matchAddParentToIndividualActionPath,
+  matchAddSpouseToIndividualPath,
+  matchAddUnlinkedIndividualPath,
+  matchLinkChildToFamilyPath,
+  matchLinkSpouseToIndividualPath,
+  matchDeleteRecordPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -317,6 +329,8 @@ import {
   insertMissingFactSubtags,
   insertMissingRecordSubtags,
   factsToAdd,
+  newFamilyFacts,
+  newIndividualFacts,
 } from './gedcom-edit-service.mjs';
 import { renderEditGedcomFields } from './gedcom-edit-widgets.mjs';
 import {
@@ -334,6 +348,9 @@ import {
   RECORD_TYPES_WITH_CHAN,
 } from './fact-editor.mjs';
 import { renderEditFactPage, renderEditRecordPage, renderRawGedcomFactPage, renderRawGedcomRecordPage } from './fact-editor-view.mjs';
+import { surnameTraditionFor, toNameFacts } from './surname-tradition.mjs';
+import { createRecordWithEmbeddedLink, appendFactToRecord, deleteRecordCascade } from './relationship-editor.mjs';
+import { renderNewIndividualPage, renderLinkChildToFamilyPage, renderLinkSpouseToIndividualPage } from './relationship-editor-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -10268,6 +10285,1127 @@ async function handleEditRecordAction(req, res, url, treeName, xref) {
 }
 
 /**
+ * Editing Phase C (phase 5 step 50): relationship editing. Loads the
+ * 3 tree preferences `newFamilyFacts()`/`newIndividualFacts()`/
+ * `surnameTraditionFor()` need, as a `{getPreference}` object directly
+ * usable by those two functions (they only ever call `.getPreference`).
+ */
+async function loadRelationshipTreePrefs(gedcomId) {
+  const result = await pool.query(
+    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('SURNAME_TRADITION', 'QUICK_REQUIRED_FACTS', 'QUICK_REQUIRED_FAMFACTS')",
+    [gedcomId],
+  );
+  const byName = {};
+  for (const row of result.rows) {
+    byName[row.setting_name] = row.setting_value;
+  }
+  return { getPreference: (key) => byName[key] ?? '' };
+}
+
+function sexOf(gedcom) {
+  return /\n1 SEX ([MFUX])/.exec(gedcom)?.[1] ?? 'U';
+}
+
+function husbWifeXrefs(familyGedcom) {
+  return {
+    husb: /\n1 HUSB @([^@]+)@/.exec(familyGedcom)?.[1] ?? null,
+    wife: /\n1 WIFE @([^@]+)@/.exec(familyGedcom)?.[1] ?? null,
+  };
+}
+
+/**
+ * GET /tree/{tree}/add-child-to-family/{xref}/{sex} (AddChildToFamilyPage,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleAddChildToFamilyPage(req, res, url, treeName, xref, sex) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { husb, wife } = husbWifeXrefs(loaded.record.gedcom);
+    const [husbRecord, wifeRecord] = await Promise.all([
+      husb !== null ? getRecordByXref(pool, tree.gedcomId, husb) : null,
+      wife !== null ? getRecordByXref(pool, tree.gedcomId, wife) : null,
+    ]);
+
+    const treePrefs = await loadRelationshipTreePrefs(tree.gedcomId);
+    const tradition = surnameTraditionFor(treePrefs.getPreference('SURNAME_TRADITION'));
+    const names = tradition.newChildNames(toNameFacts(husbRecord?.gedcom ?? null), toNameFacts(wifeRecord?.gedcom ?? null), sex);
+    const iFacts = newIndividualFacts(treePrefs, sex, names);
+
+    const titles = { M: 'Add a son', F: 'Add a daughter', U: 'Add a child' };
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const recordPageUrl = recordUrl(treeName, 'FAM', xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderNewIndividualPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - ${titles[sex] ?? titles.U}`,
+      postUrl: `/tree/${encodeURIComponent(treeName)}/add-child-to-family/${encodeURIComponent(xref)}`,
+      url: url.searchParams.get('url') ?? recordPageUrl,
+      treeName,
+      facts: { i: iFacts.map((f) => ({ recordType: 'INDI', tag: f.tag, gedcom: f.gedcom })) },
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve add-child-to-family page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/add-child-to-family/{xref} (AddChildToFamilyAction,
+ * phase 5 step 50) - AuthEditor. Scope cut: the new CHIL fact is always
+ * appended at the end of the family's facts, never inserted before a
+ * younger sibling - see relationship-editor.mjs's top doc comment.
+ */
+async function handleAddChildToFamilyAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const levels = formData.getAll('ilevels[]');
+    const tags = formData.getAll('itags[]');
+    const values = formData.getAll('ivalues[]');
+    const gedcomBody = editLinesToGedcom('INDI', levels, tags, values);
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+
+    const client = await pool.connect();
+    let childXref;
+    try {
+      await client.query('BEGIN');
+      const child = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'INDI', `\n1 FAMC @${xref}@${gedcomBody}`);
+      childXref = child.xref;
+      const familyCurrent = { xref: loaded.record.xref, type: 'FAM', gedcom: loaded.record.gedcom, fullGedcom: loaded.record.gedcom };
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, familyCurrent, `1 CHIL @${childXref}@`, {
+        updateChan: true,
+      });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, 'INDI', childXref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve add-child-to-family action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/add-spouse-to-family/{xref}/{sex} (AddSpouseToFamilyPage,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleAddSpouseToFamilyPage(req, res, url, treeName, xref, sex) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { husb, wife } = husbWifeXrefs(loaded.record.gedcom);
+    const existingSpouseXref = husb ?? wife;
+    const existingSpouse = existingSpouseXref !== null ? await getRecordByXref(pool, tree.gedcomId, existingSpouseXref) : null;
+
+    const treePrefs = await loadRelationshipTreePrefs(tree.gedcomId);
+    const tradition = surnameTraditionFor(treePrefs.getPreference('SURNAME_TRADITION'));
+    const names = tradition.newSpouseNames(toNameFacts(existingSpouse?.gedcom ?? null), sex);
+    const iFacts = newIndividualFacts(treePrefs, sex, names);
+    const fFacts = newFamilyFacts(treePrefs);
+
+    const title = sex === 'F' ? 'Add a wife' : 'Add a husband';
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const recordPageUrl = recordUrl(treeName, 'FAM', xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderNewIndividualPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title,
+      postUrl: `/tree/${encodeURIComponent(treeName)}/add-spouse-to-family/${encodeURIComponent(xref)}`,
+      url: url.searchParams.get('url') ?? recordPageUrl,
+      treeName,
+      facts: {
+        i: iFacts.map((f) => ({ recordType: 'INDI', tag: f.tag, gedcom: f.gedcom })),
+        f: fFacts.map((f) => ({ recordType: 'FAM', tag: f.tag, gedcom: f.gedcom })),
+      },
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve add-spouse-to-family page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/add-spouse-to-family/{xref} (AddSpouseToFamilyAction,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleAddSpouseToFamilyAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const iGedcomBody = editLinesToGedcom('INDI', formData.getAll('ilevels[]'), formData.getAll('itags[]'), formData.getAll('ivalues[]'));
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+
+    const client = await pool.connect();
+    let spouseXref;
+    try {
+      await client.query('BEGIN');
+
+      const spouse = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'INDI', iGedcomBody);
+      spouseXref = spouse.xref;
+
+      const { husb, wife } = husbWifeXrefs(loaded.record.gedcom);
+      const familyCurrent = { xref: loaded.record.xref, type: 'FAM', gedcom: loaded.record.gedcom, fullGedcom: loaded.record.gedcom };
+
+      let link = null;
+      if (husb === null && sexOf(spouse.fullGedcom) === 'M') link = 'HUSB';
+      else if (wife === null && sexOf(spouse.fullGedcom) === 'F') link = 'WIFE';
+      else if (husb === null) link = 'HUSB';
+      else if (wife === null) link = 'WIFE';
+
+      if (link !== null) {
+        await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, familyCurrent, `1 ${link} @${spouseXref}@`, {
+          updateChan: false,
+        });
+
+        const fGedcomBody = editLinesToGedcom('FAM', formData.getAll('flevels[]'), formData.getAll('ftags[]'), formData.getAll('fvalues[]'), false);
+        if (fGedcomBody !== '') {
+          await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, familyCurrent, fGedcomBody, { updateChan: false });
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, 'INDI', spouseXref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve add-spouse-to-family action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET/POST /tree/{tree}/add-child-to-individual/{xref} (AddChildToIndividualPage/Action,
+ * phase 5 step 50) - AuthEditor. Creates a new one-parent family.
+ */
+async function handleAddChildToIndividualPage(req, res, url, treeName, xref) {
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const sex = sexOf(loaded.record.gedcom);
+    const treePrefs = await loadRelationshipTreePrefs(tree.gedcomId);
+    const tradition = surnameTraditionFor(treePrefs.getPreference('SURNAME_TRADITION'));
+    const nameFacts = toNameFacts(loaded.record.gedcom);
+    const names =
+      sex === 'M' ? tradition.newChildNames(nameFacts, null, 'U') : sex === 'F' ? tradition.newChildNames(null, nameFacts, 'U') : tradition.newChildNames(null, null, 'U');
+    const iFacts = newIndividualFacts(treePrefs, 'U', names);
+
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const recordPageUrl = recordUrl(treeName, 'INDI', xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderNewIndividualPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - Add a child to create a one-parent family`,
+      postUrl: `/tree/${encodeURIComponent(treeName)}/add-child-to-individual/${encodeURIComponent(xref)}`,
+      url: url.searchParams.get('url') ?? recordPageUrl,
+      treeName,
+      facts: { i: iFacts.map((f) => ({ recordType: 'INDI', tag: f.tag, gedcom: f.gedcom })) },
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve add-child-to-individual page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+async function handleAddChildToIndividualAction(req, res, url, treeName, xref) {
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const iGedcomBody = editLinesToGedcom('INDI', formData.getAll('ilevels[]'), formData.getAll('itags[]'), formData.getAll('ivalues[]'));
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+    const link = sexOf(loaded.record.gedcom) === 'F' ? 'WIFE' : 'HUSB';
+
+    const client = await pool.connect();
+    let childXref;
+    try {
+      await client.query('BEGIN');
+
+      const child = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'INDI', iGedcomBody);
+      childXref = child.xref;
+
+      const family = await createRecordWithEmbeddedLink(
+        client,
+        tree.gedcomId,
+        user.userId,
+        autoAcceptEdits,
+        author,
+        'FAM',
+        `\n1 ${link} @${xref}@\n1 CHIL @${childXref}@`,
+      );
+
+      const individualCurrent = { xref: loaded.record.xref, type: 'INDI', gedcom: loaded.record.gedcom, fullGedcom: loaded.record.gedcom };
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, individualCurrent, `1 FAMS @${family.xref}@`, {
+        updateChan: false,
+      });
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, child, `1 FAMC @${family.xref}@`, { updateChan: false });
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, 'INDI', childXref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve add-child-to-individual action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/add-parent-to-individual/{xref}/{sex} (AddParentToIndividualPage,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleAddParentToIndividualPage(req, res, url, treeName, xref, sex) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const treePrefs = await loadRelationshipTreePrefs(tree.gedcomId);
+    const tradition = surnameTraditionFor(treePrefs.getPreference('SURNAME_TRADITION'));
+    const names = tradition.newParentNames(toNameFacts(loaded.record.gedcom), sex);
+    const iFacts = newIndividualFacts(treePrefs, sex, names);
+
+    const title = sex === 'F' ? 'Add a mother' : 'Add a father';
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const recordPageUrl = recordUrl(treeName, 'INDI', xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderNewIndividualPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - ${title}`,
+      postUrl: `/tree/${encodeURIComponent(treeName)}/add-parent-to-individual/${encodeURIComponent(xref)}`,
+      url: url.searchParams.get('url') ?? recordPageUrl,
+      treeName,
+      facts: { i: iFacts.map((f) => ({ recordType: 'INDI', tag: f.tag, gedcom: f.gedcom })) },
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve add-parent-to-individual page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/add-parent-to-individual/{xref} (AddParentToIndividualAction,
+ * phase 5 step 50) - AuthEditor. The HUSB/WIFE link direction is read
+ * from the newly submitted parent's OWN SEX value, not the route's
+ * `sex` query param - matches real PHP (`$parent->sex()`).
+ */
+async function handleAddParentToIndividualAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const iGedcomBody = editLinesToGedcom('INDI', formData.getAll('ilevels[]'), formData.getAll('itags[]'), formData.getAll('ivalues[]'));
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+
+    const client = await pool.connect();
+    let parentXref;
+    try {
+      await client.query('BEGIN');
+
+      const parent = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'INDI', iGedcomBody);
+      parentXref = parent.xref;
+      const link = sexOf(parent.fullGedcom) === 'F' ? 'WIFE' : 'HUSB';
+
+      const family = await createRecordWithEmbeddedLink(
+        client,
+        tree.gedcomId,
+        user.userId,
+        autoAcceptEdits,
+        author,
+        'FAM',
+        `\n1 CHIL @${xref}@\n1 ${link} @${parentXref}@`,
+      );
+
+      const individualCurrent = { xref: loaded.record.xref, type: 'INDI', gedcom: loaded.record.gedcom, fullGedcom: loaded.record.gedcom };
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, individualCurrent, `1 FAMC @${family.xref}@`, {
+        updateChan: false,
+      });
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, parent, `1 FAMS @${family.xref}@`, { updateChan: false });
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, 'INDI', parentXref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve add-parent-to-individual action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/add-spouse-to-individual/{xref} (AddSpouseToIndividualPage,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleAddSpouseToIndividualPage(req, res, url, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  const OPPOSITE_SEX = { F: 'M', M: 'F', U: 'U', X: 'U' };
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const sex = OPPOSITE_SEX[sexOf(loaded.record.gedcom)] ?? 'U';
+    const treePrefs = await loadRelationshipTreePrefs(tree.gedcomId);
+    const tradition = surnameTraditionFor(treePrefs.getPreference('SURNAME_TRADITION'));
+    const names = tradition.newSpouseNames(toNameFacts(loaded.record.gedcom), sex);
+    const iFacts = newIndividualFacts(treePrefs, sex, names);
+    const fFacts = newFamilyFacts(treePrefs);
+
+    const titles = { F: 'Add a wife', M: 'Add a husband', U: 'Add a spouse' };
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const recordPageUrl = recordUrl(treeName, 'INDI', xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderNewIndividualPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - ${titles[sex]}`,
+      postUrl: `/tree/${encodeURIComponent(treeName)}/add-spouse-to-individual/${encodeURIComponent(xref)}`,
+      url: url.searchParams.get('url') ?? recordPageUrl,
+      treeName,
+      facts: {
+        i: iFacts.map((f) => ({ recordType: 'INDI', tag: f.tag, gedcom: f.gedcom })),
+        f: fFacts.map((f) => ({ recordType: 'FAM', tag: f.tag, gedcom: f.gedcom })),
+      },
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve add-spouse-to-individual page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/add-spouse-to-individual/{xref} (AddSpouseToIndividualAction,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleAddSpouseToIndividualAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const iGedcomBody = editLinesToGedcom('INDI', formData.getAll('ilevels[]'), formData.getAll('itags[]'), formData.getAll('ivalues[]'));
+    const fGedcomBody = editLinesToGedcom('FAM', formData.getAll('flevels[]'), formData.getAll('ftags[]'), formData.getAll('fvalues[]'));
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+    const individualIsWife = sexOf(loaded.record.gedcom) === 'F';
+
+    const client = await pool.connect();
+    let spouseXref;
+    try {
+      await client.query('BEGIN');
+
+      const spouse = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'INDI', iGedcomBody);
+      spouseXref = spouse.xref;
+
+      const iLink = `\n1 ${individualIsWife ? 'WIFE' : 'HUSB'} @${xref}@`;
+      const sLink = `\n1 ${individualIsWife ? 'HUSB' : 'WIFE'} @${spouseXref}@`;
+      const family = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'FAM', `${fGedcomBody}${iLink}${sLink}`);
+
+      const individualCurrent = { xref: loaded.record.xref, type: 'INDI', gedcom: loaded.record.gedcom, fullGedcom: loaded.record.gedcom };
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, individualCurrent, `1 FAMS @${family.xref}@`, {
+        updateChan: false,
+      });
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, spouse, `1 FAMS @${family.xref}@`, { updateChan: false });
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, 'INDI', spouseXref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve add-spouse-to-individual action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/add-unlinked-individual (AddUnlinkedPage,
+ * phase 5 step 50) - AuthEditor (tree-level only, no record xref).
+ */
+async function handleAddUnlinkedPage(req, res, url, treeName) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user } = gate;
+
+  try {
+    const treePrefs = await loadRelationshipTreePrefs(tree.gedcomId);
+    const iFacts = newIndividualFacts(treePrefs, 'U', ['1 NAME ']);
+
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, null);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderNewIndividualPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: 'Create an individual',
+      postUrl: `/tree/${encodeURIComponent(treeName)}/add-unlinked-individual`,
+      url: url.searchParams.get('url') ?? `/tree/${encodeURIComponent(treeName)}`,
+      treeName,
+      facts: { i: iFacts.map((f) => ({ recordType: 'INDI', tag: f.tag, gedcom: f.gedcom })) },
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve add-unlinked-individual page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/add-unlinked-individual (AddUnlinkedAction,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleAddUnlinkedAction(req, res, url, treeName) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const iGedcomBody = editLinesToGedcom('INDI', formData.getAll('ilevels[]'), formData.getAll('itags[]'), formData.getAll('ivalues[]'));
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+
+    const client = await pool.connect();
+    let individualXref;
+    try {
+      await client.query('BEGIN');
+      const individual = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'INDI', iGedcomBody);
+      individualXref = individual.xref;
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, 'INDI', individualXref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve add-unlinked-individual action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/link-child-to-family/{xref} (LinkChildToFamilyPage,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleLinkChildToFamilyPage(req, res, url, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const families = await listRecordsByType(pool, tree.gedcomId, 'FAM');
+    const pediElement = elementFor('INDI:FAMC:PEDI');
+    const pedigreeOptions = Object.entries(pediElement.values ?? {}).map(([key, label]) => ({ key, label }));
+
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderLinkChildToFamilyPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - Link this individual to an existing family as a child`,
+      postUrl: `/tree/${encodeURIComponent(treeName)}/link-child-to-family/${encodeURIComponent(xref)}`,
+      cancelUrl: recordUrl(treeName, 'INDI', xref),
+      families,
+      pedigreeOptions,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve link-child-to-family page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/link-child-to-family/{xref} (LinkChildToFamilyAction,
+ * phase 5 step 50) - AuthEditor. Scope cut: the new CHIL fact is
+ * always appended at the end, never inserted before a younger
+ * sibling.
+ */
+async function handleLinkChildToFamilyAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const famid = formData.get('famid') ?? '';
+    const [loadedIndividual, loadedFamily] = await Promise.all([
+      loadEditableRecord(tree, isManager, xref),
+      loadEditableRecord(tree, isManager, famid),
+    ]);
+
+    if (loadedIndividual === null || !loadedIndividual.canEdit || loadedFamily === null || !loadedFamily.canEdit) {
+      res.writeHead(loadedIndividual === null || loadedFamily === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loadedIndividual === null || loadedFamily === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const PEDI = formData.get('PEDI') ?? '';
+    let famcGedcom;
+    if (PEDI === '') {
+      famcGedcom = `1 FAMC @${famid}@`;
+    } else if (PEDI === 'ADOPTED') {
+      famcGedcom = `1 FAMC @${famid}@\n2 PEDI ${PEDI}\n1 ADOP\n2 FAMC @${famid}@\n3 ADOP BOTH`;
+    } else if (PEDI === 'SEALING') {
+      famcGedcom = `1 FAMC @${famid}@\n2 PEDI ${PEDI}\n1 SLGC\n2 FAMC @${famid}@`;
+    } else if (PEDI === 'FOSTER') {
+      famcGedcom = `1 FAMC @${famid}@\n2 PEDI ${PEDI}\n1 EVEN\n2 TYPE ${PEDI}`;
+    } else {
+      famcGedcom = `1 FAMC @${famid}@\n2 PEDI ${PEDI}`;
+    }
+
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+    const existingFamc = splitFacts(loadedIndividual.record.gedcom).find(
+      (f) => f.tag === 'FAMC' && f.gedcom.includes(`@${famid}@`),
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const newIndiGedcom =
+        existingFamc !== undefined
+          ? updateFactGedcom(loadedIndividual.record.gedcom, existingFamc.id, famcGedcom)
+          : createFactGedcom(loadedIndividual.record.gedcom, famcGedcom);
+      await applyRecordUpdate(client, tree.gedcomId, user.userId, autoAcceptEdits, loadedIndividual.record, newIndiGedcom, {
+        updateChan: true,
+        author,
+      });
+
+      const alreadyLinked = splitFacts(loadedFamily.record.gedcom).some((f) => f.tag === 'CHIL' && f.gedcom.includes(`@${xref}@`));
+      if (!alreadyLinked) {
+        const newFamGedcom = createFactGedcom(loadedFamily.record.gedcom, `1 CHIL @${xref}@`);
+        await applyRecordUpdate(client, tree.gedcomId, user.userId, autoAcceptEdits, loadedFamily.record, newFamGedcom, {
+          updateChan: true,
+          author,
+        });
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    res.writeHead(302, { Location: recordUrl(treeName, 'INDI', xref) });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve link-child-to-family action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/link-spouse-to-individual/{xref} (LinkSpouseToIndividualPage,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleLinkSpouseToIndividualPage(req, res, url, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const individuals = await listRecordsByType(pool, tree.gedcomId, 'INDI');
+    const isWife = sexOf(loaded.record.gedcom) === 'F';
+    const title = isWife ? 'Add a husband using an existing individual' : 'Add a wife using an existing individual';
+    const spouseLabel = isWife ? 'Husband' : 'Wife';
+
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderLinkSpouseToIndividualPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - ${title}`,
+      postUrl: `/tree/${encodeURIComponent(treeName)}/link-spouse-to-individual/${encodeURIComponent(xref)}`,
+      cancelUrl: recordUrl(treeName, 'INDI', xref),
+      spouseLabel,
+      individuals,
+      treeName,
+      marriageGedcom: '1 MARR',
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve link-spouse-to-individual page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/link-spouse-to-individual/{xref} (LinkSpouseToIndividualAction,
+ * phase 5 step 50) - AuthEditor.
+ */
+async function handleLinkSpouseToIndividualAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const spid = formData.get('spid') ?? '';
+    const [loadedIndividual, loadedSpouse] = await Promise.all([
+      loadEditableRecord(tree, isManager, xref),
+      loadEditableRecord(tree, isManager, spid),
+    ]);
+
+    if (loadedIndividual === null || !loadedIndividual.canEdit || loadedSpouse === null || !loadedSpouse.canEdit) {
+      res.writeHead(loadedIndividual === null || loadedSpouse === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loadedIndividual === null || loadedSpouse === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const fGedcomBody = editLinesToGedcom('FAM', formData.getAll('flevels[]'), formData.getAll('ftags[]'), formData.getAll('fvalues[]'));
+    const author = user.userName;
+    const autoAcceptEdits = user.settings.auto_accept === '1';
+    const individualIsMale = sexOf(loadedIndividual.record.gedcom) === 'M';
+    const links = individualIsMale
+      ? `\n1 HUSB @${xref}@\n1 WIFE @${spid}@`
+      : `\n1 WIFE @${xref}@\n1 HUSB @${spid}@`;
+
+    const client = await pool.connect();
+    let familyXref;
+    try {
+      await client.query('BEGIN');
+
+      const family = await createRecordWithEmbeddedLink(client, tree.gedcomId, user.userId, autoAcceptEdits, author, 'FAM', `${links}${fGedcomBody}`);
+      familyXref = family.xref;
+
+      const individualCurrent = { xref: loadedIndividual.record.xref, type: 'INDI', gedcom: loadedIndividual.record.gedcom, fullGedcom: loadedIndividual.record.gedcom };
+      const spouseCurrent = { xref: loadedSpouse.record.xref, type: 'INDI', gedcom: loadedSpouse.record.gedcom, fullGedcom: loadedSpouse.record.gedcom };
+
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, individualCurrent, `1 FAMS @${familyXref}@`, {
+        updateChan: true,
+      });
+      await appendFactToRecord(client, tree.gedcomId, user.userId, autoAcceptEdits, author, spouseCurrent, `1 FAMS @${familyXref}@`, {
+        updateChan: true,
+      });
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    res.writeHead(302, { Location: recordUrl(treeName, 'FAM', familyXref) });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve link-spouse-to-individual action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/delete/{xref} (DeleteRecord, phase 5 step 50) -
+ * AuthEditor. Matches real PHP's own permissive behavior exactly: if
+ * the record can't be found or isn't editable, this silently does
+ * nothing and still returns 200 - no explicit 403/404.
+ */
+async function handleDeleteRecordAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+  if (gate === null) return;
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded !== null && loaded.canEdit) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await deleteRecordCascade(client, tree.gedcomId, user.userId, user.settings.auto_accept === '1', user.userName, loaded.record);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to resolve delete-record action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
  * /admin (ControlPanel) - the entry point into the ~85-route admin
  * area (phase 5 step 39). Scoped to this read-only dashboard only -
  * every other /admin/... link on the page still falls through the
@@ -13131,6 +14269,138 @@ const server = createServer(async (req, res) => {
 
   if (editRecordActionMatch !== null) {
     await handleEditRecordAction(req, res, url, editRecordActionMatch.tree, editRecordActionMatch.xref);
+    return;
+  }
+
+  // Editing Phase C (phase 5 step 50): relationship editing.
+  const addChildToFamilyPageMatch = matchAddChildToFamilyPagePath(url.pathname);
+
+  if (addChildToFamilyPageMatch !== null) {
+    await handleAddChildToFamilyPage(
+      req,
+      res,
+      url,
+      addChildToFamilyPageMatch.tree,
+      addChildToFamilyPageMatch.xref,
+      addChildToFamilyPageMatch.sex,
+    );
+    return;
+  }
+
+  const addChildToFamilyActionMatch = matchAddChildToFamilyActionPath(url.pathname);
+
+  if (addChildToFamilyActionMatch !== null) {
+    await handleAddChildToFamilyAction(req, res, url, addChildToFamilyActionMatch.tree, addChildToFamilyActionMatch.xref);
+    return;
+  }
+
+  const addSpouseToFamilyPageMatch = matchAddSpouseToFamilyPagePath(url.pathname);
+
+  if (addSpouseToFamilyPageMatch !== null) {
+    await handleAddSpouseToFamilyPage(
+      req,
+      res,
+      url,
+      addSpouseToFamilyPageMatch.tree,
+      addSpouseToFamilyPageMatch.xref,
+      addSpouseToFamilyPageMatch.sex,
+    );
+    return;
+  }
+
+  const addSpouseToFamilyActionMatch = matchAddSpouseToFamilyActionPath(url.pathname);
+
+  if (addSpouseToFamilyActionMatch !== null) {
+    await handleAddSpouseToFamilyAction(req, res, url, addSpouseToFamilyActionMatch.tree, addSpouseToFamilyActionMatch.xref);
+    return;
+  }
+
+  const addChildToIndividualMatch = matchAddChildToIndividualPath(url.pathname);
+
+  if (addChildToIndividualMatch !== null) {
+    if (req.method === 'GET') {
+      await handleAddChildToIndividualPage(req, res, url, addChildToIndividualMatch.tree, addChildToIndividualMatch.xref);
+    } else {
+      await handleAddChildToIndividualAction(req, res, url, addChildToIndividualMatch.tree, addChildToIndividualMatch.xref);
+    }
+    return;
+  }
+
+  const addParentToIndividualPageMatch = matchAddParentToIndividualPagePath(url.pathname);
+
+  if (addParentToIndividualPageMatch !== null) {
+    await handleAddParentToIndividualPage(
+      req,
+      res,
+      url,
+      addParentToIndividualPageMatch.tree,
+      addParentToIndividualPageMatch.xref,
+      addParentToIndividualPageMatch.sex,
+    );
+    return;
+  }
+
+  const addParentToIndividualActionMatch = matchAddParentToIndividualActionPath(url.pathname);
+
+  if (addParentToIndividualActionMatch !== null) {
+    await handleAddParentToIndividualAction(
+      req,
+      res,
+      url,
+      addParentToIndividualActionMatch.tree,
+      addParentToIndividualActionMatch.xref,
+    );
+    return;
+  }
+
+  const addSpouseToIndividualMatch = matchAddSpouseToIndividualPath(url.pathname);
+
+  if (addSpouseToIndividualMatch !== null) {
+    if (req.method === 'GET') {
+      await handleAddSpouseToIndividualPage(req, res, url, addSpouseToIndividualMatch.tree, addSpouseToIndividualMatch.xref);
+    } else {
+      await handleAddSpouseToIndividualAction(req, res, url, addSpouseToIndividualMatch.tree, addSpouseToIndividualMatch.xref);
+    }
+    return;
+  }
+
+  const addUnlinkedIndividualTreeName = matchAddUnlinkedIndividualPath(url.pathname);
+
+  if (addUnlinkedIndividualTreeName !== null) {
+    if (req.method === 'GET') {
+      await handleAddUnlinkedPage(req, res, url, addUnlinkedIndividualTreeName);
+    } else {
+      await handleAddUnlinkedAction(req, res, url, addUnlinkedIndividualTreeName);
+    }
+    return;
+  }
+
+  const linkChildToFamilyMatch = matchLinkChildToFamilyPath(url.pathname);
+
+  if (linkChildToFamilyMatch !== null) {
+    if (req.method === 'GET') {
+      await handleLinkChildToFamilyPage(req, res, url, linkChildToFamilyMatch.tree, linkChildToFamilyMatch.xref);
+    } else {
+      await handleLinkChildToFamilyAction(req, res, url, linkChildToFamilyMatch.tree, linkChildToFamilyMatch.xref);
+    }
+    return;
+  }
+
+  const linkSpouseToIndividualMatch = matchLinkSpouseToIndividualPath(url.pathname);
+
+  if (linkSpouseToIndividualMatch !== null) {
+    if (req.method === 'GET') {
+      await handleLinkSpouseToIndividualPage(req, res, url, linkSpouseToIndividualMatch.tree, linkSpouseToIndividualMatch.xref);
+    } else {
+      await handleLinkSpouseToIndividualAction(req, res, url, linkSpouseToIndividualMatch.tree, linkSpouseToIndividualMatch.xref);
+    }
+    return;
+  }
+
+  const deleteRecordMatch = matchDeleteRecordPath(url.pathname);
+
+  if (deleteRecordMatch !== null) {
+    await handleDeleteRecordAction(req, res, url, deleteRecordMatch.tree, deleteRecordMatch.xref);
     return;
   }
 

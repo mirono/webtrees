@@ -1041,3 +1041,70 @@ export function matchEditRecordActionPath(pathname) {
   const match = /^\/tree\/([^/]+)\/update-record\/([^/]+)\/?$/.exec(pathname);
   return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
 }
+
+/**
+ * Editing Phase C routes (phase 5 step 50, AuthEditor-gated,
+ * `/tree/{tree}/...`): AddChildToFamily, AddSpouseToFamily,
+ * AddChildToIndividual, AddParentToIndividual, AddSpouseToIndividual,
+ * AddUnlinkedIndividual, LinkChildToFamily, LinkSpouseToIndividual,
+ * DeleteRecord.
+ */
+export function matchAddChildToFamilyPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-child-to-family\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), sex: decodeURIComponent(match[3]) } : null;
+}
+
+export function matchAddChildToFamilyActionPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-child-to-family\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchAddSpouseToFamilyPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-spouse-to-family\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), sex: decodeURIComponent(match[3]) } : null;
+}
+
+export function matchAddSpouseToFamilyActionPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-spouse-to-family\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchAddChildToIndividualPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-child-to-individual\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchAddParentToIndividualPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-parent-to-individual\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), sex: decodeURIComponent(match[3]) } : null;
+}
+
+export function matchAddParentToIndividualActionPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-parent-to-individual\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchAddSpouseToIndividualPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-spouse-to-individual\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchAddUnlinkedIndividualPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-unlinked-individual\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export function matchLinkChildToFamilyPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/link-child-to-family\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchLinkSpouseToIndividualPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/link-spouse-to-individual\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchDeleteRecordPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/delete\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}

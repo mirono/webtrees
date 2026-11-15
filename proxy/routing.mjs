@@ -371,6 +371,28 @@ export function isFactEditorPath(pathname) {
   );
 }
 
+// Editing Phase C routes (phase 5 step 50): AddChildToFamily,
+// AddSpouseToFamily, AddChildToIndividual, AddParentToIndividual,
+// AddSpouseToIndividual, AddUnlinkedIndividual, LinkChildToFamily,
+// LinkSpouseToIndividual, DeleteRecord. `/delete/{xref}` (2 segments,
+// whole-record delete) is distinct from isFactEditorPath's own
+// `/delete/{xref}/{fact_id}` (3 segments) - both are matched here so
+// this function alone decides the whole "delete" family, to avoid
+// splitting one literal prefix across two matchers.
+export function isRelationshipEditorPath(pathname) {
+  return (
+    /^\/tree\/[^/]+\/add-child-to-family\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/add-spouse-to-family\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/add-child-to-individual\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/add-parent-to-individual\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/add-spouse-to-individual\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/add-unlinked-individual\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/link-child-to-family\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/link-spouse-to-individual\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/delete\/[^/]+\/?$/.test(pathname)
+  );
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -420,7 +442,8 @@ export function isNodeRoute(pathname, searchParams) {
     isGedcomImportPath(pathname) ||
     isMergeRecordsPath(pathname) ||
     isDataFixPath(pathname) ||
-    isFactEditorPath(pathname)
+    isFactEditorPath(pathname) ||
+    isRelationshipEditorPath(pathname)
   ) {
     return true;
   }
@@ -469,7 +492,8 @@ export function isNodeRoute(pathname, searchParams) {
     isGedcomImportPath(route) ||
     isMergeRecordsPath(route) ||
     isDataFixPath(route) ||
-    isFactEditorPath(route)
+    isFactEditorPath(route) ||
+    isRelationshipEditorPath(route)
   );
 }
 
