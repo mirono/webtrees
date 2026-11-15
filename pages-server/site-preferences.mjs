@@ -456,6 +456,23 @@ export const CUSTOM_INDIVIDUAL_TAGS = [
 const SITE_TAGS_PREFERENCE_NAMES = ['CUSTOM_FAMILY_TAGS', 'CUSTOM_INDIVIDUAL_TAGS', 'CUSTOM_GEDCOM_L_TAGS', 'CUSTOM_FAM_FACT', 'CUSTOM_FAM_NCHI', 'CUSTOM_RESI_VALUE', 'CUSTOM_TIME_TAGS'];
 
 /**
+ * Mirrors the HIDE_* subset of Site::DEFAULT_PREFERENCES
+ * (app/Site.php:43-85) - on a fresh install with no `wt_site_setting`
+ * row, these keys default to hidden ('1'); every other HIDDEN_TAG_KEYS
+ * entry (BAPM, RELI, MARB, BARM's sibling BASM via the BARM group,
+ * FAM:ENGA is actually listed, ANCI, etc. - see that key list) has no
+ * entry here and so defaults to NOT hidden, exactly matching real PHP
+ * (`self::DEFAULT_PREFERENCES[$setting_name] ?? ''`).
+ */
+const HIDE_DEFAULT_ON_KEYS = [
+  'ADDR_EMAIL', 'ADDR_PHON', 'ADDR_WWW', 'AFN', 'ALIA', 'ANCI', 'ANUL', 'ASSO', 'BARM',
+  'BIRT_FAMC', 'CHR', 'DIVF', 'ENGA', 'FAM_CENS', 'FAM_RESI', 'FCOM', 'IDNO', 'LDS',
+  'MARC', 'MARL', 'MARS', 'NAME_FONE', 'NAME_NPFX', 'NAME_NSFX', 'NAME_ROMN', 'NAME_SOUR',
+  'ORDN', 'PLAC_FONE', 'PLAC_FORM', 'PLAC_MAP', 'PLAC_NOTE', 'PLAC_ROMN', 'REFN', 'RFN',
+  'RIN', 'SOUR_DATA', 'SOUR_DATE', 'SOUR_EVEN', 'SOUR_NOTE', 'SOUR_QUAY', 'SSN', 'SUBM',
+];
+
+/**
  * Mirrors SiteTagsPage (app/Http/RequestHandlers/SiteTagsPage.php:38-77).
  *
  * @param {import('pg').Pool} pool
@@ -468,7 +485,8 @@ export async function loadSiteTagsPreferences(pool) {
   const hiddenTags = {};
 
   for (const key of HIDDEN_TAG_KEYS) {
-    hiddenTags[key] = hiddenPrefs[`HIDE_${key}`] === '1';
+    const stored = hiddenPrefs[`HIDE_${key}`];
+    hiddenTags[key] = stored === undefined ? HIDE_DEFAULT_ON_KEYS.includes(key) : stored === '1';
   }
 
   return {
