@@ -154,6 +154,7 @@ function renderFact({ tag, date, time, place, address, author, factId, canEdit, 
         <tr>
             <th scope="row">
                 <div class="wt-fact-label">${escapeHtml(label)}</div>
+                ${editLinksHtml}
                 <span class="wt-fact-icon wt-fact-icon-${escapeHtml(tag)}" title="${escapeHtml(label)}"></span>
             </th>
             <td>
@@ -163,7 +164,6 @@ function renderFact({ tag, date, time, place, address, author, factId, canEdit, 
                     ${addressHtml}
                     ${authorHtml}
                 </div>
-                ${editLinksHtml}
             </td>
         </tr>`;
 }

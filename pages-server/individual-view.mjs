@@ -227,6 +227,7 @@ function renderFact({
         <tr>
             <th scope="row">
                 <div class="wt-fact-label">${escapeHtml(label)}</div>
+                ${editLinksHtml}
                 <span class="wt-fact-icon wt-fact-icon-${escapeHtml(tag)}" title="${escapeHtml(label)}"></span>
             </th>
             <td>
@@ -237,7 +238,6 @@ function renderFact({
                     ${addressHtml}
                     ${authorHtml}
                 </div>
-                ${editLinksHtml}
             </td>
         </tr>`;
 }
