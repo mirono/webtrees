@@ -316,9 +316,11 @@ import {
   editLinesToGedcom,
   insertMissingFactSubtags,
   insertMissingRecordSubtags,
+  factsToAdd,
 } from './gedcom-edit-service.mjs';
 import { renderEditGedcomFields } from './gedcom-edit-widgets.mjs';
 import {
+  factId,
   splitFacts,
   canEditRecord,
   canEditFact,
@@ -1326,8 +1328,30 @@ async function handleIndividualPage(req, res, treeName, xref) {
   const deathDate = getDeathDate(facts);
   const individualSex = sex(individual.gedcom);
 
+  // Phase 5 step 49: who may edit this page's own facts, so the facts
+  // table can show edit/copy/delete icons (fact-edit-links-view.mjs) -
+  // a non-fatal lookup (degrades to no edit controls, not a 502) since
+  // it's a nicety on an otherwise read-only page, not load-bearing for
+  // the page's own display.
+  let editRole = { isEditor: false, isManager: false };
+  let individualPendingDeletion = false;
+
+  if (user !== null) {
+    try {
+      editRole = await treeEditRole(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+
+      if (editRole.isEditor) {
+        individualPendingDeletion = await isPendingDeletion(pool, tree.gedcomId, xref);
+      }
+    } catch (error) {
+      console.error('Failed to resolve edit role for individual page (edit controls will be hidden):', error);
+    }
+  }
+
+  const ownEditContext = { ...editRole, pendingDeletion: individualPendingDeletion, recordType: 'INDI', recordXref: individual.xref };
+
   const ownFacts = facts.filter((fact) => VITAL_FACT_TAGS.includes(/^1 (\S+)/.exec(fact)?.[1]));
-  const visibleFacts = extractVisibleFacts(ownFacts, defaultResnInfo, accessLevel);
+  const visibleFacts = extractVisibleFacts(ownFacts, defaultResnInfo, accessLevel, ownEditContext);
 
   // Mirrors IndividualFactsTabModule's own merge of individualFacts()
   // with familyFacts() (app/Services/IndividualFactsService.php) -
@@ -1337,7 +1361,7 @@ async function handleIndividualPage(req, res, treeName, xref) {
   // comment for what's ported vs. simplified (year-only sort, no
   // relativeFacts()/associateFacts()/historicFacts()).
   try {
-    const familyFacts = await familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, relPrefs, spouseFamilyXrefs);
+    const familyFacts = await familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, relPrefs, spouseFamilyXrefs, editRole);
 
     visibleFacts.push(...familyFacts);
     visibleFacts.sort((a, b) => a.sortYear - b.sortYear);
@@ -1449,6 +1473,35 @@ async function handleIndividualPage(req, res, treeName, xref) {
     return;
   }
 
+  // Phase 5 step 49: "Edit record"/"Add a fact" controls, gated on the
+  // record-level canEdit() (RESN=LOCKED/pending-deletion), not just
+  // editRole.isEditor - matches real PHP's own
+  // Auth::checkRecordAccess($record, true) gate on these same targets.
+  let canEditThisRecord = false;
+  let addFacts = [];
+
+  if (editRole.isEditor) {
+    try {
+      canEditThisRecord = canEditRecord({
+        isPendingDeletion: individualPendingDeletion,
+        isManager: editRole.isManager,
+        isEditor: true,
+        facts: splitFacts(individual.gedcom),
+      });
+
+      if (canEditThisRecord) {
+        const { hiddenTags } = await sitePreferences.loadSiteTagsPreferences(pool);
+        const hasExistingFact = (candidateTag) => facts.some((f) => /^1 (\S+)/.exec(f)?.[1] === candidateTag);
+        addFacts = factsToAdd('INDI', hasExistingFact, false, hiddenTags)
+          .filter((tag) => tag !== 'OBJE') // Auth::canUploadMedia gate - media upload is unported, see AddNewFact's own doc comment.
+          .map((tag) => ({ tag, label: elementFor(`INDI:${tag}`).label }))
+          .sort((a, b) => a.label.localeCompare(b.label));
+      }
+    } catch (error) {
+      console.error('Failed to resolve edit-record/add-fact controls for individual page (controls will be hidden):', error);
+    }
+  }
+
   const individualViewModel = {
     xref: individual.xref,
     fullNameHtml,
@@ -1466,6 +1519,10 @@ async function handleIndividualPage(req, res, treeName, xref) {
     sourcesTab,
     notesTab,
     mediaImages,
+    treeName,
+    url: recordUrl(treeName, 'INDI', individual.xref),
+    canEditRecord: canEditThisRecord,
+    addFacts,
   };
 
   const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
@@ -1911,9 +1968,18 @@ async function resolveFamilyNavigatorFamily(tree, treePrivacyPrefs, accessLevel,
  *   display (e.g. via displayableFamilyFacts() or a VITAL_FACT_TAGS check)
  * @param {{factResn: Map<string,string>, treeFactResn: Map<string,string>}} defaultResnInfo
  * @param {number} accessLevel
- * @returns {{tag: string, date: string, time: string, place: string, address: string, author: string, sortYear: number}[]}
+ * @param {{isEditor: boolean, isManager: boolean, pendingDeletion: boolean, recordType: string, recordXref: string}|null} [editContext]
+ *   When given (phase 5 step 49), each fact also gets `factId`/`canEdit`/
+ *   `recordType`/`recordXref` so the view layer can render
+ *   fact-edit-links-view.mjs's edit/copy/delete icons - `recordType`/
+ *   `recordXref` identify the OWNING record (a family fact shown on an
+ *   individual's own page still edits the family). Omitted (`null`,
+ *   the default) for display-only panels that don't offer editing yet
+ *   (Extra information, the family navigator sidebar) - `canEdit` is
+ *   simply `false` and no edit controls render for those.
+ * @returns {{tag: string, date: string, time: string, place: string, address: string, author: string, sortYear: number, factId: string, canEdit: boolean, recordType: string|null, recordXref: string|null}[]}
  */
-function extractVisibleFacts(facts, defaultResnInfo, accessLevel) {
+function extractVisibleFacts(facts, defaultResnInfo, accessLevel, editContext = null) {
   const visibleFacts = [];
 
   for (const fact of facts) {
@@ -1957,6 +2023,13 @@ function extractVisibleFacts(facts, defaultResnInfo, accessLevel) {
       // (the actual gap this extraction step exists to close), not a
       // faithful full reproduction of the real sort.
       sortYear: gedcomDate && gedcomDate.isOK() ? gedcomDate.minimumDate().yearValue() : Infinity,
+      factId: factId(fact),
+      canEdit:
+        editContext !== null &&
+        editContext.isEditor &&
+        canEditFact({ isPendingDeletion: editContext.pendingDeletion, isManager: editContext.isManager, isEditor: editContext.isEditor, tag, factGedcom: fact }),
+      recordType: editContext?.recordType ?? null,
+      recordXref: editContext?.recordXref ?? null,
     });
   }
 
@@ -1989,9 +2062,10 @@ const FAMILY_FACTS_EXCLUDED_ON_INDIVIDUAL_TAB = new Set(['CHAN', '_UID', 'UID', 
  * @param {number} accessLevel
  * @param {object} relPrefs
  * @param {string[]} spouseFamilyXrefs
+ * @param {{isEditor: boolean, isManager: boolean}} [editRole] Phase 5 step 49 - when the viewer is an editor, each spouse family's OWN pending-deletion state is looked up so its facts can carry correct edit/copy/delete icons (editing a family fact edits the FAMILY record, not the individual).
  * @returns {Promise<ReturnType<typeof extractVisibleFacts>>}
  */
-async function familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, relPrefs, spouseFamilyXrefs) {
+async function familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, relPrefs, spouseFamilyXrefs, editRole = { isEditor: false, isManager: false }) {
   const facts = [];
 
   for (const familyXref of spouseFamilyXrefs) {
@@ -2005,7 +2079,21 @@ async function familyFactsForIndividual(tree, treePrivacyPrefs, accessLevel, rel
       (fact) => !FAMILY_FACTS_EXCLUDED_ON_INDIVIDUAL_TAB.has(/^1 (\S+)/.exec(fact)?.[1]),
     );
 
-    facts.push(...extractVisibleFacts(displayable, shown.defaultResnInfo, accessLevel).map((fact) => ({ ...fact, fromFamily: true })));
+    let familyPendingDeletion = false;
+
+    if (editRole.isEditor) {
+      try {
+        familyPendingDeletion = await isPendingDeletion(pool, tree.gedcomId, familyXref);
+      } catch (error) {
+        console.error('Failed to resolve pending-deletion state for a spouse family (edit controls will be hidden for its facts):', error);
+      }
+    }
+
+    const familyEditContext = { ...editRole, pendingDeletion: familyPendingDeletion, recordType: 'FAM', recordXref: familyXref };
+
+    facts.push(
+      ...extractVisibleFacts(displayable, shown.defaultResnInfo, accessLevel, familyEditContext).map((fact) => ({ ...fact, fromFamily: true })),
+    );
   }
 
   return facts;
@@ -2268,13 +2356,53 @@ async function handleFamilyPage(req, res, treeName, xref) {
     return;
   }
 
-  const visibleFacts = extractVisibleFacts(displayableFamilyFacts(facts), defaultResnInfo, accessLevel);
+  // Phase 5 step 49: edit/copy/delete icons + "Add a fact"/"Edit
+  // record" controls, same non-fatal-lookup convention as the
+  // individual page (see that handler's own comment).
+  let familyEditRole = { isEditor: false, isManager: false };
+  let familyPendingDeletion = false;
+  let canEditThisFamily = false;
+  let familyAddFacts = [];
+
+  if (user !== null) {
+    try {
+      familyEditRole = await treeEditRole(pool, { gedcomId: tree.gedcomId, userId, isAdmin });
+
+      if (familyEditRole.isEditor) {
+        familyPendingDeletion = await isPendingDeletion(pool, tree.gedcomId, xref);
+        canEditThisFamily = canEditRecord({
+          isPendingDeletion: familyPendingDeletion,
+          isManager: familyEditRole.isManager,
+          isEditor: true,
+          facts: splitFacts(family.gedcom),
+        });
+
+        if (canEditThisFamily) {
+          const { hiddenTags } = await sitePreferences.loadSiteTagsPreferences(pool);
+          const hasExistingFact = (candidateTag) => facts.some((f) => /^1 (\S+)/.exec(f)?.[1] === candidateTag);
+          familyAddFacts = factsToAdd('FAM', hasExistingFact, false, hiddenTags)
+            .map((tag) => ({ tag, label: elementFor(`FAM:${tag}`).label }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to resolve edit role for family page (edit controls will be hidden):', error);
+    }
+  }
+
+  const familyFactEditContext = { ...familyEditRole, pendingDeletion: familyPendingDeletion, recordType: 'FAM', recordXref: xref };
+  const visibleFacts = extractVisibleFacts(displayableFamilyFacts(facts), defaultResnInfo, accessLevel, familyFactEditContext);
 
   const familyViewModel = {
     husband: familyMemberViewModel(tree, husband),
     wife: familyMemberViewModel(tree, wife),
     children: children.map((child) => familyMemberViewModel(tree, child)).filter((child) => child !== null),
     facts: visibleFacts,
+    treeName,
+    xref,
+    url: recordUrl(treeName, 'FAM', xref),
+    canEditRecord: canEditThisFamily,
+    addFacts: familyAddFacts,
   };
 
   const genealogyMenuAccessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId, isAdmin });

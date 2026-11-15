@@ -22,14 +22,19 @@
 // scope: every real section is present - nothing silently missing.
 // Facts and events, Families, Sources, Notes, Media, and Album all
 // have real data (each simplified from real PHP's own richer
-// rendering - no edit affordances, no citation/PAGE/DATA/QUAY detail,
-// no collapsible "show all" toggles - see each tab's own render
-// function for its specific scope note); Places and Interactive tree
+// rendering - no citation/PAGE/DATA/QUAY detail, no collapsible "show
+// all" toggles - see each tab's own render function for its specific
+// scope note). The Facts tab's own edit/copy/delete icons and "Add a
+// fact"/"Edit record" controls (phase 5 step 49, wiring editing Phase
+// A/B onto this page for manual testing) ARE real, reusing
+// fact-edit-links-view.mjs; every other tab is still display-only.
+// Places and Interactive tree
 // are permanently stubbed (each is its own disproportionately large
 // subsystem - a Leaflet map and an SVG pedigree-drawing widget - out
 // of scope for this migration for now, confirmed with the user).
 
 import { createHash } from 'node:crypto';
+import { renderFactEditLinks, renderAddFactRow, renderEditRecordLink } from './fact-edit-links-view.mjs';
 
 function escapeHtml(value) {
   return String(value)
@@ -168,7 +173,23 @@ const EXTRA_INFO_LABELS = {
  * (`fact-date.phtml`'s two-separate-`<span class="date">` rendering,
  * `AbstractElement::labelValue()`'s bolded-label markup).
  */
-function renderFact({ tag, value, date, time, place, address, author, fromFamily, isExtraInfo }) {
+function renderFact({
+  tag,
+  value,
+  date,
+  time,
+  place,
+  address,
+  author,
+  fromFamily,
+  isExtraInfo,
+  factId,
+  canEdit,
+  recordType,
+  recordXref,
+  treeName,
+  returnUrl,
+}) {
   let label;
 
   if (fromFamily) {
@@ -197,6 +218,11 @@ function renderFact({ tag, value, date, time, place, address, author, fromFamily
       ? `<div class="wt-fact-place"><span class="label">Author of last change</span>: <span class="value align-top">${escapeHtml(author)}</span></div>`
       : '';
 
+  const editLinksHtml =
+    canEdit && treeName
+      ? renderFactEditLinks({ treeName, recordType, recordXref, factId, returnUrl })
+      : '';
+
   return `
         <tr>
             <th scope="row">
@@ -211,6 +237,7 @@ function renderFact({ tag, value, date, time, place, address, author, fromFamily
                     ${addressHtml}
                     ${authorHtml}
                 </div>
+                ${editLinksHtml}
             </td>
         </tr>`;
 }
@@ -884,11 +911,19 @@ export function renderIndividualPage({ tree, user, csrfToken, individual , genea
   const nameGenderHtml = renderNameGenderAccordion({ names: individual.names, sexId, sexValueLabel: individual.sexValueLabel });
 
   const familiesHtml = renderFamiliesTabContent(individual.familiesTab);
+  const editRecordLinkHtml = individual.canEditRecord
+    ? `<div class="pb-2">${renderEditRecordLink({ treeName: individual.treeName, recordXref: individual.xref })}</div>`
+    : '';
+  const addFactRowHtml = individual.canEditRecord
+    ? renderAddFactRow({ treeName: individual.treeName, recordXref: individual.xref, addFacts: individual.addFacts ?? [] })
+    : '';
   const factsHtml =
-    individual.facts.length > 0
+    individual.facts.length > 0 || addFactRowHtml !== ''
       ? `
+    ${editRecordLinkHtml}
     <table class="table wt-facts-table">
-        <tbody>${individual.facts.map(renderFact).join('')}
+        <tbody>${individual.facts.map((fact) => renderFact({ ...fact, treeName: individual.treeName, returnUrl: individual.url })).join('')}
+        ${addFactRowHtml}
         </tbody>
     </table>`
       : '<p>This feature has not been migrated yet.</p>';

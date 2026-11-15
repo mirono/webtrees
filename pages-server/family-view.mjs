@@ -21,6 +21,11 @@
 // husband/wife/children identity cards (each linking to their own now-
 // real /tree/{tree}/individual/{xref} Node route) + marriage/divorce
 // vital facts only - no full facts-and-events table, no chart links.
+// The facts table's edit/copy/delete icons and "Add a fact"/"Edit
+// record" controls (phase 5 step 49) ARE real, reusing
+// fact-edit-links-view.mjs - same as individual-view.mjs.
+
+import { renderFactEditLinks, renderAddFactRow, renderEditRecordLink } from './fact-edit-links-view.mjs';
 
 function escapeHtml(value) {
   return String(value)
@@ -121,7 +126,7 @@ function renderMemberCard(member) {
  *   'FAM:CHAN:_WT_USER' => 'Author of last change') - a harmless no-op
  *   for any other tag.
  */
-function renderFact({ tag, date, time, place, address, author }) {
+function renderFact({ tag, date, time, place, address, author, factId, canEdit, recordType, recordXref, treeName, returnUrl }) {
   const label = FACT_LABELS[tag] ?? tag;
   const timeHtml = time ? ` – <span class="date">${escapeHtml(time)}</span>` : '';
   const dateHtml = date ? `<span class="wt-fact-date-age"><span class="date">${escapeHtml(date)}</span>${timeHtml}</span>` : '';
@@ -140,6 +145,11 @@ function renderFact({ tag, date, time, place, address, author }) {
       ? `<div class="wt-fact-place"><span class="label">Author of last change</span>: <span class="value align-top">${escapeHtml(author)}</span></div>`
       : '';
 
+  const editLinksHtml =
+    canEdit && treeName
+      ? renderFactEditLinks({ treeName, recordType, recordXref, factId, returnUrl })
+      : '';
+
   return `
         <tr>
             <th scope="row">
@@ -153,6 +163,7 @@ function renderFact({ tag, date, time, place, address, author }) {
                     ${addressHtml}
                     ${authorHtml}
                 </div>
+                ${editLinksHtml}
             </td>
         </tr>`;
 }
@@ -216,12 +227,20 @@ export function renderFamilyPage({ tree, user, csrfToken, family , genealogyMenu
   // shows this heading, even for zero facts, with a "No facts exist"
   // message in that case; this v1 only shows the section when there's
   // something to show).
+  const editRecordLinkHtml = family.canEditRecord
+    ? `<div class="pb-2">${renderEditRecordLink({ treeName: family.treeName, recordXref: family.xref })}</div>`
+    : '';
+  const addFactRowHtml = family.canEditRecord
+    ? renderAddFactRow({ treeName: family.treeName, recordXref: family.xref, addFacts: family.addFacts ?? [] })
+    : '';
   const factsHtml =
-    family.facts.length > 0
+    family.facts.length > 0 || addFactRowHtml !== ''
       ? `
                     <h3 class="mt-4">Facts and events</h3>
+                    ${editRecordLinkHtml}
     <table class="table wt-facts-table">
-        <tbody>${family.facts.map(renderFact).join('')}
+        <tbody>${family.facts.map((fact) => renderFact({ ...fact, treeName: family.treeName, returnUrl: family.url })).join('')}
+        ${addFactRowHtml}
         </tbody>
     </table>`
       : '';

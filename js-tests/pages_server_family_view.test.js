@@ -220,6 +220,59 @@ describe('renderFamilyPage', () => {
     });
   });
 
+  describe('editing controls (phase 5 step 49)', () => {
+    function editableFamily(overrides = {}) {
+      return {
+        ...baseParams().family,
+        treeName: 'ophir',
+        xref: 'F1',
+        url: '/tree/ophir/family/F1',
+        canEditRecord: true,
+        addFacts: [{ tag: 'MARR', label: 'Marriage' }],
+        facts: [{ tag: 'RESI', date: '', place: '', factId: 'abcd1234', canEdit: true, recordType: 'FAM', recordXref: 'F1' }],
+        ...overrides,
+      };
+    }
+
+    test('a fact with canEdit renders its edit/copy/delete icons', () => {
+      const html = renderFamilyPage(baseParams({ family: editableFamily() }));
+
+      expect(html).toContain('/tree/ophir/edit-fact/F1/abcd1234');
+      expect(html).toContain('/tree/ophir/copy/F1/abcd1234');
+      expect(html).toContain('/tree/ophir/delete/F1/abcd1234');
+    });
+
+    test('a fact without canEdit shows no edit icons even when other facts on the page do', () => {
+      const html = renderFamilyPage(
+        baseParams({ family: editableFamily({ facts: [{ tag: 'RESI', date: '', place: '', canEdit: false }] }) }),
+      );
+
+      expect(html).not.toContain('wt-fact-edit-links');
+    });
+
+    test('shows "Edit record" and the "Add a fact" dropdown when canEditRecord is true', () => {
+      const html = renderFamilyPage(baseParams({ family: editableFamily() }));
+
+      expect(html).toContain('/tree/ophir/edit-record/F1');
+      expect(html).toContain('<option value="MARR">Marriage</option>');
+      expect(html).toContain('/tree/ophir/add-fact/F1');
+    });
+
+    test('shows neither control when canEditRecord is false, even with addFacts present', () => {
+      const html = renderFamilyPage(baseParams({ family: editableFamily({ canEditRecord: false }) }));
+
+      expect(html).not.toContain('edit-record');
+      expect(html).not.toContain('add-fact');
+    });
+
+    test('the facts table still renders (with the add-fact row) even when there are zero facts', () => {
+      const html = renderFamilyPage(baseParams({ family: editableFamily({ facts: [] }) }));
+
+      expect(html).toContain('wt-facts-table');
+      expect(html).toContain('/tree/ophir/add-fact/F1');
+    });
+  });
+
   describe('the header, logged-in vs. anonymous', () => {
     test('an anonymous visitor sees a "Sign in" link and no CSRF meta tag', () => {
       const html = renderFamilyPage(baseParams({ user: null, csrfToken: null }));

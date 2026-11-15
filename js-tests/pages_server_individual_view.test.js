@@ -553,6 +553,71 @@ describe('renderIndividualPage', () => {
     });
   });
 
+  describe('editing controls (phase 5 step 49)', () => {
+    function editableIndividual(overrides = {}) {
+      return {
+        ...baseParams().individual,
+        treeName: 'ophir',
+        url: '/tree/ophir/individual/X1',
+        canEditRecord: true,
+        addFacts: [{ tag: 'OCCU', label: 'Occupation' }],
+        facts: [{ tag: 'RESI', date: '', place: '', factId: 'abcd1234', canEdit: true, recordType: 'INDI', recordXref: 'X1' }],
+        ...overrides,
+      };
+    }
+
+    test('a fact with canEdit renders its edit/copy/delete icons against its own xref', () => {
+      const html = renderIndividualPage(baseParams({ individual: editableIndividual() }));
+
+      expect(html).toContain('/tree/ophir/edit-fact/X1/abcd1234');
+      expect(html).toContain('/tree/ophir/copy/X1/abcd1234');
+      expect(html).toContain('/tree/ophir/delete/X1/abcd1234');
+    });
+
+    // The key correctness case: a fact merged in from a spouse family
+    // (familyFactsForIndividual()) must edit the FAMILY record, not
+    // the individual viewing the page.
+    test('a merged-in family fact renders edit icons against the FAMILY xref, not the individual', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: editableIndividual({
+            facts: [
+              { tag: 'MARR', date: '', place: '', fromFamily: true, factId: 'ffff1234', canEdit: true, recordType: 'FAM', recordXref: 'F9' },
+            ],
+          }),
+        }),
+      );
+
+      expect(html).toContain('/tree/ophir/edit-fact/F9/ffff1234');
+      expect(html).toContain('/tree/ophir/copy/F9/ffff1234');
+      expect(html).toContain('/tree/ophir/delete/F9/ffff1234');
+      expect(html).not.toContain('/tree/ophir/edit-fact/X1/ffff1234');
+    });
+
+    test('a fact without canEdit shows no edit icons', () => {
+      const html = renderIndividualPage(
+        baseParams({ individual: editableIndividual({ facts: [{ tag: 'RESI', date: '', place: '', canEdit: false }] }) }),
+      );
+
+      expect(html).not.toContain('wt-fact-edit-links');
+    });
+
+    test('shows "Edit record" and the "Add a fact" dropdown when canEditRecord is true', () => {
+      const html = renderIndividualPage(baseParams({ individual: editableIndividual() }));
+
+      expect(html).toContain('/tree/ophir/edit-record/X1');
+      expect(html).toContain('<option value="OCCU">Occupation</option>');
+      expect(html).toContain('/tree/ophir/add-fact/X1');
+    });
+
+    test('shows neither control when canEditRecord is false', () => {
+      const html = renderIndividualPage(baseParams({ individual: editableIndividual({ canEditRecord: false }) }));
+
+      expect(html).not.toContain('edit-record');
+      expect(html).not.toContain('add-fact');
+    });
+  });
+
   describe('the Sources tab', () => {
     test('renders a fact\'s label and each cited source, linked by real title', () => {
       const html = renderIndividualPage(
