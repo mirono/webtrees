@@ -977,3 +977,67 @@ export function matchEmailPreferencesPath(pathname) {
 export function matchSiteTagsPath(pathname) {
   return /^\/admin\/tags\/?$/.test(pathname);
 }
+
+/**
+ * Editing Phase B routes (phase 5 step 48, AuthEditor-gated,
+ * `/tree/{tree}/...`): AddNewFact/SelectNewFact, EditFactPage/Action,
+ * DeleteFact, CopyFact/PasteFact, EditRawFactPage/Action,
+ * EditRawRecordPage/Action, EditRecordPage/Action.
+ */
+export function matchAddNewFactPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-fact\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), fact: decodeURIComponent(match[3]) } : null;
+}
+
+export function matchSelectNewFactPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/add-fact\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchEditFactPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/edit-fact\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), factId: decodeURIComponent(match[3]) } : null;
+}
+
+/** PHP's route is `/update-fact/{xref}{/fact_id}` - the fact_id segment is optional (new facts have none). */
+export function matchEditFactActionPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/update-fact\/([^/]+)(?:\/([^/]+))?\/?$/.exec(pathname);
+  return match
+    ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), factId: match[3] ? decodeURIComponent(match[3]) : null }
+    : null;
+}
+
+export function matchDeleteFactPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/delete\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), factId: decodeURIComponent(match[3]) } : null;
+}
+
+export function matchCopyFactPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/copy\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), factId: decodeURIComponent(match[3]) } : null;
+}
+
+export function matchPasteFactPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/paste-fact\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchEditRawFactPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/edit-raw\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]), factId: decodeURIComponent(match[3]) } : null;
+}
+
+export function matchEditRawRecordPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/edit-raw\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchEditRecordPagePath(pathname) {
+  const match = /^\/tree\/([^/]+)\/edit-record\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}
+
+export function matchEditRecordActionPath(pathname) {
+  const match = /^\/tree\/([^/]+)\/update-record\/([^/]+)\/?$/.exec(pathname);
+  return match ? { tree: decodeURIComponent(match[1]), xref: decodeURIComponent(match[2]) } : null;
+}

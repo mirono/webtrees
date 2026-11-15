@@ -39,12 +39,20 @@
 // those values just because it doesn't understand them, or a routine
 // action like switching language/theme could silently end an ordinary
 // user's real login session. So: int/bool/string/null decode to real
-// JS values (the only kinds this codebase ever needs to READ or
-// WRITE); float/array/object decode to an opaque wrapper carrying
-// their exact original bytes, which re-encode byte-for-byte unchanged
-// - never interpreted, never lost. Only a genuinely malformed blob (or
-// a value type this scanner can't even bound - none observed in
-// practice; PHP's serialize() only emits i/b/N/d/s/a/O) still throws.
+// JS values; float/object decode to an opaque wrapper carrying their
+// exact original bytes, which re-encode byte-for-byte unchanged -
+// never interpreted, never lost. Arrays ('a') ARE decoded/encoded for
+// real (needed by phase 5 step 48's clipboard feature, which stores a
+// nested PHP associative array under the session's 'clipboard' key) -
+// into a plain JS object (even an int-keyed PHP array, since JS object
+// keys are always strings anyway), re-encoded the same way in reverse
+// (a JS *Array* passed in also encodes as a dense int-keyed PHP array,
+// for convenience, though nothing here currently writes one). Objects
+// ('O' - e.g. FlashMessages' array-of-stdClass, which this migration
+// doesn't write) remain opaque, same as floats. Only a genuinely
+// malformed blob (or a value type this scanner can't even bound - none
+// observed in practice; PHP's serialize() only emits i/b/N/d/s/a/O)
+// still throws.
 
 const OPAQUE = Symbol('phpSerializeOpaque');
 
@@ -102,7 +110,27 @@ function encodeValue(value) {
     return 'N;';
   }
 
+  if (Array.isArray(value)) {
+    const body = value.map((item, index) => encodeArrayKey(index) + encodeValue(item)).join('');
+    return `a:${value.length}:{${body}}`;
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value);
+    const body = entries.map(([key, item]) => encodeArrayKey(key) + encodeValue(item)).join('');
+    return `a:${entries.length}:{${body}}`;
+  }
+
   throw new TypeError(`php-serialize: unsupported value type for encoding: ${typeof value}`);
+}
+
+/** PHP arrays canonicalize a decimal-integer-looking string key to an int key. */
+function encodeArrayKey(key) {
+  if (typeof key === 'number' || /^(0|-?[1-9]\d*)$/.test(String(key))) {
+    return `i:${key};`;
+  }
+
+  return `s:${Buffer.byteLength(String(key), 'utf8')}:"${key}";`;
 }
 
 class Cursor {
@@ -176,7 +204,7 @@ export function decodePhpSession(data) {
   return session;
 }
 
-/** Decodes int/bool/null/string to real JS values; wraps float/array/object opaquely. */
+/** Decodes int/bool/null/string/array to real JS values; wraps float/object opaquely. */
 function decodeOneValue(cursor) {
   const start = cursor.pos;
   const type = cursor.peek();
@@ -200,8 +228,10 @@ function decodeOneValue(cursor) {
     case 's': {
       return readStringValue(cursor);
     }
+    case 'a': {
+      return decodeArrayValue(cursor);
+    }
     case 'd':
-    case 'a':
     case 'O': {
       skipValue(cursor);
 
@@ -215,6 +245,47 @@ function decodeOneValue(cursor) {
       throw new UnsupportedPhpValueTypeError(type, start);
     }
   }
+}
+
+/**
+ * Decodes an "a:N:{key;value;...}"-shaped PHP array. Returns a dense
+ * JS array if the keys are exactly the sequential ints 0..N-1 in that
+ * order (what PHP itself would print for a `list`-style array, and
+ * what `encodeValue()` produces for a JS array round-tripped through
+ * here), otherwise a plain object keyed by the (always-string, as PHP
+ * ints decode to JS numbers but object keys stringify them anyway)
+ * original keys.
+ */
+function decodeArrayValue(cursor) {
+  cursor.pos += 2; // "a:"
+  const count = Number.parseInt(cursor.readUntil(':'), 10);
+
+  cursor.expect('{');
+
+  const entries = [];
+  for (let i = 0; i < count; i += 1) {
+    const key = decodeOneValue(cursor);
+    const value = decodeOneValue(cursor);
+    entries.push([key, value]);
+  }
+
+  cursor.expect('}');
+
+  // An empty PHP array is ambiguous (could become either shape once
+  // populated) - decoded as a plain object, since every real caller
+  // here (ClipboardService's per-record-type sub-array) assigns
+  // string keys onto it, not sequential indices.
+  const isDenseList = entries.length > 0 && entries.every(([key], index) => key === index);
+
+  if (isDenseList) {
+    return entries.map(([, value]) => value);
+  }
+
+  const result = {};
+  for (const [key, value] of entries) {
+    result[key] = value;
+  }
+  return result;
 }
 
 /**

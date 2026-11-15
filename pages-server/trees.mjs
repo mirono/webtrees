@@ -168,3 +168,31 @@ export async function isTreeManager(pool, { gedcomId, userId, isAdmin }) {
 
   return result.rows.length > 0;
 }
+
+/**
+ * Mirrors Auth::isEditor()/isManager() for one tree (phase 5 step 48):
+ * 'canedit' of 'edit'/'accept'/'admin' is editor-or-above
+ * (UserInterface::ROLE_EDITOR/ROLE_MODERATOR/ROLE_MANAGER), 'admin' is
+ * manager (matches isTreeManager() above, duplicated here rather than
+ * calling it, so both come back from the one query this gate needs).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {{gedcomId: number, userId: number|null, isAdmin: boolean}} params
+ * @returns {Promise<{isEditor: boolean, isManager: boolean}>}
+ */
+export async function treeEditRole(pool, { gedcomId, userId, isAdmin }) {
+  if (isAdmin) {
+    return { isEditor: true, isManager: true };
+  }
+
+  const result = await pool.query(
+    "SELECT setting_value FROM wt_user_gedcom_setting WHERE gedcom_id = $1 AND user_id = $2 AND setting_name = 'canedit'",
+    [gedcomId, userId],
+  );
+  const role = result.rows[0]?.setting_value;
+
+  return {
+    isEditor: role === 'edit' || role === 'accept' || role === 'admin',
+    isManager: role === 'admin',
+  };
+}

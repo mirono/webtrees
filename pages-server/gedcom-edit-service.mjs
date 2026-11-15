@@ -351,19 +351,21 @@ export function insertMissingRecordSubtags(recordTag, recordGedcom, includeHidde
 }
 
 /**
- * Mirrors GedcomEditService::factsToAdd(). NOTE: real PHP's own
- * `!$include_hidden` branch calls `isHiddenTag($t)` with just the bare
- * subtag name, not `record->tag() . ':' . $t` like the filter right
- * above it - since every HIDDEN_TAGS substring is a full tag path
- * (always longer than a bare subtag name), `str_contains()` can never
- * match there, making that second filter a real no-op in real PHP.
- * Replicated exactly (bug-for-bug), not fixed, per this migration's
- * convention - see fix-wt-obje-sort's dead filter clause (step 46) for
- * the same kind of quirk.
+ * Mirrors GedcomEditService::factsToAdd(). NOTE: `includeHidden` has
+ * NO EFFECT on the result - real PHP's unconditional filter
+ * (`$subtags = array_filter($subtags, fn ($subtag) =>
+ * !$this->isHiddenTag($record->tag() . ':' . $subtag));`) already
+ * excludes every hidden subtag regardless of `$include_hidden`, and
+ * the `if (!$include_hidden)` block right after it re-applies the
+ * exact same predicate - a real (and confirmed-current, re-checked
+ * directly against app/Services/GedcomEditService.php rather than
+ * trusted from an earlier session's notes, which had this backwards)
+ * redundant-not-dead-code quirk, replicated here rather than
+ * "fixed" per this migration's convention.
  *
  * @param {string} recordTag 'INDI' or 'FAM'
  * @param {(tag: string) => boolean} hasExistingFact e.g. `(tag) => facts.some(f => factTagOf(f) === tag)`
- * @param {boolean} includeHidden
+ * @param {boolean} includeHidden Accepted for signature parity with real PHP; does not change the result.
  * @param {Record<string, boolean>} hiddenTagFlags
  */
 export function factsToAdd(recordTag, hasExistingFact, includeHidden, hiddenTagFlags) {
@@ -374,10 +376,6 @@ export function factsToAdd(recordTag, hasExistingFact, includeHidden, hiddenTagF
     .map(([key]) => key);
 
   keys = keys.filter((subtag) => !isHiddenTag(`${recordTag}:${subtag}`, hiddenTagFlags));
-
-  if (!includeHidden) {
-    keys = keys.filter((t) => !isHiddenTag(t, hiddenTagFlags));
-  }
 
   const exclude = new Set(['HUSB', 'WIFE', 'CHIL', 'FAMC', 'FAMS', 'CHAN']);
   return keys.filter((key) => !exclude.has(key));

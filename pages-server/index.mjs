@@ -123,6 +123,17 @@ import {
   matchDataFixUpdateAllPath,
   matchDataFixDataPath,
   matchDataFixPreviewPath,
+  matchAddNewFactPath,
+  matchSelectNewFactPath,
+  matchEditFactPagePath,
+  matchEditFactActionPath,
+  matchDeleteFactPath,
+  matchCopyFactPath,
+  matchPasteFactPath,
+  matchEditRawFactPath,
+  matchEditRawRecordPath,
+  matchEditRecordPagePath,
+  matchEditRecordActionPath,
 } from './routes.mjs';
 import { parseCookies, getCurrentUser } from './auth.mjs';
 import { generateCsrfToken, csrfSetCookieHeader, isValidCsrf } from './csrf.mjs';
@@ -134,7 +145,7 @@ import { doLogin } from './login-action.mjs';
 import { doLogout } from './logout.mjs';
 import { renderNoTreeAccessPage } from './home-view.mjs';
 import { renderTreePage } from './tree-view.mjs';
-import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel } from './trees.mjs';
+import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel, treeEditRole } from './trees.mjs';
 import { significantIndividualXref, findVisibleWelcomeBlockId } from './welcome-block.mjs';
 import { renderIndividualPage, EXTRA_INFO_TAGS } from './individual-view.mjs';
 import {
@@ -294,10 +305,33 @@ import {
   validateMergeSelection,
   compareFacts,
   mergeRecordsTransactional,
+  applyRecordUpdate,
 } from './record-merge.mjs';
 import { renderMergeStep1Page, renderMergeStep2Page, renderMergeResultPage } from './record-merge-view.mjs';
 import { DATA_FIX_MODULES, findDataFixModule, recordsToFix as dataFixRecordsToFix } from './data-fix.mjs';
 import { renderDataFixChoosePage, renderDataFixPage, renderDataFixPreviewFragment } from './data-fix-view.mjs';
+import {
+  elementFor,
+  defaultValueFor,
+  editLinesToGedcom,
+  insertMissingFactSubtags,
+  insertMissingRecordSubtags,
+} from './gedcom-edit-service.mjs';
+import { renderEditGedcomFields } from './gedcom-edit-widgets.mjs';
+import {
+  splitFacts,
+  canEditRecord,
+  canEditFact,
+  createFactGedcom,
+  updateFactGedcom,
+  deleteFactGedcom,
+  recordUrl,
+  factSummaryLabel,
+  copyFactToClipboard,
+  pasteFactFromClipboard,
+  RECORD_TYPES_WITH_CHAN,
+} from './fact-editor.mjs';
+import { renderEditFactPage, renderEditRecordPage, renderRawGedcomFactPage, renderRawGedcomRecordPage } from './fact-editor-view.mjs';
 import { buildGenealogyMenu } from './genealogy-menu.mjs';
 import { renderGenealogyMenuNav } from './genealogy-menu-view.mjs';
 import { renderMediaPage } from './media-view.mjs';
@@ -393,6 +427,7 @@ import { selectPreference } from './preferences.mjs';
 import {
   loadOrCreateAnonymousSession,
   saveSession,
+  loadSessionData,
   regenerateSessionForLogin,
   sessionSetCookieHeader,
   sessionClearCookieHeader,
@@ -9146,6 +9181,965 @@ async function authenticateTreeManager(req, res, requestPath, treeName) {
 }
 
 /**
+ * AuthEditor-equivalent gate for the editing Phase B routes (phase 5
+ * step 48, all under `/tree/{tree}/...`): requires tree role
+ * editor-or-above (editor/moderator/manager/admin), unlike
+ * authenticateTreeManager()'s manager-only gate.
+ *
+ * @returns {Promise<{user: object, tree: object, isManager: boolean}|null>}
+ */
+async function authenticateEditor(req, res, requestPath, treeName) {
+  let user;
+
+  try {
+    user = await getCurrentUser(req.headers.cookie, pool);
+  } catch (error) {
+    console.error('Failed to look up session:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+    return null;
+  }
+
+  if (user === null) {
+    res.writeHead(302, { Location: `/login?url=${encodeURIComponent(requestPath)}` });
+    res.end();
+    return null;
+  }
+
+  const isAdmin = user.settings.canadmin === '1';
+  const tree = await accessibleTreeByName(pool, treeName, { userId: user.userId, isAdmin });
+
+  if (tree === null) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not Found');
+    return null;
+  }
+
+  const { isEditor, isManager } = await treeEditRole(pool, { gedcomId: tree.gedcomId, userId: user.userId, isAdmin });
+
+  if (!isEditor) {
+    res.writeHead(403, { 'content-type': 'text/plain' });
+    res.end('Forbidden');
+    return null;
+  }
+
+  return { user: { ...user, isAdmin }, tree, isManager };
+}
+
+/**
+ * Builds the site-wide genealogy menu bar (step 33) for an editing
+ * Phase B page.
+ */
+async function buildEditorGenealogyMenu(tree, user, xrefParam) {
+  const accessLevel = await viewerAccessLevel(pool, { gedcomId: tree.gedcomId, userId: user.userId, isAdmin: user.isAdmin });
+  return renderGenealogyMenuNav(await buildGenealogyMenu(pool, { tree, userId: user.userId, isAdmin: user.isAdmin, accessLevel, xrefParam }));
+}
+
+/**
+ * Loads a record by xref plus everything a Phase B handler needs to
+ * decide whether the current user may edit it - mirrors
+ * `Auth::checkRecordAccess($record, true)` (see fact-editor.mjs's top
+ * doc comment for the one way this deliberately differs: denying
+ * outright, rather than real PHP's canShow()-fallback, whenever
+ * canEditRecord() is false).
+ *
+ * @returns {Promise<{record: {xref: string, type: string, gedcom: string}, facts: Array, canEdit: boolean}|null>} null if the record doesn't exist
+ */
+async function loadEditableRecord(tree, isManager, xref) {
+  const record = await getRecordByXref(pool, tree.gedcomId, xref);
+
+  if (record === null) {
+    return null;
+  }
+
+  const pendingDeletion = await isPendingDeletion(pool, tree.gedcomId, xref);
+  const facts = splitFacts(record.gedcom);
+  const canEdit = canEditRecord({ isPendingDeletion: pendingDeletion, isManager, isEditor: true, facts });
+
+  return { record, facts, canEdit, pendingDeletion };
+}
+
+/** The two tree preferences every Phase B edit form/action needs: NO_UPDATE_CHAN and SHOW_GEDCOM_RECORD. */
+async function loadFactEditorTreePrefs(gedcomId) {
+  const result = await pool.query(
+    "SELECT setting_name, setting_value FROM wt_gedcom_setting WHERE gedcom_id = $1 AND setting_name IN ('NO_UPDATE_CHAN', 'SHOW_GEDCOM_RECORD')",
+    [gedcomId],
+  );
+  const byName = {};
+  for (const row of result.rows) {
+    byName[row.setting_name] = row.setting_value;
+  }
+  return { noUpdateChan: byName.NO_UPDATE_CHAN === '1', showGedcomRecord: byName.SHOW_GEDCOM_RECORD === '1' };
+}
+
+/**
+ * GET /tree/{tree}/add-fact/{xref}/{fact} (AddNewFact, phase 5 step
+ * 48) - AuthEditor. Shows a blank fact-edit form for a brand new fact.
+ * Scope cut: real PHP blocks `fact === 'OBJE'` unless the user may
+ * upload media (`Auth::canUploadMedia`) - media management is
+ * unported, so that extra gate is omitted (adding an OBJE link fact
+ * here still only lets you type an existing media xref, via the
+ * xref:OBJE widget's plain `<select>` - see gedcom-edit-widgets.mjs).
+ */
+async function handleAddNewFactPage(req, res, url, treeName, xref, factTag) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+      return;
+    }
+
+    if (!loaded.canEdit) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    const { record } = loaded;
+    const fullTag = `${record.type}:${factTag}`;
+    const element = elementFor(fullTag);
+    const defaultValue = defaultValueFor(fullTag);
+    const factGedcom = `1 ${factTag}${defaultValue !== '' ? ` ${defaultValue}` : ''}`.trim();
+
+    const includeHidden = url.searchParams.get('include_hidden') === '1';
+    const { hiddenTags } = await sitePreferences.loadSiteTagsPreferences(pool);
+    const gedcom = insertMissingFactSubtags(fullTag, factGedcom, includeHidden, hiddenTags);
+    const hidden = insertMissingFactSubtags(fullTag, factGedcom, true, hiddenTags);
+
+    const hiddenUrl =
+      gedcom === hidden
+        ? ''
+        : `/tree/${encodeURIComponent(treeName)}/add-fact/${encodeURIComponent(xref)}/${encodeURIComponent(factTag)}?include_hidden=1`;
+
+    const fieldsHtml = renderEditGedcomFields({ gedcom, hierarchy: [record.type], treeName, prefix: '', xrefOptions: {} });
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const { noUpdateChan, showGedcomRecord } = await loadFactEditorTreePrefs(tree.gedcomId);
+    const recordPageUrl = recordUrl(treeName, record.type, xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderEditFactPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - ${element.label}`,
+      actionUrl: `/tree/${encodeURIComponent(treeName)}/update-fact/${encodeURIComponent(xref)}`,
+      fieldsHtml,
+      url: recordPageUrl,
+      keepChanChecked: noUpdateChan,
+      hiddenUrl,
+      canEditRaw: user.isAdmin || showGedcomRecord,
+      rawEditUrl: `/tree/${encodeURIComponent(treeName)}/edit-raw/${encodeURIComponent(xref)}/new?url=${encodeURIComponent(recordPageUrl)}`,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve add-fact page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/add-fact/{xref} (SelectNewFact, phase 5 step 48) -
+ * AuthEditor. The "which fact type?" picker's submit just redirects
+ * into AddNewFact with the chosen tag.
+ */
+async function handleSelectNewFactPage(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const fact = formData.get('fact') ?? '';
+
+    res.writeHead(302, {
+      Location: `/tree/${encodeURIComponent(treeName)}/add-fact/${encodeURIComponent(xref)}/${encodeURIComponent(fact)}`,
+    });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve select-new-fact action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/edit-fact/{xref}/{fact_id} (EditFactPage, phase 5
+ * step 48) - AuthEditor. Shows the fact-edit form for an EXISTING fact.
+ */
+async function handleEditFactPage(req, res, url, treeName, xref, editFactId) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record, facts, pendingDeletion } = loaded;
+    const recordPageUrl = recordUrl(treeName, record.type, xref);
+    const fact = facts.find(
+      (f) => f.id === editFactId && canEditFact({ isPendingDeletion: pendingDeletion, isManager, isEditor: true, tag: f.tag, factGedcom: f.gedcom }),
+    );
+
+    if (fact === undefined) {
+      res.writeHead(302, { Location: recordPageUrl });
+      res.end();
+      return;
+    }
+
+    const fullTag = `${record.type}:${fact.tag}`;
+    const includeHidden = url.searchParams.get('include_hidden') === '1';
+    const { hiddenTags } = await sitePreferences.loadSiteTagsPreferences(pool);
+    const gedcom = insertMissingFactSubtags(fullTag, fact.gedcom, includeHidden, hiddenTags);
+    const hidden = insertMissingFactSubtags(fullTag, fact.gedcom, true, hiddenTags);
+
+    const hiddenUrl =
+      gedcom === hidden
+        ? ''
+        : `/tree/${encodeURIComponent(treeName)}/edit-fact/${encodeURIComponent(xref)}/${encodeURIComponent(editFactId)}?include_hidden=1`;
+
+    const fieldsHtml = renderEditGedcomFields({ gedcom, hierarchy: [record.type], treeName, prefix: '', xrefOptions: {} });
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const { noUpdateChan, showGedcomRecord } = await loadFactEditorTreePrefs(tree.gedcomId);
+    const url_ = url.searchParams.get('url') ?? recordPageUrl;
+    const csrfToken = generateCsrfToken();
+
+    const html = renderEditFactPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `${xref} - ${factSummaryLabel(record.type, fact.tag, fact.gedcom)}`,
+      actionUrl: `/tree/${encodeURIComponent(treeName)}/update-fact/${encodeURIComponent(xref)}/${encodeURIComponent(editFactId)}`,
+      fieldsHtml,
+      url: url_,
+      keepChanChecked: noUpdateChan,
+      hiddenUrl,
+      canEditRaw: user.isAdmin || showGedcomRecord,
+      rawEditUrl: `/tree/${encodeURIComponent(treeName)}/edit-raw/${encodeURIComponent(xref)}/${encodeURIComponent(editFactId)}?url=${encodeURIComponent(url_)}`,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve edit-fact page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/update-fact/{xref}{/fact_id} (EditFactAction,
+ * phase 5 step 48) - AuthEditor. Commits a new or edited fact (new
+ * when `factId` is null). Scope cut: CensusAssistantModule's extra
+ * per-individual fan-out (`ca_individuals`) is omitted - that module
+ * is itself unported.
+ */
+async function handleEditFactAction(req, res, url, treeName, xref, editFactId) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record } = loaded;
+    const keepChan = formData.get('keep_chan') === '1';
+    const levels = formData.getAll('levels[]');
+    const tags = formData.getAll('tags[]');
+    const values = formData.getAll('values[]');
+    const factGedcom = editLinesToGedcom(record.type, levels, tags, values, false);
+
+    const newGedcomBody =
+      factGedcom !== ''
+        ? createFactGedcom(record.gedcom, factGedcom, editFactId)
+        : editFactId !== null
+          ? deleteFactGedcom(record.gedcom, editFactId)
+          : record.gedcom;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await applyRecordUpdate(client, tree.gedcomId, user.userId, user.settings.auto_accept === '1', record, newGedcomBody, {
+        updateChan: !keepChan,
+        author: user.userName,
+      });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, record.type, xref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve update-fact action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/delete/{xref}/{fact_id} (DeleteFact, phase 5 step
+ * 48) - AuthEditor.
+ */
+async function handleDeleteFactAction(req, res, url, treeName, xref, deleteFactId) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record, facts, pendingDeletion } = loaded;
+    const fact = facts.find(
+      (f) => f.id === deleteFactId && canEditFact({ isPendingDeletion: pendingDeletion, isManager, isEditor: true, tag: f.tag, factGedcom: f.gedcom }),
+    );
+
+    if (fact !== undefined) {
+      const newGedcomBody = deleteFactGedcom(record.gedcom, deleteFactId);
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await applyRecordUpdate(client, tree.gedcomId, user.userId, user.settings.auto_accept === '1', record, newGedcomBody, {
+          updateChan: true,
+          author: user.userName,
+        });
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to resolve delete-fact action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/copy/{xref}/{fact_id} (CopyFact, phase 5 step 48) -
+ * AuthEditor. Stores the fact's GEDCOM in the user's session
+ * `clipboard` key (real PHP's ClipboardService, now genuinely
+ * decoded/encoded - see php-serialize.mjs's doc comment).
+ */
+async function handleCopyFactAction(req, res, url, treeName, xref, copyFactId) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, gate.isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const fact = loaded.facts.find((f) => f.id === copyFactId);
+
+    if (fact !== undefined) {
+      const cookies = parseCookies(req.headers.cookie);
+      const sessionId = findSessionCookieValue(cookies);
+
+      if (sessionId !== undefined) {
+        const session = await loadSessionData(pool, sessionId);
+
+        if (session !== null) {
+          copyFactToClipboard(session, loaded.record.type, fact.id, fact.gedcom);
+          await saveSession(sessionId, session, pool);
+        }
+      }
+    }
+
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('');
+  } catch (error) {
+    console.error('Failed to resolve copy-fact action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/paste-fact/{xref} (PasteFact, phase 5 step 48) -
+ * AuthEditor.
+ */
+async function handlePasteFactAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const pastedFactId = formData.get('fact_id') ?? '';
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record } = loaded;
+    const cookies = parseCookies(req.headers.cookie);
+    const sessionId = findSessionCookieValue(cookies);
+    const session = sessionId !== undefined ? await loadSessionData(pool, sessionId) : null;
+    const pastedGedcom = session !== null ? pasteFactFromClipboard(session, record.type, pastedFactId) : null;
+
+    if (pastedGedcom !== null) {
+      const newGedcomBody = createFactGedcom(record.gedcom, pastedGedcom);
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await applyRecordUpdate(client, tree.gedcomId, user.userId, user.settings.auto_accept === '1', record, newGedcomBody, {
+          updateChan: true,
+          author: user.userName,
+        });
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    res.writeHead(302, { Location: recordUrl(treeName, record.type, xref) });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve paste-fact action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/edit-raw/{xref}/{fact_id} (EditRawFactPage, phase 5
+ * step 48) - AuthEditor. `fact_id` of 'new' means a not-yet-saved fact
+ * from AddNewFact's own "Edit the raw GEDCOM" link - matches real
+ * PHP's own convention (EditFactPage/AddNewFact's `fact->id()` is
+ * literally the string 'new' for a never-yet-saved Fact object).
+ */
+async function handleEditRawFactPage(req, res, url, treeName, xref, rawFactId) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record, facts } = loaded;
+    const recordPageUrl = recordUrl(treeName, record.type, xref);
+    const fact = facts.find((f) => f.id === rawFactId);
+
+    if (fact === undefined) {
+      res.writeHead(302, { Location: recordPageUrl });
+      res.end();
+      return;
+    }
+
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const returnUrl = url.searchParams.get('url') ?? recordPageUrl;
+    const csrfToken = generateCsrfToken();
+
+    const html = renderRawGedcomFactPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `Edit the raw GEDCOM - ${xref}`,
+      actionUrl: `/tree/${encodeURIComponent(treeName)}/edit-raw/${encodeURIComponent(xref)}/${encodeURIComponent(rawFactId)}`,
+      url: returnUrl,
+      summary: factSummaryLabel(record.type, fact.tag, fact.gedcom),
+      gedcom: fact.gedcom,
+      cancelUrl: recordPageUrl,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve edit-raw fact page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/edit-raw/{xref}/{fact_id} (EditRawFactAction,
+ * phase 5 step 48) - AuthEditor.
+ */
+async function handleEditRawFactAction(req, res, url, treeName, xref, rawFactId) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record, facts } = loaded;
+    const fact = facts.find((f) => f.id === rawFactId);
+    const rawGedcom = (formData.get('gedcom') ?? '').replace(/[\r\n]+/g, '\n').trim();
+
+    if (fact !== undefined) {
+      const newGedcomBody = updateFactGedcom(record.gedcom, rawFactId, rawGedcom);
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await applyRecordUpdate(client, tree.gedcomId, user.userId, user.settings.auto_accept === '1', record, newGedcomBody, {
+          updateChan: false,
+          author: user.userName,
+        });
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    const redirectUrl = formData.get('url') || recordUrl(treeName, record.type, xref);
+    res.writeHead(302, { Location: redirectUrl });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve edit-raw fact action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/edit-raw/{xref} (EditRawRecordPage, phase 5 step
+ * 48) - AuthEditor.
+ */
+async function handleEditRawRecordPage(req, res, url, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record, facts } = loaded;
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderRawGedcomRecordPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: `Edit the raw GEDCOM - ${xref}`,
+      actionUrl: `/tree/${encodeURIComponent(treeName)}/edit-raw/${encodeURIComponent(xref)}`,
+      level0: record.gedcom.split('\n', 1)[0],
+      facts: facts.map((fact) => ({ id: fact.id, tag: fact.tag, summary: factSummaryLabel(record.type, fact.tag, fact.gedcom), gedcom: fact.gedcom })),
+      cancelUrl: recordUrl(treeName, record.type, xref),
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve edit-raw record page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/edit-raw/{xref} (EditRawRecordAction, phase 5 step
+ * 48) - AuthEditor. Rebuilds the whole record from the submitted
+ * level0 line plus the submitted `fact[]`/`fact_id[]` pairs, retaining
+ * (unlike the usual per-fact actions) every fact the form didn't send
+ * back, INCLUDING ones that would normally be privacy-hidden from this
+ * user - mirrors real PHP's own `facts([], false, Auth::PRIV_HIDE, true)`
+ * retention loop exactly.
+ */
+async function handleEditRawRecordAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record } = loaded;
+    const submittedLevel0 = formData.get('level0') ?? '';
+    const submittedFacts = formData.getAll('fact[]');
+    const submittedFactIds = formData.getAll('fact_id[]');
+
+    const level0 = submittedLevel0 !== '' ? submittedLevel0 : record.gedcom.split('\n', 1)[0];
+    const keptFactLines = loaded.facts
+      .filter((fact) => !submittedFactIds.includes(fact.id))
+      .map((fact) => fact.gedcom);
+    const newFactLines = submittedFacts.map((fact) => fact.trim()).filter((fact) => fact !== '');
+
+    let gedcom = [level0, ...keptFactLines, ...newFactLines].join('\n');
+    gedcom = gedcom.replace(/[\r\n]+/g, '\n').trim();
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await applyRecordUpdate(client, tree.gedcomId, user.userId, user.settings.auto_accept === '1', record, gedcom, {
+        updateChan: false,
+        author: user.userName,
+      });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    res.writeHead(302, { Location: recordUrl(treeName, record.type, xref) });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve edit-raw record action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * GET /tree/{tree}/edit-record/{xref} (EditRecordPage, phase 5 step
+ * 48) - AuthEditor.
+ */
+async function handleEditRecordPage(req, res, url, treeName, xref) {
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record } = loaded;
+    const includeHidden = url.searchParams.get('include_hidden') === '1';
+    const { hiddenTags } = await sitePreferences.loadSiteTagsPreferences(pool);
+    const gedcom = insertMissingRecordSubtags(record.type, record.gedcom, includeHidden, hiddenTags);
+    const hidden = insertMissingRecordSubtags(record.type, record.gedcom, true, hiddenTags);
+
+    const hiddenUrl =
+      gedcom === hidden ? '' : `/tree/${encodeURIComponent(treeName)}/edit-record/${encodeURIComponent(xref)}?include_hidden=1`;
+
+    const fieldsHtml = renderEditGedcomFields({ gedcom, hierarchy: [record.type], treeName, prefix: '', xrefOptions: {} });
+    const genealogyMenuHtml = await buildEditorGenealogyMenu(tree, user, xref);
+    const { noUpdateChan, showGedcomRecord } = await loadFactEditorTreePrefs(tree.gedcomId);
+    const recordPageUrl = recordUrl(treeName, record.type, xref);
+    const csrfToken = generateCsrfToken();
+
+    const html = renderEditRecordPage({
+      tree: { name: treeName, title: tree.title },
+      user,
+      csrfToken,
+      genealogyMenuHtml,
+      title: xref,
+      actionUrl: `/tree/${encodeURIComponent(treeName)}/update-record/${encodeURIComponent(xref)}`,
+      fieldsHtml,
+      cancelUrl: recordPageUrl,
+      hasChan: RECORD_TYPES_WITH_CHAN.has(record.type),
+      keepChanChecked: noUpdateChan,
+      hiddenUrl,
+      canEditRaw: user.isAdmin || showGedcomRecord,
+      rawEditUrl: `/tree/${encodeURIComponent(treeName)}/edit-raw/${encodeURIComponent(xref)}`,
+    });
+
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': csrfSetCookieHeader(csrfToken) });
+    res.end(html);
+  } catch (error) {
+    console.error('Failed to resolve edit-record page:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
+ * POST /tree/{tree}/update-record/{xref} (EditRecordAction, phase 5
+ * step 48) - AuthEditor.
+ */
+async function handleEditRecordAction(req, res, url, treeName, xref) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST', 'content-type': 'text/plain' });
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const gate = await authenticateEditor(req, res, url.pathname, treeName);
+
+  if (gate === null) {
+    return;
+  }
+
+  const { tree, user, isManager } = gate;
+
+  try {
+    const body = await readRequestBody(req);
+    const formData = new URLSearchParams(body);
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!isValidCsrf(cookies, formData.get('_csrf'))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('This form has expired. Please reload the page and try again.');
+      return;
+    }
+
+    const loaded = await loadEditableRecord(tree, isManager, xref);
+
+    if (loaded === null || !loaded.canEdit) {
+      res.writeHead(loaded === null ? 404 : 403, { 'content-type': 'text/plain' });
+      res.end(loaded === null ? 'Not Found' : 'Forbidden');
+      return;
+    }
+
+    const { record } = loaded;
+    const keepChan = formData.get('keep_chan') === '1';
+    const levels = formData.getAll('levels[]');
+    const tags = formData.getAll('tags[]');
+    const values = formData.getAll('values[]');
+
+    const level0 = record.type === 'HEAD' ? `0 ${record.type}` : `0 @${xref}@ ${record.type}`;
+    const gedcom = level0 + editLinesToGedcom(record.type, levels, tags, values);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await applyRecordUpdate(client, tree.gedcomId, user.userId, user.settings.auto_accept === '1', record, gedcom, {
+        updateChan: !keepChan,
+        author: user.userName,
+      });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    res.writeHead(302, { Location: recordUrl(treeName, record.type, xref) });
+    res.end();
+  } catch (error) {
+    console.error('Failed to resolve update-record action:', error);
+    res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end('Bad Gateway');
+  }
+}
+
+/**
  * /admin (ControlPanel) - the entry point into the ~85-route admin
  * area (phase 5 step 39). Scoped to this read-only dashboard only -
  * every other /admin/... link on the page still falls through the
@@ -11923,6 +12917,92 @@ const server = createServer(async (req, res) => {
 
   if (dataFixChooseTreeName !== null) {
     await handleDataFixChoosePage(req, res, url, dataFixChooseTreeName);
+    return;
+  }
+
+  // Editing Phase B (phase 5 step 48).
+  const addNewFactMatch = matchAddNewFactPath(url.pathname);
+
+  if (addNewFactMatch !== null) {
+    await handleAddNewFactPage(req, res, url, addNewFactMatch.tree, addNewFactMatch.xref, addNewFactMatch.fact);
+    return;
+  }
+
+  const editFactPageMatch = matchEditFactPagePath(url.pathname);
+
+  if (editFactPageMatch !== null) {
+    await handleEditFactPage(req, res, url, editFactPageMatch.tree, editFactPageMatch.xref, editFactPageMatch.factId);
+    return;
+  }
+
+  const editFactActionMatch = matchEditFactActionPath(url.pathname);
+
+  if (editFactActionMatch !== null) {
+    await handleEditFactAction(req, res, url, editFactActionMatch.tree, editFactActionMatch.xref, editFactActionMatch.factId);
+    return;
+  }
+
+  const selectNewFactMatch = matchSelectNewFactPath(url.pathname);
+
+  if (selectNewFactMatch !== null) {
+    await handleSelectNewFactPage(req, res, url, selectNewFactMatch.tree, selectNewFactMatch.xref);
+    return;
+  }
+
+  const deleteFactMatch = matchDeleteFactPath(url.pathname);
+
+  if (deleteFactMatch !== null) {
+    await handleDeleteFactAction(req, res, url, deleteFactMatch.tree, deleteFactMatch.xref, deleteFactMatch.factId);
+    return;
+  }
+
+  const copyFactMatch = matchCopyFactPath(url.pathname);
+
+  if (copyFactMatch !== null) {
+    await handleCopyFactAction(req, res, url, copyFactMatch.tree, copyFactMatch.xref, copyFactMatch.factId);
+    return;
+  }
+
+  const pasteFactMatch = matchPasteFactPath(url.pathname);
+
+  if (pasteFactMatch !== null) {
+    await handlePasteFactAction(req, res, url, pasteFactMatch.tree, pasteFactMatch.xref);
+    return;
+  }
+
+  const editRawFactMatch = matchEditRawFactPath(url.pathname);
+
+  if (editRawFactMatch !== null) {
+    if (req.method === 'GET') {
+      await handleEditRawFactPage(req, res, url, editRawFactMatch.tree, editRawFactMatch.xref, editRawFactMatch.factId);
+    } else {
+      await handleEditRawFactAction(req, res, url, editRawFactMatch.tree, editRawFactMatch.xref, editRawFactMatch.factId);
+    }
+    return;
+  }
+
+  const editRawRecordMatch = matchEditRawRecordPath(url.pathname);
+
+  if (editRawRecordMatch !== null) {
+    if (req.method === 'GET') {
+      await handleEditRawRecordPage(req, res, url, editRawRecordMatch.tree, editRawRecordMatch.xref);
+    } else {
+      await handleEditRawRecordAction(req, res, url, editRawRecordMatch.tree, editRawRecordMatch.xref);
+    }
+    return;
+  }
+
+  const editRecordPageMatch = matchEditRecordPagePath(url.pathname);
+
+  if (editRecordPageMatch !== null) {
+    await handleEditRecordPage(req, res, url, editRecordPageMatch.tree, editRecordPageMatch.xref);
+    return;
+  }
+
+  const editRecordActionMatch = matchEditRecordActionPath(url.pathname);
+
+  if (editRecordActionMatch !== null) {
+    await handleEditRecordAction(req, res, url, editRecordActionMatch.tree, editRecordActionMatch.xref);
     return;
   }
 

@@ -94,16 +94,17 @@ describe('decodePhpSession error handling', () => {
   });
 });
 
-// Real PHP writes float/array/object values into $_SESSION for
-// features this migration hasn't ported yet - e.g. ClipboardService's
-// 'clipboard' key (an array) and FlashMessages' 'flash_messages' key
-// (an array of stdClass objects), both confirmed live during actual
-// testing of this codebase. A route that decodes an EXISTING session
-// must preserve these byte-for-byte even though it doesn't understand
-// them, or an ordinary action (switching language/theme) could
-// silently corrupt/lose a real user's session. These are NOT decoded
-// into JS values - just opaquely round-tripped.
-describe('opaque round-tripping of float/array/object values', () => {
+// Real PHP writes float/array/object values into $_SESSION - e.g.
+// ClipboardService's 'clipboard' key (an array, now genuinely
+// decoded/encoded - phase 5 step 48 - rather than just opaquely
+// preserved, since CopyFact/PasteFact needs to read and write it) and
+// FlashMessages' 'flash_messages' key (an array of stdClass objects,
+// still NOT ported - its objects stay opaque). A route that decodes an
+// EXISTING session must preserve whatever it doesn't understand
+// byte-for-byte, or an ordinary action (switching language/theme)
+// could silently corrupt/lose a real user's session - floats and
+// objects still round-trip opaquely for exactly this reason.
+describe('round-tripping of float/array/object values', () => {
   test('a float value round-trips byte-identically', () => {
     const encoded = 'pi|d:3.14;';
     const decoded = decodePhpSession(encoded);
@@ -162,11 +163,47 @@ describe('opaque round-tripping of float/array/object values', () => {
   });
 
   test('opaque values are not exposed as plain JS values (no accidental collision with a real string/number)', () => {
-    const decoded = decodePhpSession('clipboard|a:0:{}');
+    const decoded = decodePhpSession('a_float|d:3.14;');
 
-    expect(typeof decoded.clipboard).toBe('object');
-    expect(decoded.clipboard).not.toBeNull();
-    expect(typeof decoded.clipboard).not.toBe('string');
-    expect(typeof decoded.clipboard).not.toBe('number');
+    expect(typeof decoded.a_float).toBe('object');
+    expect(decoded.a_float).not.toBeNull();
+    expect(typeof decoded.a_float).not.toBe('string');
+    expect(typeof decoded.a_float).not.toBe('number');
+  });
+
+  test('a dense (list-shaped) array decodes to a real JS array of real values', () => {
+    const decoded = decodePhpSession('list|a:3:{i:0;s:1:"a";i:1;s:1:"b";i:2;s:1:"c";}');
+
+    expect(decoded.list).toEqual(['a', 'b', 'c']);
+  });
+
+  test('an associative array decodes to a real JS object of real values, matching ClipboardService\'s actual shape', () => {
+    // Real shape: $clipboard[$record_type][$fact_id] = $fact_gedcom.
+    const encoded = 'clipboard|a:1:{s:4:"INDI";a:1:{s:4:"abcd";s:19:"1 NAME John /Smith/";}}';
+    const decoded = decodePhpSession(encoded);
+
+    expect(decoded.clipboard).toEqual({ INDI: { abcd: '1 NAME John /Smith/' } });
+    expect(encodePhpSession(decoded)).toBe(encoded);
+  });
+
+  test('a JS object written into a session field encodes as a PHP associative array', () => {
+    const session = { clipboard: { FAM: { ef01: '1 MARR Y' } } };
+    const encoded = encodePhpSession(session);
+
+    expect(encoded).toBe('clipboard|a:1:{s:3:"FAM";a:1:{s:4:"ef01";s:8:"1 MARR Y";}}');
+    expect(decodePhpSession(encoded)).toEqual(session);
+  });
+
+  test('a JS array written into a session field encodes as a dense PHP array', () => {
+    const encoded = encodePhpSession({ list: ['a', 'b'] });
+
+    expect(encoded).toBe('list|a:2:{i:0;s:1:"a";i:1;s:1:"b";}');
+  });
+
+  test('mutating a decoded clipboard object and re-encoding only changes what changed', () => {
+    const decoded = decodePhpSession('clipboard|a:1:{s:4:"INDI";a:0:{}}');
+    decoded.clipboard.INDI.abcd = '1 OCCU farmer';
+
+    expect(encodePhpSession(decoded)).toBe('clipboard|a:1:{s:4:"INDI";a:1:{s:4:"abcd";s:13:"1 OCCU farmer";}}');
   });
 });

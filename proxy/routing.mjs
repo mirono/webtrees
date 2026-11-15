@@ -353,6 +353,24 @@ export function isDataFixPath(pathname) {
   return /^\/tree\/[^/]+\/data-fix(?:\/[^/]+(?:\/(?:update|update-all|data|preview))?)?\/?$/.test(pathname);
 }
 
+// Editing Phase B routes (phase 5 step 48): AddNewFact/SelectNewFact,
+// EditFactPage/Action, DeleteFact, CopyFact/PasteFact,
+// EditRawFactPage/Action, EditRawRecordPage/Action,
+// EditRecordPage/Action.
+export function isFactEditorPath(pathname) {
+  return (
+    /^\/tree\/[^/]+\/add-fact\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/edit-fact\/[^/]+\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/update-fact\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/delete\/[^/]+\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/copy\/[^/]+\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/paste-fact\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/edit-raw\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/edit-record\/[^/]+\/?$/.test(pathname) ||
+    /^\/tree\/[^/]+\/update-record\/[^/]+\/?$/.test(pathname)
+  );
+}
+
 /**
  * True for a direct request to one of NODE_ROUTE_PATHS or the
  * exact-match /tree/{tree} route, or the "ugly URL" (rewrite_urls off)
@@ -401,7 +419,8 @@ export function isNodeRoute(pathname, searchParams) {
     isGedcomExportPath(pathname) ||
     isGedcomImportPath(pathname) ||
     isMergeRecordsPath(pathname) ||
-    isDataFixPath(pathname)
+    isDataFixPath(pathname) ||
+    isFactEditorPath(pathname)
   ) {
     return true;
   }
@@ -449,7 +468,8 @@ export function isNodeRoute(pathname, searchParams) {
     isGedcomExportPath(route) ||
     isGedcomImportPath(route) ||
     isMergeRecordsPath(route) ||
-    isDataFixPath(route)
+    isDataFixPath(route) ||
+    isFactEditorPath(route)
   );
 }
 

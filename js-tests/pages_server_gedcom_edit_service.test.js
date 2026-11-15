@@ -215,6 +215,14 @@ describe('gedcom-edit-service.mjs', () => {
       const tagsVisible = factsToAdd('INDI', () => false, true, { RELI: true });
       expect(tagsVisible).not.toContain('RELI');
     });
+
+    test('includeHidden has no effect on the result either way (real-PHP quirk: the hidden-tag filter is unconditional)', () => {
+      const withHiddenTrue = factsToAdd('INDI', () => false, true, { RELI: true, SSN: true });
+      const withHiddenFalse = factsToAdd('INDI', () => false, false, { RELI: true, SSN: true });
+      expect(withHiddenTrue).toEqual(withHiddenFalse);
+      expect(withHiddenTrue).not.toContain('RELI');
+      expect(withHiddenTrue).not.toContain('SSN');
+    });
   });
 
   describe('newFamilyFacts/newIndividualFacts', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel } from '../pages-server/trees.mjs';
+import { accessibleTrees, accessibleTreeByName, isTreeManager, viewerAccessLevel, treeEditRole } from '../pages-server/trees.mjs';
 
 function mockPool(queryImpl) {
   return { query: vi.fn(queryImpl) };
@@ -144,5 +144,45 @@ describe('isTreeManager', () => {
     const pool = mockPool(async () => ({ rows: [] }));
 
     expect(await isTreeManager(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toBe(false);
+  });
+});
+
+describe('treeEditRole', () => {
+  test('an administrator is both editor and manager, no query needed', async () => {
+    const pool = mockPool(() => {
+      throw new Error('should not be called for an admin');
+    });
+
+    expect(await treeEditRole(pool, { gedcomId: 1, userId: 1, isAdmin: true })).toEqual({ isEditor: true, isManager: true });
+  });
+
+  test.each(['edit', 'accept', 'admin'])('canedit=%s is editor-or-above', async (role) => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: role }] }));
+
+    expect((await treeEditRole(pool, { gedcomId: 1, userId: 5, isAdmin: false })).isEditor).toBe(true);
+  });
+
+  test('canedit=admin is also a manager', async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: 'admin' }] }));
+
+    expect(await treeEditRole(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toEqual({ isEditor: true, isManager: true });
+  });
+
+  test('canedit=edit/accept is editor but not manager', async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: 'edit' }] }));
+
+    expect(await treeEditRole(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toEqual({ isEditor: true, isManager: false });
+  });
+
+  test('canedit=access (member) is neither editor nor manager', async () => {
+    const pool = mockPool(async () => ({ rows: [{ setting_value: 'access' }] }));
+
+    expect(await treeEditRole(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toEqual({ isEditor: false, isManager: false });
+  });
+
+  test('no matching row (canedit=none/unset) is neither editor nor manager', async () => {
+    const pool = mockPool(async () => ({ rows: [] }));
+
+    expect(await treeEditRole(pool, { gedcomId: 1, userId: 5, isAdmin: false })).toEqual({ isEditor: false, isManager: false });
   });
 });

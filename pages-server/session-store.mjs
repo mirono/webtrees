@@ -116,6 +116,34 @@ export async function saveSession(sessionId, session, pool) {
 }
 
 /**
+ * Loads an EXISTING logged-in session's data by its session_id -
+ * unlike `loadOrCreateAnonymousSession()`, never creates one; used by
+ * CopyFact/PasteFact (phase 5 step 48) to read/mutate the session's
+ * `clipboard` key (`Session::get('clipboard')`/`put('clipboard', ...)`
+ * in real PHP's ClipboardService). Returns `null` for a missing row
+ * or undecodable session_data (same "don't corrupt a session this
+ * route doesn't understand" stance as `loadOrCreateAnonymousSession()` -
+ * callers should then no-op rather than overwrite it).
+ *
+ * @param {import('pg').Pool} pool
+ * @param {string} sessionId
+ * @returns {Promise<Record<string, unknown>|null>}
+ */
+export async function loadSessionData(pool, sessionId) {
+  const result = await pool.query('SELECT session_data FROM wt_session WHERE session_id = $1', [sessionId]);
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  try {
+    return decodePhpSession(result.rows[0].session_data);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The successful-login step: mirrors Auth::login() -> Session::regenerate()
  * with $destroy=false - a NEW session ID is issued, but the session's
  * existing data (CSRF_TOKEN, initiated) carries over unchanged, with
