@@ -618,6 +618,81 @@ describe('renderIndividualPage', () => {
     });
   });
 
+  describe('the Relatives tab "add a relative" links (phase 5 step 51)', () => {
+    test('offers "Add a father"/"Add a mother" only when there is no parent family', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            treeName: 'ophir',
+            xref: 'X1',
+            url: '/tree/ophir/individual/X1',
+            canEditRecord: true,
+            familiesTab: { parentFamilies: [], spouseFamilies: [] },
+          },
+        }),
+      );
+
+      expect(html).toContain('/tree/ophir/add-parent-to-individual/X1/M');
+      expect(html).toContain('/tree/ophir/add-parent-to-individual/X1/F');
+    });
+
+    test('omits "Add a father"/"Add a mother" when a parent family already exists', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            treeName: 'ophir',
+            xref: 'X1',
+            url: '/tree/ophir/individual/X1',
+            canEditRecord: true,
+            familiesTab: { parentFamilies: [{ label: 'Parents', husband: null, wife: null, children: [], facts: [] }], spouseFamilies: [] },
+          },
+        }),
+      );
+
+      expect(html).not.toContain('add-parent-to-individual');
+    });
+
+    test('always offers link-child-to-family, add-spouse, link-spouse, and add-child-to-individual', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            treeName: 'ophir',
+            xref: 'X1',
+            url: '/tree/ophir/individual/X1',
+            canEditRecord: true,
+            familiesTab: { parentFamilies: [], spouseFamilies: [] },
+          },
+        }),
+      );
+
+      expect(html).toContain('/tree/ophir/link-child-to-family/X1');
+      expect(html).toContain('/tree/ophir/add-spouse-to-individual/X1');
+      expect(html).toContain('/tree/ophir/link-spouse-to-individual/X1');
+      expect(html).toContain('/tree/ophir/add-child-to-individual/X1');
+    });
+
+    test('shows no "add a relative" links when canEditRecord is false', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            canEditRecord: false,
+            familiesTab: { parentFamilies: [], spouseFamilies: [] },
+          },
+        }),
+      );
+
+      expect(html).not.toContain('add-parent-to-individual');
+      expect(html).not.toContain('link-child-to-family');
+      expect(html).not.toContain('add-spouse-to-individual');
+      expect(html).not.toContain('link-spouse-to-individual');
+      expect(html).not.toContain('add-child-to-individual');
+    });
+  });
+
   describe('the Sources tab', () => {
     test('renders a fact\'s label and each cited source, linked by real title', () => {
       const html = renderIndividualPage(

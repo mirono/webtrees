@@ -273,6 +273,43 @@ describe('renderFamilyPage', () => {
     });
   });
 
+  describe('"Add a husband/wife/child" links (phase 5 step 51)', () => {
+    test('shows "Add a child" always, and "Add a husband"/"Add a wife" only when absent', () => {
+      const html = renderFamilyPage(
+        baseParams({ family: { ...baseParams().family, treeName: 'ophir', xref: 'F1', canEditRecord: true, husband: null, wife: null } }),
+      );
+
+      expect(html).toContain('/tree/ophir/add-spouse-to-family/F1/M');
+      expect(html).toContain('/tree/ophir/add-spouse-to-family/F1/F');
+      expect(html).toContain('/tree/ophir/add-child-to-family/F1/U');
+    });
+
+    test('hides "Add a husband" when a husband is present, keeps "Add a wife"', () => {
+      const html = renderFamilyPage(
+        baseParams({
+          family: {
+            ...baseParams().family,
+            treeName: 'ophir',
+            xref: 'F1',
+            canEditRecord: true,
+            husband: member('John DOE', 'I1', 'M'),
+            wife: null,
+          },
+        }),
+      );
+
+      expect(html).not.toContain('/tree/ophir/add-spouse-to-family/F1/M');
+      expect(html).toContain('/tree/ophir/add-spouse-to-family/F1/F');
+    });
+
+    test('shows none of these links when canEditRecord is false', () => {
+      const html = renderFamilyPage(baseParams({ family: { ...baseParams().family, canEditRecord: false, husband: null, wife: null } }));
+
+      expect(html).not.toContain('add-spouse-to-family');
+      expect(html).not.toContain('add-child-to-family');
+    });
+  });
+
   describe('the header, logged-in vs. anonymous', () => {
     test('an anonymous visitor sees a "Sign in" link and no CSRF meta tag', () => {
       const html = renderFamilyPage(baseParams({ user: null, csrfToken: null }));

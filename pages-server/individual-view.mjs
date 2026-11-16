@@ -313,14 +313,53 @@ function renderFamiliesTabFamily({ label, url, husband, wife, children, facts })
  * @param {{parentFamilies: object[], spouseFamilies: object[]}} familiesTab
  * @returns {string}
  */
-function renderFamiliesTabContent({ parentFamilies, spouseFamilies }) {
-  const families = [...parentFamilies, ...spouseFamilies];
+/**
+ * Mirrors modules/relatives/tab.phtml's own `$can_edit` block (phase 5
+ * step 51 - this tab was originally built "no edit affordances yet",
+ * before editing existed at all; these are the actual entry points
+ * into editing Phase C's AddChildToIndividual/AddParentToIndividual/
+ * AddSpouseToIndividual/LinkChildToFamily/LinkSpouseToIndividual -
+ * there is no OTHER link to any of them anywhere in the UI, matching
+ * real PHP exactly). Scope cut: the "Re-order families" link is
+ * omitted (ReorderFamiliesPage is itself unported).
+ */
+function renderAddRelativeLinks({ treeName, xref, sex, url, hasParentFamily }) {
+  const base = `/tree/${encodeURIComponent(treeName)}`;
+  const returnUrl = `${url}#tab-relatives`;
+  const spouseWord = sex !== 'F' ? 'wife' : 'husband';
 
-  if (families.length === 0) {
+  const addParentsHtml = hasParentFamily
+    ? ''
+    : `
+            <tr><td><a href="${base}/add-parent-to-individual/${encodeURIComponent(xref)}/M?url=${encodeURIComponent(returnUrl)}">Add a father</a></td></tr>
+            <tr><td><a href="${base}/add-parent-to-individual/${encodeURIComponent(xref)}/F?url=${encodeURIComponent(returnUrl)}">Add a mother</a></td></tr>`;
+
+  return `
+    <br>
+    <table class="table table-sm wt-facts-table" role="presentation">
+        <tbody>${addParentsHtml}
+            <tr><td><a href="${base}/link-child-to-family/${encodeURIComponent(xref)}">Link this individual to an existing family as a child</a></td></tr>
+            <tr><td><a href="${base}/add-spouse-to-individual/${encodeURIComponent(xref)}?url=${encodeURIComponent(returnUrl)}">Add a ${spouseWord}</a></td></tr>
+            <tr><td><a href="${base}/link-spouse-to-individual/${encodeURIComponent(xref)}">Add a ${spouseWord} using an existing individual</a></td></tr>
+            <tr><td><a href="${base}/add-child-to-individual/${encodeURIComponent(xref)}">Add a child to create a one-parent family</a></td></tr>
+        </tbody>
+    </table>`;
+}
+
+function renderFamiliesTabContent({ parentFamilies, spouseFamilies }, editContext = null) {
+  const families = [...parentFamilies, ...spouseFamilies];
+  const familiesHtml = families.length === 0 ? '' : families.map(renderFamiliesTabFamily).join('');
+
+  const addLinksHtml =
+    editContext !== null
+      ? renderAddRelativeLinks({ ...editContext, hasParentFamily: parentFamilies.length > 0 })
+      : '';
+
+  if (familiesHtml === '' && addLinksHtml === '') {
     return '<p>This feature has not been migrated yet.</p>';
   }
 
-  return families.map(renderFamiliesTabFamily).join('');
+  return familiesHtml + addLinksHtml;
 }
 
 /**
@@ -910,7 +949,12 @@ export function renderIndividualPage({ tree, user, csrfToken, individual , genea
   const sexId = createHash('md5').update(`__sex__${individual.xref}`).digest('hex');
   const nameGenderHtml = renderNameGenderAccordion({ names: individual.names, sexId, sexValueLabel: individual.sexValueLabel });
 
-  const familiesHtml = renderFamiliesTabContent(individual.familiesTab);
+  const familiesHtml = renderFamiliesTabContent(
+    individual.familiesTab,
+    individual.canEditRecord
+      ? { treeName: individual.treeName, xref: individual.xref, sex: individual.sex, url: individual.url }
+      : null,
+  );
   const editRecordLinkHtml = individual.canEditRecord
     ? `<div class="pb-2">${renderEditRecordLink({ treeName: individual.treeName, recordXref: individual.xref })}</div>`
     : '';

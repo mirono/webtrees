@@ -230,6 +230,21 @@ export function renderFamilyPage({ tree, user, csrfToken, family , genealogyMenu
   const editRecordLinkHtml = family.canEditRecord
     ? `<div class="pb-2">${renderEditRecordLink({ treeName: family.treeName, recordXref: family.xref })}</div>`
     : '';
+  // Mirrors family-page-menu.phtml's "edit" dropdown (phase 5 step 51 -
+  // this is THE entry point into AddSpouseToFamily/AddChildToFamily;
+  // there is no other link to either anywhere in the UI, matching real
+  // PHP). Simplified to plain links rather than a dropdown, same
+  // convention as fact-edit-links-view.mjs's own controls. Scope cut:
+  // "Change family members"/"Re-order children" are omitted
+  // (ChangeFamilyMembers/ReorderChildren are themselves unported).
+  const addRelativeLinksHtml = family.canEditRecord
+    ? `
+    <div class="pb-2">
+        ${family.husband === null ? `<a class="btn btn-link" href="/tree/${encodeURIComponent(family.treeName)}/add-spouse-to-family/${encodeURIComponent(family.xref)}/M">Add a husband</a>` : ''}
+        ${family.wife === null ? `<a class="btn btn-link" href="/tree/${encodeURIComponent(family.treeName)}/add-spouse-to-family/${encodeURIComponent(family.xref)}/F">Add a wife</a>` : ''}
+        <a class="btn btn-link" href="/tree/${encodeURIComponent(family.treeName)}/add-child-to-family/${encodeURIComponent(family.xref)}/U">Add a child</a>
+    </div>`
+    : '';
   const addFactRowHtml = family.canEditRecord
     ? renderAddFactRow({ treeName: family.treeName, recordXref: family.xref, addFacts: family.addFacts ?? [] })
     : '';
@@ -276,6 +291,7 @@ export function renderFamilyPage({ tree, user, csrfToken, family , genealogyMenu
             <div class="row">
                 <div class="col-md-12">
                     <h2 class="wt-page-title">${titleHtml}</h2>
+                    ${addRelativeLinksHtml}
 
                     <div class="wt-family-members d-flex">
                         ${renderMemberCard(family.husband)}
