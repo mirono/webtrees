@@ -35,6 +35,13 @@
 
 import { createHash } from 'node:crypto';
 import { renderFactEditLinks, renderAddFactRow, renderEditRecordLink } from './fact-edit-links-view.mjs';
+import {
+  parentRelationshipLabel,
+  spouseRelationshipLabel,
+  childRelationshipLabel,
+  siblingRelationshipLabel,
+  selfRelationshipLabel,
+} from './individual.mjs';
 
 function escapeHtml(value) {
   return String(value)
@@ -43,11 +50,6 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
 }
-
-// Matches family-view.mjs's own placeholder for a missing/unlinked
-// spouse - not shared/exported (this migration's convention is small
-// per-file duplicates over a shared registry).
-const UNKNOWN_NAME_HTML = '<span class="NAME" dir="auto" translate="no">…</span>';
 
 // Verified against app/Gedcom.php's real 'INDI:TAG' element
 // definitions (the I18N::translate() argument each entry passes), not
@@ -255,11 +257,6 @@ function renderFact({
  * @returns {string}
  */
 function renderFamiliesTabMemberCard(member) {
-  if (member === null) {
-    return `
-        <div class="wt-chart-box">${UNKNOWN_NAME_HTML}</div>`;
-  }
-
   const factsHtml = member.birthSummary
     ? `
             <div class="wt-chart-box-facts">
@@ -273,46 +270,143 @@ function renderFamiliesTabMemberCard(member) {
         </div>`;
 }
 
-/**
- * One family's full entry within the Families tab - real per-member
- * cards (husband/wife/children, reusing FamilyPage's own chart-box
- * rendering) plus the family's own displayable facts (MARR/RESI/etc,
- * the same extraction shared with FamilyPage and the Facts-tab merge -
- * see index.mjs's resolveFamiliesTabFamily()), upgraded from step 11's
- * flat "husband + wife" link. No step-families, no edit affordances
- * (add/re-order) - modules/relatives/family.phtml's own `can_edit`
- * block, same "no editing capability yet" cut as everywhere else.
- *
- * @param {{label: string, url: string, husband: object|null, wife: object|null, children: object[], facts: object[]}} family
- * @returns {string}
- */
-function renderFamiliesTabFamily({ label, url, husband, wife, children, facts }) {
-  const childrenHtml = children.map(renderFamiliesTabMemberCard).join('');
-  const factsHtml =
-    facts.length > 0
-      ? `
-        <table class="table table-sm wt-facts-table">
-            <tbody>${facts.map((fact) => renderFact({ ...fact, fromFamily: true })).join('')}
-            </tbody>
-        </table>`
-      : '';
-
-  return `
-    <div class="wt-family">
-        <h4>${escapeHtml(label)} — <a href="${escapeHtml(url)}">View this family</a></h4>
-        <div class="wt-chart-box-list d-flex flex-wrap">${renderFamiliesTabMemberCard(husband)}${renderFamiliesTabMemberCard(wife)}${childrenHtml}
-        </div>${factsHtml}
-    </div>`;
+function capitalizeFirst(text) {
+  return text.length === 0 ? text : text[0].toUpperCase() + text.slice(1);
 }
 
 /**
- * Families TAB content - real per-member cards for each parent/spouse
- * family (see renderFamiliesTabFamily()), upgraded from step 11's flat
- * link list (phase 5 step 14c).
+ * The relationship-name word shown in a family-row's `<th>` - reuses
+ * the same small hardcoded label set already built for the Family
+ * navigator sidebar (individual.mjs's parentRelationshipLabel() etc -
+ * see that file's own doc comment for why this isn't the full
+ * RelationshipService::getCloseRelationshipName() BFS engine). `kind`
+ * distinguishes a husband/wife row from a child row; `type` ('FAMC' or
+ * 'FAMS') distinguishes a parent-family row (father/mother,
+ * brother/sister) from a spouse-family row (husband/wife,
+ * son/daughter), matching real family.phtml's own `$type` parameter.
  *
- * @param {{parentFamilies: object[], spouseFamilies: object[]}} familiesTab
+ * @param {{xref: string, sex: string, birthYear: number|null}} member
+ * @param {'FAMC'|'FAMS'} type
+ * @param {'spouse'|'child'} kind
+ * @param {{xref: string, birthYear: number|null}} individualContext
  * @returns {string}
  */
+function familyRowLabel(member, type, kind, individualContext) {
+  if (member.xref === individualContext.xref) {
+    return selfRelationshipLabel(member.sex);
+  }
+
+  if (kind === 'spouse') {
+    return type === 'FAMC' ? parentRelationshipLabel(member.sex) : spouseRelationshipLabel(member.sex);
+  }
+
+  return type === 'FAMC' ? siblingRelationshipLabel(member.sex, individualContext.birthYear, member.birthYear) : childRelationshipLabel(member.sex);
+}
+
+/**
+ * One husband/wife/child row - real relationship-name `<th>` plus the
+ * member's chart-box `<td>` (same card markup as FamilyPage's own
+ * husband/wife/children cards), matching modules/relatives/family.phtml's
+ * own per-member `<tr>` exactly (no more "piled one after the other"
+ * flex list - phase 5 step 52, user-reported).
+ *
+ * @param {object} member
+ * @param {string} label
+ * @returns {string}
+ */
+function renderFamilyMemberRow(member, label) {
+  return `
+            <tr class="wt-sex-${escapeHtml(member.sex.toLowerCase())}">
+                <th scope="row">${escapeHtml(capitalizeFirst(label))}</th>
+                <td class="border-0 p-0">${renderFamiliesTabMemberCard(member)}</td>
+            </tr>`;
+}
+
+/**
+ * A placeholder "Add a husband/wife" row for an empty HUSB/WIFE slot -
+ * shown regardless of FAMC/FAMS type, matching real family.phtml
+ * exactly (even a parent-family missing a father still offers "Add a
+ * father" via this same AddSpouseToFamily route - it's just filling in
+ * that specific family record's own HUSB/WIFE slot).
+ *
+ * @param {'M'|'F'} slotSex
+ * @param {string} base
+ * @param {string} familyXref
+ * @param {string} returnUrl
+ * @returns {string}
+ */
+function renderAddSpouseToFamilyRow(slotSex, base, familyXref, returnUrl) {
+  const word = slotSex === 'M' ? 'husband' : 'wife';
+  return `
+            <tr>
+                <th scope="row"></th>
+                <td><a href="${base}/add-spouse-to-family/${encodeURIComponent(familyXref)}/${slotSex}?url=${encodeURIComponent(returnUrl)}">Add a ${word}</a></td>
+            </tr>`;
+}
+
+/**
+ * One family's full entry within the Families tab - a real per-row
+ * facts-table (husband/wife/children rows with relationship-name
+ * labels, family facts, "add a relative" edit rows), matching
+ * modules/relatives/family.phtml's structure exactly (phase 5 step 52,
+ * replacing step 14c's flat `wt-chart-box-list` flex pile). No
+ * step-families (adoption-driven second parent/spouse sets - see
+ * index.mjs's own doc comment), no "Re-order children" (ReorderChildrenPage
+ * is itself unported).
+ *
+ * @param {{type: 'FAMC'|'FAMS', xref: string, label: string, url: string, husband: object|null, wife: object|null, children: object[], facts: object[]}} family
+ * @param {{treeName: string, xref: string, birthYear: number|null, url: string, canEdit: boolean}} individualContext
+ * @returns {string}
+ */
+function renderFamiliesTabFamily(family, individualContext) {
+  const { type, xref: familyXref, label, url, husband, wife, children, facts } = family;
+  const { treeName, canEdit, url: individualUrl } = individualContext;
+  const base = `/tree/${encodeURIComponent(treeName)}`;
+  const returnUrl = `${individualUrl}#tab-relatives`;
+
+  const husbandRow =
+    husband !== null
+      ? renderFamilyMemberRow(husband, familyRowLabel(husband, type, 'spouse', individualContext))
+      : canEdit
+        ? renderAddSpouseToFamilyRow('M', base, familyXref, returnUrl)
+        : '';
+
+  const wifeRow =
+    wife !== null
+      ? renderFamilyMemberRow(wife, familyRowLabel(wife, type, 'spouse', individualContext))
+      : canEdit
+        ? renderAddSpouseToFamilyRow('F', base, familyXref, returnUrl)
+        : '';
+
+  const factsRowsHtml = facts.map((fact) => renderFact({ ...fact, fromFamily: true })).join('');
+
+  const childrenRowsHtml = children.map((child) => renderFamilyMemberRow(child, familyRowLabel(child, type, 'child', individualContext))).join('');
+
+  const addChildWords =
+    type === 'FAMC' ? { M: 'Add a brother', F: 'Add a sister', U: 'Add a sibling' } : { M: 'Add a son', F: 'Add a daughter', U: 'Add a child' };
+
+  const addChildRow = canEdit
+    ? `
+            <tr>
+                <th scope="row"></th>
+                <td>
+                    <a href="${base}/add-child-to-family/${encodeURIComponent(familyXref)}/M?url=${encodeURIComponent(returnUrl)}">${addChildWords.M}</a>
+                    |
+                    <a href="${base}/add-child-to-family/${encodeURIComponent(familyXref)}/F?url=${encodeURIComponent(returnUrl)}">${addChildWords.F}</a>
+                    |
+                    <a href="${base}/add-child-to-family/${encodeURIComponent(familyXref)}/U?url=${encodeURIComponent(returnUrl)}">${addChildWords.U}</a>
+                </td>
+            </tr>`
+    : '';
+
+  return `
+    <table class="table table-sm wt-facts-table">
+        <caption><a href="${escapeHtml(url)}">${escapeHtml(label)}</a></caption>
+        <tbody>${husbandRow}${wifeRow}${factsRowsHtml}${childrenRowsHtml}${addChildRow}
+        </tbody>
+    </table>`;
+}
+
 /**
  * Mirrors modules/relatives/tab.phtml's own `$can_edit` block (phase 5
  * step 51 - this tab was originally built "no edit affordances yet",
@@ -346,14 +440,26 @@ function renderAddRelativeLinks({ treeName, xref, sex, url, hasParentFamily }) {
     </table>`;
 }
 
-function renderFamiliesTabContent({ parentFamilies, spouseFamilies }, editContext = null) {
-  const families = [...parentFamilies, ...spouseFamilies];
-  const familiesHtml = families.length === 0 ? '' : families.map(renderFamiliesTabFamily).join('');
+/**
+ * Families TAB content - real per-row facts-tables for each parent/
+ * spouse family (see renderFamiliesTabFamily()), plus the page-level
+ * "add a relative" links (see renderAddRelativeLinks()). `individual`'s
+ * own xref/sex/birthYear are needed for every row's relationship-name
+ * label regardless of edit capability (self-detection, sibling
+ * elder/younger ordering) - only the "add" links/rows are gated on
+ * `canEdit`, matching real PHP's `$individual` vs. `$can_edit` being
+ * two entirely separate things in family.phtml/tab.phtml.
+ *
+ * @param {{parentFamilies: object[], spouseFamilies: object[]}} familiesTab
+ * @param {{treeName: string, xref: string, sex: string, url: string, birthYear: number|null, canEdit: boolean}} individual
+ * @returns {string}
+ */
+function renderFamiliesTabContent({ parentFamilies, spouseFamilies }, individual) {
+  const { canEdit } = individual;
 
-  const addLinksHtml =
-    editContext !== null
-      ? renderAddRelativeLinks({ ...editContext, hasParentFamily: parentFamilies.length > 0 })
-      : '';
+  const familiesHtml = [...parentFamilies, ...spouseFamilies].map((family) => renderFamiliesTabFamily(family, individual)).join('');
+
+  const addLinksHtml = canEdit ? renderAddRelativeLinks({ ...individual, hasParentFamily: parentFamilies.length > 0 }) : '';
 
   if (familiesHtml === '' && addLinksHtml === '') {
     return '<p>This feature has not been migrated yet.</p>';
@@ -949,12 +1055,14 @@ export function renderIndividualPage({ tree, user, csrfToken, individual , genea
   const sexId = createHash('md5').update(`__sex__${individual.xref}`).digest('hex');
   const nameGenderHtml = renderNameGenderAccordion({ names: individual.names, sexId, sexValueLabel: individual.sexValueLabel });
 
-  const familiesHtml = renderFamiliesTabContent(
-    individual.familiesTab,
-    individual.canEditRecord
-      ? { treeName: individual.treeName, xref: individual.xref, sex: individual.sex, url: individual.url }
-      : null,
-  );
+  const familiesHtml = renderFamiliesTabContent(individual.familiesTab, {
+    treeName: individual.treeName,
+    xref: individual.xref,
+    sex: individual.sex,
+    url: individual.url,
+    birthYear: individual.birthYear,
+    canEdit: individual.canEditRecord,
+  });
   const editRecordLinkHtml = individual.canEditRecord
     ? `<div class="pb-2">${renderEditRecordLink({ treeName: individual.treeName, recordXref: individual.xref })}</div>`
     : '';

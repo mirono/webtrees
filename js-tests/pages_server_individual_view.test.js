@@ -284,13 +284,15 @@ describe('renderIndividualPage', () => {
     });
   });
 
-  describe('the Families tab', () => {
-    function familyMember(name, xref, sex = 'M') {
+  describe('the Families tab (phase 5 step 52 - real per-row table layout)', () => {
+    function familyMember(name, xref, sex = 'M', birthYear = null) {
       return {
         fullNameHtml: `<span class="NAME" dir="auto" translate="no">${name}</span>`,
         sex,
         birthSummary: 'Birth: 12 AUG 1870, London',
         url: `/tree/ophir/individual/${xref}`,
+        xref,
+        birthYear,
       };
     }
 
@@ -301,7 +303,7 @@ describe('renderIndividualPage', () => {
       expect(html).toContain('This feature has not been migrated yet.');
     });
 
-    test('renders a parent family with a "Parents" label, real member cards, and a link to the family page', () => {
+    test('renders a parent family as a facts-table with Father/Mother row labels, real member cards, and a link to the family page', () => {
       const html = renderIndividualPage(
         baseParams({
           individual: {
@@ -309,6 +311,8 @@ describe('renderIndividualPage', () => {
             familiesTab: {
               parentFamilies: [
                 {
+                  type: 'FAMC',
+                  xref: 'F1',
                   label: 'Parents',
                   url: '/tree/ophir/family/F1',
                   husband: familyMember('Dad', 'I1', 'M'),
@@ -323,8 +327,10 @@ describe('renderIndividualPage', () => {
         }),
       );
 
-      expect(html).toContain('Parents');
-      expect(html).toContain('href="/tree/ophir/family/F1"');
+      expect(html).toContain('<table class="table table-sm wt-facts-table">');
+      expect(html).toContain('<caption><a href="/tree/ophir/family/F1">Parents</a></caption>');
+      expect(html).toContain('<th scope="row">Father</th>');
+      expect(html).toContain('<th scope="row">Mother</th>');
       expect(html).toContain('wt-chart-box wt-chart-box-m');
       expect(html).toContain('wt-chart-box wt-chart-box-f');
       expect(html).toContain('Dad');
@@ -332,7 +338,7 @@ describe('renderIndividualPage', () => {
       expect(html).toContain('href="/tree/ophir/individual/I1"');
     });
 
-    test('renders a spouse family with a "Spouse family" label and each child\'s own card', () => {
+    test('renders a spouse family with Husband/Wife and Son row labels, each child in its own row', () => {
       const html = renderIndividualPage(
         baseParams({
           individual: {
@@ -341,6 +347,8 @@ describe('renderIndividualPage', () => {
               parentFamilies: [],
               spouseFamilies: [
                 {
+                  type: 'FAMS',
+                  xref: 'F2',
                   label: 'Spouse family',
                   url: '/tree/ophir/family/F2',
                   husband: familyMember('John', 'I3', 'M'),
@@ -354,13 +362,15 @@ describe('renderIndividualPage', () => {
         }),
       );
 
-      expect(html).toContain('Spouse family');
-      expect(html).toContain('href="/tree/ophir/family/F2"');
+      expect(html).toContain('<caption><a href="/tree/ophir/family/F2">Spouse family</a></caption>');
+      expect(html).toContain('<th scope="row">Husband</th>');
+      expect(html).toContain('<th scope="row">Wife</th>');
+      expect(html).toContain('<th scope="row">Son</th>');
       expect(html).toContain('Kid');
       expect(html).toContain('href="/tree/ophir/individual/I5"');
     });
 
-    test('a null husband or wife renders the unknown-name placeholder card, not a broken link', () => {
+    test('an empty HUSB/WIFE slot renders no row at all when the viewer may not edit', () => {
       const html = renderIndividualPage(
         baseParams({
           individual: {
@@ -368,18 +378,42 @@ describe('renderIndividualPage', () => {
             familiesTab: {
               parentFamilies: [],
               spouseFamilies: [
-                { label: 'Spouse family', url: '/tree/ophir/family/F2', husband: null, wife: familyMember('Jane', 'I4', 'F'), children: [], facts: [] },
+                { type: 'FAMS', xref: 'F2', label: 'Spouse family', url: '/tree/ophir/family/F2', husband: null, wife: familyMember('Jane', 'I4', 'F'), children: [], facts: [] },
               ],
             },
           },
         }),
       );
 
-      expect(html).toContain('…');
       expect(html).not.toContain('href="/tree/ophir/individual/undefined"');
+      expect(html).not.toContain('Add a husband');
     });
 
-    test("renders the family's own vital facts (e.g. Marriage) below the member cards, with the family-level label", () => {
+    test('an empty HUSB/WIFE slot offers "Add a husband"/"Add a wife" when the viewer may edit', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            treeName: 'ophir',
+            xref: 'X1',
+            url: '/tree/ophir/individual/X1',
+            canEditRecord: true,
+            familiesTab: {
+              parentFamilies: [],
+              spouseFamilies: [
+                { type: 'FAMS', xref: 'F2', label: 'Spouse family', url: '/tree/ophir/family/F2', husband: null, wife: familyMember('Jane', 'I4', 'F'), children: [], facts: [] },
+              ],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('/tree/ophir/add-spouse-to-family/F2/M');
+      expect(html).toContain('Add a husband');
+      expect(html).not.toContain('/tree/ophir/add-spouse-to-family/F2/F');
+    });
+
+    test("renders the family's own vital facts (e.g. Marriage) as real fact rows inside the same table, with the family-level label", () => {
       const html = renderIndividualPage(
         baseParams({
           individual: {
@@ -388,6 +422,8 @@ describe('renderIndividualPage', () => {
               parentFamilies: [],
               spouseFamilies: [
                 {
+                  type: 'FAMS',
+                  xref: 'F2',
                   label: 'Spouse family',
                   url: '/tree/ophir/family/F2',
                   husband: familyMember('John', 'I3', 'M'),
@@ -403,6 +439,84 @@ describe('renderIndividualPage', () => {
 
       expect(html).toContain('Marriage');
       expect(html).toContain('17 AUG 1995');
+    });
+
+    test('a spouse-family (FAMS) "add a child" row offers son/daughter/child wording', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            treeName: 'ophir',
+            xref: 'X1',
+            url: '/tree/ophir/individual/X1',
+            canEditRecord: true,
+            familiesTab: {
+              parentFamilies: [],
+              spouseFamilies: [
+                { type: 'FAMS', xref: 'F2', label: 'Spouse family', url: '/tree/ophir/family/F2', husband: familyMember('John', 'I3'), wife: familyMember('Jane', 'I4', 'F'), children: [], facts: [] },
+              ],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('Add a son');
+      expect(html).toContain('Add a daughter');
+      expect(html).toContain('/tree/ophir/add-child-to-family/F2/M');
+    });
+
+    test('a parent-family (FAMC) "add a child" row offers brother/sister/sibling wording instead', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            treeName: 'ophir',
+            xref: 'X1',
+            url: '/tree/ophir/individual/X1',
+            canEditRecord: true,
+            familiesTab: {
+              parentFamilies: [
+                { type: 'FAMC', xref: 'F1', label: 'Parents', url: '/tree/ophir/family/F1', husband: familyMember('Dad', 'I1'), wife: familyMember('Mom', 'I2', 'F'), children: [], facts: [] },
+              ],
+              spouseFamilies: [],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('Add a brother');
+      expect(html).toContain('Add a sister');
+      expect(html).toContain('Add a sibling');
+      expect(html).not.toContain('Add a son');
+    });
+
+    test('the page\'s own subject gets a self label ("Himself") instead of a parent/spouse label', () => {
+      const html = renderIndividualPage(
+        baseParams({
+          individual: {
+            ...baseParams().individual,
+            xref: 'I1',
+            sex: 'M',
+            familiesTab: {
+              parentFamilies: [],
+              spouseFamilies: [
+                {
+                  type: 'FAMS',
+                  xref: 'F2',
+                  label: 'Spouse family',
+                  url: '/tree/ophir/family/F2',
+                  husband: familyMember('John Doe', 'I1', 'M'),
+                  wife: familyMember('Jane', 'I4', 'F'),
+                  children: [],
+                  facts: [],
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      expect(html).toContain('<th scope="row">Himself</th>');
     });
   });
 
@@ -646,7 +760,7 @@ describe('renderIndividualPage', () => {
             xref: 'X1',
             url: '/tree/ophir/individual/X1',
             canEditRecord: true,
-            familiesTab: { parentFamilies: [{ label: 'Parents', husband: null, wife: null, children: [], facts: [] }], spouseFamilies: [] },
+            familiesTab: { parentFamilies: [{ type: 'FAMC', xref: 'F1', label: 'Parents', husband: null, wife: null, children: [], facts: [] }], spouseFamilies: [] },
           },
         }),
       );

@@ -1274,7 +1274,7 @@ async function handleIndividualPage(req, res, treeName, xref) {
 
     const parentFamilies = [];
     for (const familyXref of parentFamilyXrefs) {
-      const family = await resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, 'Parents');
+      const family = await resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, 'Parents', 'FAMC');
       if (family !== null) {
         parentFamilies.push(family);
       }
@@ -1282,7 +1282,7 @@ async function handleIndividualPage(req, res, treeName, xref) {
 
     const spouseFamilies = [];
     for (const familyXref of spouseFamilyXrefs) {
-      const family = await resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, 'Spouse family');
+      const family = await resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, 'Spouse family', 'FAMS');
       if (family !== null) {
         spouseFamilies.push(family);
       }
@@ -1526,6 +1526,7 @@ async function handleIndividualPage(req, res, treeName, xref) {
     age: ageString({ birthDate, deathDate, isDead: dead, sex: individualSex }),
     sex: individualSex,
     sexValueLabel: sexLabel(individualSex),
+    birthYear: birthDate && birthDate.date.isOK() ? birthDate.date.minimumDate().yearValue() : null,
     photoImages,
     useSilhouette: treePrivacyPrefs.useSilhouette,
     names,
@@ -1640,6 +1641,8 @@ function familyMemberViewModel(tree, member) {
     sex: sex(member.individual.gedcom),
     birthSummary: birthSummary(birthDate),
     url: `/tree/${tree.name}/individual/${member.individual.xref}`,
+    xref: member.individual.xref,
+    birthYear: birthDate && birthDate.date.isOK() ? birthDate.date.minimumDate().yearValue() : null,
   };
 }
 
@@ -1863,7 +1866,7 @@ async function noteLinkedRecordsShowable(tree, treePrivacyPrefs, accessLevel, re
  *   not ported - same "small hardcoded set, not the full label engine"
  *   cut as the Family navigator's own relationship labels.
  */
-async function resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, label) {
+async function resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref, label, type) {
   const shown = await resolveShownFamily(tree, treePrivacyPrefs, accessLevel, relPrefs, familyXref);
 
   if (shown === null) {
@@ -1873,6 +1876,8 @@ async function resolveFamiliesTabFamily(tree, treePrivacyPrefs, accessLevel, rel
   const facts = extractVisibleFacts(displayableFamilyFacts(shown.facts), shown.defaultResnInfo, accessLevel);
 
   return {
+    type,
+    xref: shown.family.xref,
     label,
     url: `/tree/${tree.name}/family/${shown.family.xref}`,
     husband: familyMemberViewModel(tree, shown.husband),
