@@ -61,6 +61,40 @@ const FACT_LABELS = {
 };
 
 /**
+ * The husband/wife slot - the real member's chart-box card, or (when
+ * that slot is genuinely empty) an EMPTY chart-box, optionally
+ * containing an inline "Add a husband"/"Add a wife" link when the
+ * viewer may edit - matches family-page-parents.phtml's own `if
+ * ($family->husband() instanceof Individual) ... else { <div
+ * class="wt-chart-box">, if canEdit: the Add link }` exactly (phase 5
+ * step 53, user-reported: the slot was instead always showing a
+ * generic "…" unknown-name placeholder, with the Add link floating in
+ * a separate block near the page title instead of inside the slot -
+ * same class of bug as the Families tab's own step 52 fix). The
+ * page-title-level "Add a husband/wife/child" block (see
+ * `addRelativeLinksHtml` below) is a SEPARATE, genuinely redundant
+ * affordance in real PHP too (family-page-menu.phtml's own dropdown
+ * offers the same actions) - both are kept.
+ *
+ * @param {{fullNameHtml: string, sex: string, birthSummary: string, url: string}|null} member
+ * @param {{treeName: string, familyXref: string, slotSex: 'M'|'F', canEdit: boolean}} params
+ * @returns {string}
+ */
+function renderSpouseSlot(member, { treeName, familyXref, slotSex, canEdit }) {
+  if (member !== null) {
+    return renderMemberCard(member);
+  }
+
+  const word = slotSex === 'M' ? 'husband' : 'wife';
+  const addLinkHtml = canEdit
+    ? `<a class="btn btn-link" href="/tree/${encodeURIComponent(treeName)}/add-spouse-to-family/${encodeURIComponent(familyXref)}/${slotSex}">Add a ${word}</a>`
+    : '';
+
+  return `
+        <div class="wt-chart-box">${addLinkHtml}</div>`;
+}
+
+/**
  * Matches resources/views/chart-box.phtml's actual outer structure -
  * an earlier draft of this file invented its own `wt-family-member`/
  * `wt-family-member-role` class names, which don't exist anywhere in
@@ -84,14 +118,13 @@ const FACT_LABELS = {
  * hidden lifespan div entirely rather than leaving genuinely dead
  * markup in place.
  *
- * @param {{fullNameHtml: string, sex: string, birthSummary: string, url: string}|null} member
+ * Only ever called with a real member now - an empty husband/wife slot
+ * goes through renderSpouseSlot() instead (see its own doc comment),
+ * and `children` is always a real, non-null array.
+ *
+ * @param {{fullNameHtml: string, sex: string, birthSummary: string, url: string}} member
  */
 function renderMemberCard(member) {
-  if (member === null) {
-    return `
-        <div class="wt-chart-box">${UNKNOWN_NAME_HTML}</div>`;
-  }
-
   const factsHtml = member.birthSummary
     ? `
             <div class="wt-chart-box-facts">
@@ -214,13 +247,28 @@ export function renderFamilyPage({ tree, user, csrfToken, family , genealogyMenu
   }`;
 
   // Matches family-page-children.phtml's own "N children"/"No
-  // children" badge, always shown regardless of count.
+  // children" badge, always shown regardless of count, plus (when the
+  // viewer may edit) an inline "Add a son | Add a daughter" pair after
+  // the last child card - genuinely redundant with the page-title-level
+  // "Add a child" link (addRelativeLinksHtml below, sex=U) in real PHP
+  // too, which also offers both. "Re-order children" is omitted
+  // (ReorderChildrenPage is itself unported, same cut as the
+  // individual page's own Families tab).
   const childCountLabel =
     family.children.length === 0 ? 'No children' : family.children.length === 1 ? '1 child' : `${family.children.length} children`;
+  const addSonDaughterHtml = family.canEditRecord
+    ? `
+        <div class="wt-chart-box">
+            <a class="btn btn-link" href="/tree/${encodeURIComponent(family.treeName)}/add-child-to-family/${encodeURIComponent(family.xref)}/M">Add a son</a>
+            |
+            <a class="btn btn-link" href="/tree/${encodeURIComponent(family.treeName)}/add-child-to-family/${encodeURIComponent(family.xref)}/F">Add a daughter</a>
+        </div>`
+    : '';
   const childrenHtml =
     `
                         <div class="badge bg-secondary m-2">${escapeHtml(childCountLabel)}</div>` +
-    family.children.map((child) => renderMemberCard(child)).join('');
+    family.children.map((child) => renderMemberCard(child)).join('') +
+    addSonDaughterHtml;
 
   // Matches family-page.phtml's own "Facts and events" heading
   // (app/Http/RequestHandlers/FamilyPage.php's real template always
@@ -294,8 +342,8 @@ export function renderFamilyPage({ tree, user, csrfToken, family , genealogyMenu
                     ${addRelativeLinksHtml}
 
                     <div class="wt-family-members d-flex">
-                        ${renderMemberCard(family.husband)}
-                        ${renderMemberCard(family.wife)}
+                        ${renderSpouseSlot(family.husband, { treeName: family.treeName, familyXref: family.xref, slotSex: 'M', canEdit: family.canEditRecord })}
+                        ${renderSpouseSlot(family.wife, { treeName: family.treeName, familyXref: family.xref, slotSex: 'F', canEdit: family.canEditRecord })}
                         ${childrenHtml}
                     </div>${factsHtml}
                 </div>

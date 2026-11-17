@@ -102,11 +102,48 @@ describe('renderFamilyPage', () => {
     expect(html).not.toContain('wt-family-member-role');
   });
 
-  test('a null husband or wife renders the unknown-name placeholder, not a broken link', () => {
+  test('a null husband or wife renders an empty chart-box, not a broken link (phase 5 step 53)', () => {
     const html = renderFamilyPage(baseParams({ family: { husband: null, wife: member('Jane DOE', 'I2'), children: [], facts: [] } }));
 
-    expect(html).toContain('…');
+    expect(html).toContain('<div class="wt-chart-box"></div>');
     expect(html).not.toContain('href="/tree/ophir/individual/undefined"');
+  });
+
+  test('an empty husband slot offers an inline "Add a husband" link when the viewer may edit (phase 5 step 53)', () => {
+    const html = renderFamilyPage(
+      baseParams({
+        family: { ...baseParams().family, treeName: 'ophir', xref: 'F1', canEditRecord: true, husband: null, wife: member('Jane DOE', 'I2') },
+      }),
+    );
+
+    expect(html).toContain('<div class="wt-chart-box"><a class="btn btn-link" href="/tree/ophir/add-spouse-to-family/F1/M">Add a husband</a></div>');
+  });
+
+  test('an empty husband slot offers no link when the viewer may not edit (phase 5 step 53)', () => {
+    const html = renderFamilyPage(
+      baseParams({ family: { ...baseParams().family, canEditRecord: false, husband: null, wife: member('Jane DOE', 'I2') } }),
+    );
+
+    expect(html).toContain('<div class="wt-chart-box"></div>');
+    expect(html).not.toContain('Add a husband');
+  });
+
+  test('the children area offers an inline "Add a son"/"Add a daughter" pair when the viewer may edit (phase 5 step 53)', () => {
+    const html = renderFamilyPage(
+      baseParams({ family: { ...baseParams().family, treeName: 'ophir', xref: 'F1', canEditRecord: true, children: [member('Kid', 'I3')] } }),
+    );
+
+    expect(html).toContain('/tree/ophir/add-child-to-family/F1/M');
+    expect(html).toContain('Add a son');
+    expect(html).toContain('/tree/ophir/add-child-to-family/F1/F');
+    expect(html).toContain('Add a daughter');
+  });
+
+  test('the children area offers no inline add links when the viewer may not edit (phase 5 step 53)', () => {
+    const html = renderFamilyPage(baseParams({ family: { ...baseParams().family, canEditRecord: false, children: [member('Kid', 'I3')] } }));
+
+    expect(html).not.toContain('Add a son');
+    expect(html).not.toContain('Add a daughter');
   });
 
   test('renders each child, linking to their individual page', () => {
