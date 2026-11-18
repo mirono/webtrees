@@ -266,18 +266,19 @@ describe('renderIndividualPage', () => {
       const html = renderIndividualPage(baseParams());
       const stubCount = html.split('This feature has not been migrated yet.').length - 1;
 
-      // 2 permanently-stubbed tabs + Facts (empty facts list) +
-      // Families (no related families) + Extra information (no
-      // matching facts) all also falling back to the same placeholder
-      // in this default (empty) fixture. Sources/Notes/Media/Album now
-      // have their own real empty-state messages instead (see the
-      // dedicated tests below), not this shared stub text.
-      expect(stubCount).toBe(5);
+      // 2 permanently-stubbed tabs + Families (no related families) +
+      // Extra information (no matching facts) also fall back to the
+      // same placeholder in this default (empty) fixture.
+      // Facts/Sources/Notes/Media/Album now all have their own real
+      // empty-state messages instead (see the dedicated tests below),
+      // not this shared stub text.
+      expect(stubCount).toBe(4);
     });
 
-    test('Sources/Notes/Media/Album show their own real empty-state messages, not the generic stub', () => {
+    test('Facts/Sources/Notes/Media/Album show their own real empty-state messages, not the generic stub', () => {
       const html = renderIndividualPage(baseParams());
 
+      expect(html).toContain('There are no facts for this individual.');
       expect(html).toContain('There are no source citations for this individual.');
       expect(html).toContain('There are no notes for this individual.');
       expect(html.split('There are no media objects for this individual.').length - 1).toBe(2); // Media + Album
@@ -521,10 +522,28 @@ describe('renderIndividualPage', () => {
   });
 
   describe('the Facts and events tab', () => {
-    test('shows the stub placeholder when there are no facts', () => {
+    // Regression test: an earlier draft fell back to the generic
+    // "This feature has not been migrated yet." stub when the facts
+    // list was empty and the viewer couldn't edit - wrong, since the
+    // tab itself IS fully migrated and real PHP's own
+    // personal_facts/tab.phtml ALWAYS renders the facts-table, just
+    // with a real "There are no facts for this individual." row.
+    test('shows a real facts-table with the "no facts" row, not the generic stub, when there are no facts', () => {
       const html = renderIndividualPage(baseParams({ individual: { ...baseParams().individual, facts: [] } }));
 
-      expect(html).not.toContain('wt-facts-table');
+      expect(html).toContain('wt-facts-table');
+      expect(html).toContain('There are no facts for this individual.');
+      expect(html.indexOf('There are no facts for this individual.')).toBeLessThan(html.indexOf('id="tab-families"'));
+    });
+
+    // Matches personal_facts/tab.phtml's real fixed-layout 25%/75%
+    // column structure.
+    test('the facts table uses a fixed layout with 25%/75% columns', () => {
+      const html = renderIndividualPage(baseParams());
+
+      expect(html).toContain('<table class="table wt-facts-table" style="table-layout: fixed">');
+      expect(html).toContain('<col style="width:25%">');
+      expect(html).toContain('<col style="width:75%">');
     });
 
     test('renders each fact with a known label', () => {

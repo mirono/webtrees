@@ -1069,16 +1069,34 @@ export function renderIndividualPage({ tree, user, csrfToken, individual , genea
   const addFactRowHtml = individual.canEditRecord
     ? renderAddFactRow({ treeName: individual.treeName, recordXref: individual.xref, addFacts: individual.addFacts ?? [] })
     : '';
-  const factsHtml =
-    individual.facts.length > 0 || addFactRowHtml !== ''
-      ? `
+  // Matches modules/personal_facts/tab.phtml's real structure exactly:
+  // a fixed-layout 25%/75% table that ALWAYS renders (never a generic
+  // "not migrated" placeholder - the feature IS fully migrated, there
+  // may just be zero facts), with a real "There are no facts for this
+  // individual." row when the collection is empty. The top checkbox
+  // row (Associated events / Events of close relatives / Historic
+  // events) is omitted - those three sub-features (associate facts,
+  // relatives' facts, historic facts) were never ported, so the
+  // conditions that would show those checkboxes are always false here
+  // too, same as in real PHP when a tree has none of that data.
+  const factsRowsHtml =
+    individual.facts.length > 0
+      ? individual.facts.map((fact) => renderFact({ ...fact, treeName: individual.treeName, returnUrl: individual.url })).join('')
+      : `
+        <tr>
+            <td colspan="2">There are no facts for this individual.</td>
+        </tr>`;
+  const factsHtml = `
     ${editRecordLinkHtml}
-    <table class="table wt-facts-table">
-        <tbody>${individual.facts.map((fact) => renderFact({ ...fact, treeName: individual.treeName, returnUrl: individual.url })).join('')}
+    <table class="table wt-facts-table" style="table-layout: fixed">
+        <colgroup>
+            <col style="width:25%">
+            <col style="width:75%">
+        </colgroup>
+        <tbody>${factsRowsHtml}
         ${addFactRowHtml}
         </tbody>
-    </table>`
-      : '<p>This feature has not been migrated yet.</p>';
+    </table>`;
   const sourcesHtml = renderSourcesTab(individual.sourcesTab);
   const notesHtml = renderNotesTab(individual.notesTab);
   const mediaHtml = renderMediaTab(individual.mediaImages);
