@@ -650,78 +650,110 @@ function tabItemLabel(tag, fromFamily) {
 }
 
 /**
- * Sources tab content (phase 5 step 14c) - matches
+ * Sources tab content (phase 5 step 14c, fixed step 55) - matches
  * modules/sources_tab/tab.phtml's real `wt-tab-sources`/`wt-facts-table`
  * wrapper, simplified to a flat label + linked source title list (no
- * PAGE/DATA/QUAY citation details, no "show all sources" toggle - see
- * index.mjs's sourcesTabItems() for the full scope note).
+ * PAGE/DATA/QUAY citation details, no "show all sources" toggle, no
+ * per-row edit links - see index.mjs's sourcesTabItems() for the full
+ * scope note). The table itself now ALWAYS renders, same fix as the
+ * Facts tab (step 54): real PHP's own empty-state "There are no source
+ * citations for this individual." row lives INSIDE the table, not as a
+ * standalone paragraph, and an edit-gated "Add a source citation" row
+ * (linking straight to the already-built AddNewFact route) is appended
+ * at the bottom regardless of whether there are existing citations -
+ * this row was missing entirely before, the one genuine functional gap
+ * here (not just a cosmetic one).
  *
  * @param {{tag: string, fromFamily: boolean, sourceLinks: {url: string, nameHtml: string}[]}[]} items
+ * @param {{treeName: string, xref: string, canEdit: boolean}} context
  * @returns {string}
  */
-function renderSourcesTab(items) {
-  if (items.length === 0) {
-    return '<p>There are no source citations for this individual.</p>';
-  }
+function renderSourcesTab(items, { treeName, xref, canEdit }) {
+  const rowsHtml =
+    items.length > 0
+      ? items
+          .map(({ tag, fromFamily, sourceLinks }) => {
+            const linksHtml = sourceLinks.map(({ url, nameHtml }) => `<div><a href="${escapeHtml(url)}">${nameHtml}</a></div>`).join('');
 
-  const rowsHtml = items
-    .map(({ tag, fromFamily, sourceLinks }) => {
-      const linksHtml = sourceLinks.map(({ url, nameHtml }) => `<div><a href="${escapeHtml(url)}">${nameHtml}</a></div>`).join('');
-
-      return `
+            return `
         <tr>
             <th scope="row">${escapeHtml(tabItemLabel(tag, fromFamily))}</th>
             <td>${linksHtml}</td>
         </tr>`;
-    })
-    .join('');
+          })
+          .join('')
+      : `
+        <tr>
+            <td colspan="2">There are no source citations for this individual.</td>
+        </tr>`;
+  const addRowHtml = canEdit
+    ? `
+        <tr>
+            <th scope="row">Source</th>
+            <td><a href="/tree/${encodeURIComponent(treeName)}/add-fact/${encodeURIComponent(xref)}/SOUR">Add a source citation</a></td>
+        </tr>`
+    : '';
 
   return `
     <div class="wt-tab-sources">
         <table class="table wt-facts-table">
-            <tbody>${rowsHtml}
+            <tbody>${rowsHtml}${addRowHtml}
             </tbody>
         </table>
     </div>`;
 }
 
 /**
- * Notes tab content (phase 5 step 14c) - matches
+ * Notes tab content (phase 5 step 14c, fixed step 55) - matches
  * modules/notes/tab.phtml's real `wt-tab-notes`/`wt-facts-table`
  * wrapper, simplified to a flat label + note-text list (shared notes
  * marked with the real "Shared note" wording, plain escaped text - no
- * "show all notes" toggle, no SubmitterText markdown-ish formatting).
+ * "show all notes" toggle, no SubmitterText markdown-ish formatting, no
+ * per-row edit links). Same table-always-renders fix as Sources/Facts
+ * (step 54): the real "There are no notes for this individual." row
+ * lives INSIDE the table, and an edit-gated "Add a note" row is
+ * appended at the bottom - was missing entirely before.
  *
  * @param {{tag: string, fromFamily: boolean, notes: {isShared: boolean, text: string}[]}[]} items
+ * @param {{treeName: string, xref: string, canEdit: boolean}} context
  * @returns {string}
  */
-function renderNotesTab(items) {
-  if (items.length === 0) {
-    return '<p>There are no notes for this individual.</p>';
-  }
+function renderNotesTab(items, { treeName, xref, canEdit }) {
+  const rowsHtml =
+    items.length > 0
+      ? items
+          .map(({ tag, fromFamily, notes }) => {
+            const notesHtml = notes
+              .map(({ isShared, text }) => {
+                const body = escapeHtml(text).replaceAll('\n', '<br>');
 
-  const rowsHtml = items
-    .map(({ tag, fromFamily, notes }) => {
-      const notesHtml = notes
-        .map(({ isShared, text }) => {
-          const body = escapeHtml(text).replaceAll('\n', '<br>');
+                return isShared ? `<div class="mb-2"><em>Shared note</em>: ${body}</div>` : `<div class="mb-2">${body}</div>`;
+              })
+              .join('');
 
-          return isShared ? `<div class="mb-2"><em>Shared note</em>: ${body}</div>` : `<div class="mb-2">${body}</div>`;
-        })
-        .join('');
-
-      return `
+            return `
         <tr>
             <th scope="row">${escapeHtml(tabItemLabel(tag, fromFamily))}</th>
             <td>${notesHtml}</td>
         </tr>`;
-    })
-    .join('');
+          })
+          .join('')
+      : `
+        <tr>
+            <td colspan="2">There are no notes for this individual.</td>
+        </tr>`;
+  const addRowHtml = canEdit
+    ? `
+        <tr>
+            <th scope="row">Note</th>
+            <td><a href="/tree/${encodeURIComponent(treeName)}/add-fact/${encodeURIComponent(xref)}/NOTE">Add a note</a></td>
+        </tr>`
+    : '';
 
   return `
     <div class="wt-tab-notes">
         <table class="table wt-facts-table">
-            <tbody>${rowsHtml}
+            <tbody>${rowsHtml}${addRowHtml}
             </tbody>
         </table>
     </div>`;
@@ -1097,8 +1129,16 @@ export function renderIndividualPage({ tree, user, csrfToken, individual , genea
         ${addFactRowHtml}
         </tbody>
     </table>`;
-  const sourcesHtml = renderSourcesTab(individual.sourcesTab);
-  const notesHtml = renderNotesTab(individual.notesTab);
+  const sourcesHtml = renderSourcesTab(individual.sourcesTab, {
+    treeName: individual.treeName,
+    xref: individual.xref,
+    canEdit: individual.canEditRecord,
+  });
+  const notesHtml = renderNotesTab(individual.notesTab, {
+    treeName: individual.treeName,
+    xref: individual.xref,
+    canEdit: individual.canEditRecord,
+  });
   const mediaHtml = renderMediaTab(individual.mediaImages);
   const albumHtml = renderAlbumTab(individual.mediaImages);
   const tabsHtml = renderTabs({ factsHtml, familiesHtml, sourcesHtml, notesHtml, mediaHtml, albumHtml });

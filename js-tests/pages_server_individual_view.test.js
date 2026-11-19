@@ -861,6 +861,37 @@ describe('renderIndividualPage', () => {
 
       expect(html).toContain('Marriage');
     });
+
+    // Regression test (phase 5 step 55): an earlier draft rendered the
+    // empty-state message as a bare <p>, outside any table, and never
+    // rendered an "Add a source citation" row at all, regardless of
+    // edit rights - real PHP's own sources_tab/tab.phtml always
+    // renders the facts-table, with the empty-state row INSIDE it, and
+    // an edit-gated add-row at the bottom.
+    test('an empty tab still renders the real facts-table with the "no citations" row inside it', () => {
+      const html = renderIndividualPage(baseParams({ individual: { ...baseParams().individual, sourcesTab: [] } }));
+
+      expect(html).toContain('wt-tab-sources');
+      expect(html).toContain('wt-facts-table');
+      expect(html).toContain('There are no source citations for this individual.');
+    });
+
+    test('shows an "Add a source citation" row when canEditRecord is true, pointing at the real add-fact/SOUR route', () => {
+      const html = renderIndividualPage(
+        baseParams({ individual: { ...baseParams().individual, treeName: 'ophir', xref: 'I1', canEditRecord: true, sourcesTab: [] } }),
+      );
+
+      expect(html).toContain('Add a source citation');
+      expect(html).toContain('href="/tree/ophir/add-fact/I1/SOUR"');
+    });
+
+    test('shows no "Add a source citation" row when canEditRecord is false', () => {
+      const html = renderIndividualPage(
+        baseParams({ individual: { ...baseParams().individual, treeName: 'ophir', xref: 'I1', canEditRecord: false, sourcesTab: [] } }),
+      );
+
+      expect(html).not.toContain('Add a source citation');
+    });
   });
 
   describe('the Notes tab', () => {
@@ -906,6 +937,34 @@ describe('renderIndividualPage', () => {
       expect(html).not.toContain('<script>alert(1)</script>');
       expect(html).toContain('&lt;script&gt;');
       expect(html).toContain('<br>line two');
+    });
+
+    // Regression test (phase 5 step 55): same class of bug as the
+    // Sources tab - bare <p> empty state outside any table, no "Add a
+    // note" row ever rendered.
+    test('an empty tab still renders the real facts-table with the "no notes" row inside it', () => {
+      const html = renderIndividualPage(baseParams({ individual: { ...baseParams().individual, notesTab: [] } }));
+
+      expect(html).toContain('wt-tab-notes');
+      expect(html).toContain('wt-facts-table');
+      expect(html).toContain('There are no notes for this individual.');
+    });
+
+    test('shows an "Add a note" row when canEditRecord is true, pointing at the real add-fact/NOTE route', () => {
+      const html = renderIndividualPage(
+        baseParams({ individual: { ...baseParams().individual, treeName: 'ophir', xref: 'I1', canEditRecord: true, notesTab: [] } }),
+      );
+
+      expect(html).toContain('Add a note');
+      expect(html).toContain('href="/tree/ophir/add-fact/I1/NOTE"');
+    });
+
+    test('shows no "Add a note" row when canEditRecord is false', () => {
+      const html = renderIndividualPage(
+        baseParams({ individual: { ...baseParams().individual, treeName: 'ophir', xref: 'I1', canEditRecord: false, notesTab: [] } }),
+      );
+
+      expect(html).not.toContain('Add a note');
     });
   });
 
